@@ -44,7 +44,32 @@
 
     <!-- Screen: Match -->
     <section id="screen-match" class="screen">
-      <canvas id="match-canvas"></canvas>
+      <div class="match-stage">
+        <canvas id="match-canvas"></canvas>
+      </div>
+      <div class="match-controls">
+        <div id="touch-stick-zone" class="stick-zone">
+          <div id="touch-stick-knob" class="stick-knob"></div>
+        </div>
+        <div class="match-action-btns">
+          <button type="button" class="btn-ctrl btn-pass" data-act="pass">
+            <span>⚽ PASSA</span>
+            <small>o Scivola</small>
+          </button>
+          <button type="button" class="btn-ctrl btn-shoot" data-act="shoot">
+            <span>🎯 TIRA</span>
+            <small>Tieni: Carica</small>
+          </button>
+          <button type="button" class="btn-ctrl btn-sprint" data-act="sprint">
+            <span>⚡ SCATTO</span>
+            <small>Tieni premuto</small>
+          </button>
+          <button type="button" class="btn-ctrl btn-super" data-act="super">
+            <span>✦ SUPER</span>
+            <small>Abilità Eroe</small>
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- Screen: Team -->
