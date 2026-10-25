@@ -1,0 +1,14 @@
+{
+  "name": "pixel-calcio-arcade",
+  "version": "1.0.0",
+  "description": "Calcetto arcade mobile 100% offline con super tiri e collezione carte.",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../server.js",
+    "test": "node tests/tappa1.cjs",
+    "lint": "node --check js/*.js"
+  },
+  "keywords": ["soccer", "arcade", "pixel-art", "mobile-game", "pwa", "capacitor"],
+  "author": "Pasquale (pako1989)",
+  "license": "MIT"
+}

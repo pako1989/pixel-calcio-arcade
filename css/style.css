@@ -1,0 +1,240 @@
+/* Pixel Calcio Arcade - CSS Mobile First (390px, Landscape & Portrait) */
+:root {
+  --bg-dark: #0a0e17;
+  --bg-card: #131b2e;
+  --bg-panel: #1a253d;
+  --neon-blue: #00e5ff;
+  --neon-green: #39ff14;
+  --neon-yellow: #ffd700;
+  --neon-orange: #ff6a00;
+  --neon-red: #ff3366;
+  --text-main: #f0f4fc;
+  --text-muted: #94a3b8;
+  --border-arcade: #24355a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+#app-container {
+  width: 100%;
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 20%, #152238 0%, #0a0e17 80%);
+}
+
+/* Header bar */
+header.app-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background-color: rgba(13, 19, 31, 0.95);
+  border-bottom: 2px solid var(--border-arcade);
+  z-index: 20;
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+}
+
+.coin-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid #3b82f6;
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fbbf24;
+}
+
+/* Screen views */
+.screen {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+  position: relative;
+}
+
+.screen.active {
+  display: flex;
+}
+
+/* Menu principal */
+.menu-hero {
+  text-align: center;
+  margin: 20px 0 24px;
+}
+
+.menu-logo {
+  font-size: 2.2rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 15px rgba(0, 229, 255, 0.6), 2px 2px 0 #ff3366;
+}
+
+.menu-subtitle {
+  font-size: 0.85rem;
+  color: var(--neon-blue);
+  letter-spacing: 2px;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-arcade {
+  background: linear-gradient(180deg, #1e3a8a 0%, #0f172a 100%);
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  color: #fff;
+  padding: 16px 20px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 0 #0f172a, 0 0 12px rgba(59, 130, 246, 0.3);
+  transition: transform 0.08s, filter 0.08s;
+}
+
+.btn-arcade:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #0f172a;
+  filter: brightness(1.2);
+}
+
+.btn-arcade.primary {
+  background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+  border-color: #fde047;
+  color: #000;
+  box-shadow: 0 4px 0 #78350f, 0 0 15px rgba(245, 158, 11, 0.5);
+}
+
+.btn-arcade.secondary {
+  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+  border-color: #6ee7b7;
+  box-shadow: 0 4px 0 #064e3b, 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+/* Bottom navigation */
+nav.app-nav {
+  height: 56px;
+  background-color: #0b111e;
+  border-top: 1px solid var(--border-arcade);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 20;
+}
+
+.nav-item {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.nav-item.active {
+  color: var(--neon-yellow);
+}
+
+.nav-item .icon {
+  font-size: 1.25rem;
+}
+
+/* Game Canvas container */
+#match-screen {
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+#match-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Modals & Cut-in banners */
+.cutin-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: rgba(10, 14, 23, 0.95);
+  border: 3px solid var(--neon-yellow);
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.6);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  width: 88%;
+  max-width: 380px;
+  z-index: 100;
+  display: none;
+}
+
+.cutin-banner.show {
+  display: block;
+  animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popIn {
+  to { transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Responsive landscape */
+@media (orientation: landscape) and (max-height: 500px) {
+  header.app-header { height: 42px; }
+  nav.app-nav { height: 46px; }
+  .menu-hero { margin: 10px 0 12px; }
+  .menu-logo { font-size: 1.6rem; }
+  .menu-buttons { flex-direction: row; flex-wrap: wrap; }
+  .btn-arcade { flex: 1 1 45%; padding: 12px; font-size: 0.95rem; }
+}
