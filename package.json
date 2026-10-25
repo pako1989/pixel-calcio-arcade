@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node ../server.js",
-    "test": "node tests/tappa1.cjs && node tests/tappa2_match.cjs",
+    "test": "node tests/tappa1.cjs && node tests/tappa2_match.cjs && node tests/tappa3_roster.cjs",
     "lint": "node --check js/*.js"
   },
   "keywords": ["soccer", "arcade", "pixel-art", "mobile-game", "pwa", "capacitor"],
