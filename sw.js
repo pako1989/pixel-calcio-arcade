@@ -1,5 +1,5 @@
 // Pixel Calcio Arcade - Service Worker 100% Offline
-const CACHE_NAME = "pixelcalcio-v1.0.0";
+const CACHE_NAME = "pixelcalcio-v1.1.0";
 const ASSETS = [
   "./",
   "./index.html",
