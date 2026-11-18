@@ -9,11 +9,12 @@ import { askName } from '../ui/nameInput';
 import { backToMenu, fixKits, startMatch } from './demo';
 import { sfx } from '../audio/sfx';
 import {
-  applyManagerResult, autoLineup, buy, buyPrice, canBuy, canSell, CLUB_KITS, clubOf, clubRating, clubTeamDef, DIVISIONS,
-  FORMATION_ORDER, FORMATIONS, isHome, matchConditions, matchPitch, ME, minuteOf, money, myTeamDef, newManager,
+  autoLineup, buy, buyPrice, canBuy, canSell, CLUB_KITS, clubOf, clubRating, clubTeamDef, DIVISIONS,
+  FORMATION_ORDER, FORMATIONS, matchConditions, matchPitch, ME, minuteOf, money, myTeamDef, newManager,
   opponentOf, playerOvr, playerValue, potOvr, ROLE_LABEL, sell, sellPrice, SIM_DURATION, simulateMyMatch, STADIUM_LEVELS,
   STAT_KEYS, STAT_LABEL, swapPlayers, table, teamRating, TRAINING_LEVELS, TRAINING_ORDER, TRAININGS, upgrade, upgradeCost,
-  weeklyBalance, type ManagerState, type MPlayer, type WeekReport,
+  weeklyBalance, type ManagerState, type MPlayer,
+  applyMatch, CUP_ROUNDS, cupTeams, ensureManager, nextMatch, resolveEvent, type MatchApplied,
 } from '../modes/manager';
 import { WEATHER_INFO } from '../data/weather';
 
@@ -31,7 +32,10 @@ const TABS: { id: Tab; label: string }[] = [
 /** Esito di una partita simulata, mostrato con la "cronaca" animata. */
 interface SimShow {
   result: MatchResult;
-  report: WeekReport;
+  applied: MatchApplied;
+  label: string;
+  /** Occasioni mancate (cronaca). */
+  chances: { min: number; text: string; mine: boolean }[];
   home: boolean;
   oppName: string;
   oppColor: number;
@@ -77,7 +81,8 @@ export class ManagerScene extends Phaser.Scene {
   }
 
   private st(): ManagerState | undefined {
-    return load().manager;
+    const m = load().manager;
+    return m && ensureManager(m);
   }
 
   private commit(mut?: (st: ManagerState) => void) {
@@ -126,6 +131,41 @@ export class ManagerScene extends Phaser.Scene {
     }
     this.buildFooter(st, W, H);
     if (st.seasonEnd) this.buildSeasonEnd(st, W, H);
+    else if (st.event) this.buildEvent(st, W, H);
+    if (this.toast) {
+      const t = txt(this, W / 2, H - 52, this.toast, 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 6, y: 4 } }).setDepth(40);
+      this.toast = null;
+      this.tweens.add({ targets: t, alpha: 0, delay: 1600, duration: 400 });
+    }
+  }
+
+  private toast: string | null = null;
+
+  // ------------------------------------------------------------ eventi
+  private buildEvent(st: ManagerState, W: number, H: number) {
+    const ev = st.event!;
+    const c = this.add.container(0, 0).setDepth(20);
+    const g = this.add.graphics();
+    c.add([this.add.rectangle(0, 0, W, H, 0x0d0a1a, 0.85).setOrigin(0).setInteractive(), g]);
+    const pw = Math.min(W - 40, 420);
+    panel(g, W / 2 - pw / 2, 50, pw, 250, 0x1b1d2e, COLORS.accent2, 0.98);
+    c.add(txt(this, W / 2, 68, 'NOTIZIA DAL CLUB', 6, '#3fd0ff'));
+    c.add(shadowTxt(this, W / 2, 90, ev.title, 16, '#ffd23f').c);
+    c.add(txt(this, W / 2, 132, ev.text, 8, '#ffffff', { wordWrap: { width: pw - 40 }, align: 'center', lineSpacing: 6 }));
+    ev.options.forEach((o, i) => {
+      const x = W / 2 + (i === 0 ? -pw / 4 : pw / 4);
+      const b = button(this, x, 230, pw / 2 - 30, 30, o.label, () => {
+        let out = '';
+        save((s) => {
+          if (s.manager) out = resolveEvent(s.manager, i);
+        });
+        sfx.select();
+        this.toast = out || null;
+        this.build();
+      }, { color: i === 0 ? COLORS.good : 0x3a3d55, textColor: i === 0 ? '#1a1222' : '#ffffff' });
+      c.add(b.c);
+      c.add(txt(this, x, 258, o.desc, 6, '#8a8fb0', { wordWrap: { width: pw / 2 - 30 }, align: 'center' }));
+    });
   }
 
   // ------------------------------------------------------------ creazione
@@ -220,10 +260,11 @@ export class ManagerScene extends Phaser.Scene {
 
   private buildFooter(st: ManagerState, W: number, H: number) {
     button(this, 40, H - 20, 64, 26, 'MENU', () => backToMenu(this), { color: 0x3a3d55, size: 6 });
-    const opp = opponentOf(st);
-    if (!opp) return;
-    const home = isHome(st);
-    txt(this, W / 2 - 52, H - 26, `GIORNATA ${st.week + 1}/${st.fixtures.length}`, 6, '#8a8fb0');
+    const nm = nextMatch(st);
+    if (!nm) return;
+    const opp = nm.opp;
+    const home = nm.home;
+    txt(this, W / 2 - 52, H - 26, nm.cup ? nm.label : `GIORNATA ${st.week + 1}/${st.fixtures.length}`, 6, nm.cup ? '#ffd23f' : '#8a8fb0');
     txt(this, W / 2 - 52, H - 13, `${home ? 'IN CASA' : 'FUORI'} vs ${opp.short}`, 6, '#ffffff');
     button(this, W - 178, H - 20, 92, 26, 'SIMULA', () => this.simulate(), { color: 0x2f6fd0, size: 8 });
     const play = button(this, W - 60, H - 20, 104, 26, 'GIOCA!', () => this.play(), { color: COLORS.good, size: 8, textColor: '#1a1222' });
@@ -248,8 +289,12 @@ export class ManagerScene extends Phaser.Scene {
     const opp = opponentOf(st);
     const cx = 8 + lw / 2;
     if (opp) {
-      const home = isHome(st);
-      txt(this, cx, top + 12, `PROSSIMA PARTITA · ${home ? 'IN CASA' : 'IN TRASFERTA'}`, 6, '#ffd23f');
+      const nm = nextMatch(st)!;
+      const home = nm.home;
+      if (nm.cup) {
+        g.fillStyle(0x4a3a10).fillRect(10, top + 4, lw - 4, 16);
+        txt(this, cx, top + 12, `${st.cup!.name} · ${CUP_ROUNDS[st.cup!.round]}`, 6, '#ffd23f');
+      } else txt(this, cx, top + 12, `PROSSIMA PARTITA · ${home ? 'IN CASA' : 'IN TRASFERTA'}`, 6, '#ffd23f');
       const me = myTeamDef(st);
       const ot = clubTeamDef(st, opp);
       const p1 = me.players[me.players.length - 1];
@@ -271,13 +316,15 @@ export class ManagerScene extends Phaser.Scene {
       this.bar(g, cx - 100, top + 138, 60, 4, mr / 99, COLORS.good);
       this.bar(g, cx + 40, top + 138, 60, 4, or / 99, COLORS.bad);
       const row = table(st).findIndex((r) => r.id === opp.id) + 1;
-      txt(this, cx, top + 152, `Avversario ${row}° in classifica`, 6, '#8a8fb0');
+      txt(this, cx, top + 152, nm.cup ? (row > 0 ? `Avversario ${row}° nel tuo campionato` : 'Eliminazione diretta: pari = rigori!') : `Avversario ${row}° in classifica`, 6, nm.cup ? '#ffd23f' : '#8a8fb0');
       const pitch = PITCHES[matchPitch(st)];
       const cond = matchConditions(st);
       const extra = [cond.weather !== 'sereno' ? WEATHER_INFO[cond.weather].name : '', cond.night && pitch.id !== 'tetto' ? 'Notte' : ''].filter(Boolean).join(', ');
       txt(this, cx, top + 166, `Campo: ${pitch.name}${extra ? ` (${extra})` : ''}`, 6, '#3fd0ff');
       const tired = st.lineup.map((id) => st.squad.find((p) => p.id === id)).filter((p) => p && p.energy < 50);
-      if (tired.length) txt(this, cx, top + 182, `${tired.length} titolari stanchi: guarda la ROSA`, 6, '#ff9a9a');
+      const injured = st.squad.filter((p) => p.injured).length;
+      if (injured) txt(this, cx, top + 182, `${injured} infortunat${injured === 1 ? 'o' : 'i'} · ${tired.length} stanchi`, 6, '#ff9a9a');
+      else if (tired.length) txt(this, cx, top + 182, `${tired.length} titolari stanchi: guarda la ROSA`, 6, '#ff9a9a');
       else txt(this, cx, top + 182, 'Squadra in forma.', 6, '#5be37d');
       txt(this, cx, top + 198, 'GIOCA: la partita la giochi tu.', 6, '#8a8fb0');
       txt(this, cx, top + 210, 'SIMULA: decide la tua rosa.', 6, '#8a8fb0');
@@ -289,8 +336,11 @@ export class ManagerScene extends Phaser.Scene {
     const pos = table(st).findIndex((r) => r.id === ME) + 1;
     txt(this, nx + 10, top + 12, st.week === 0 ? 'CLASSIFICA: -' : `CLASSIFICA: ${pos}°`, 8, pos <= 2 ? '#5be37d' : pos >= 7 && st.division > 0 ? '#ff5a5a' : '#ffffff').setOrigin(0, 0.5);
     txt(this, nx + nw - 10, top + 12, `TIFOSI ${st.fans}`, 6, '#8a8fb0').setOrigin(1, 0.5);
-    txt(this, nx + 10, top + 30, 'NOTIZIE', 6, '#ffd23f').setOrigin(0, 0.5);
-    let y = top + 44;
+    if (st.objective) {
+      txt(this, nx + 10, top + 28, `OBIETTIVO: ${st.objective.label}`, 6, st.week > 0 && pos <= st.objective.pos ? '#5be37d' : '#ff9a9a').setOrigin(0, 0.5);
+    }
+    txt(this, nx + 10, top + 46, 'NOTIZIE', 6, '#ffd23f').setOrigin(0, 0.5);
+    let y = top + 58;
     for (const n of st.news.slice(0, 9)) {
       const t = txt(this, nx + 10, y, `· ${n}`, 6, '#d8dcf0', { wordWrap: { width: nw - 20 }, lineSpacing: 3 }).setOrigin(0, 0);
       y += t.height + 6;
@@ -326,11 +376,16 @@ export class ManagerScene extends Phaser.Scene {
     if (opts.price !== undefined) {
       txt(this, x + w - 6, cy, money(opts.price), 6, opts.dim ? '#ff9a9a' : '#ffd23f').setOrigin(1, 0.5);
     } else {
-      // energia e morale
+      // energia e morale (o infortunio)
       const ex = x + w - 56;
+      if (p.injured) {
+        g.fillStyle(0xc8302a).fillRect(ex - 2, cy - 6, 50, 11);
+        txt(this, ex + 23, cy, `INF ${p.injured}s`, 6, '#ffffff');
+      } else {
       this.bar(g, ex, cy - 4, 30, 3, p.energy / 100, p.energy < 45 ? COLORS.bad : p.energy < 70 ? COLORS.accent : COLORS.good);
       this.bar(g, ex, cy + 1, 30, 3, p.morale / 100, 0xff7ab8);
       txt(this, x + w - 12, cy, p.morale >= 70 ? ':)' : p.morale >= 40 ? ':|' : ':(', 6, p.morale >= 70 ? '#5be37d' : p.morale >= 40 ? '#d8dcf0' : '#ff9a9a');
+      }
     }
     const z = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
     z.on('pointerup', () => {
@@ -485,7 +540,12 @@ export class ManagerScene extends Phaser.Scene {
     const a = this.sel;
     this.sel = null;
     sfx.select();
-    this.commit((s) => swapPlayers(s, a, id));
+    let ok = true;
+    save((s) => {
+      if (s.manager) ok = swapPlayers(s.manager, a, id);
+    });
+    if (!ok) this.toast = 'Infortunato: non può giocare!';
+    this.build();
   }
 
   private cycleFormation(d: number) {
@@ -616,13 +676,24 @@ export class ManagerScene extends Phaser.Scene {
     const rx = 16 + lw;
     const rw = W - rx - 8;
     panel(g, rx, top, rw, H - top - 44, 0x1b1d2e, 0x2e3250, 0.95);
-    txt(this, rx + rw / 2, top + 10, 'CALENDARIO', 6, '#ffd23f');
+    const views: ['cal' | 'coppa' | 'giornata', string][] = [['cal', 'CALENDARIO'], ['giornata', 'GIORNATA'], ['coppa', 'COPPA']];
+    const bw = (rw - 16) / 3;
+    views.forEach(([id, label], i) => {
+      const b = button(this, rx + 8 + bw * i + bw / 2, top + 12, bw - 4, 16, label, () => {
+        this.tableView = id;
+        sfx.select();
+        this.build();
+      }, { size: 6, color: 0x2a2d48 });
+      b.setSelected(this.tableView === id);
+    });
+    if (this.tableView === 'coppa') return this.drawCup(g, st, rx, top + 26, rw);
+    if (this.tableView === 'giornata') return this.drawRound(g, st, rx, top + 26, rw);
     const from = Phaser.Math.Clamp(st.week - 3, 0, Math.max(0, st.fixtures.length - 10));
     for (let w = from; w < Math.min(st.fixtures.length, from + 10); w++) {
       const f = st.fixtures[w].find((x) => x.h === ME || x.a === ME)!;
       const home = f.h === ME;
       const opp = clubOf(st, home ? f.a : f.h);
-      const y = top + 26 + (w - from) * 18;
+      const y = top + 36 + (w - from) * 17;
       const cur = w === st.week;
       if (cur) g.fillStyle(0x4a3f80).fillRect(rx + 4, y - 8, rw - 8, 16);
       txt(this, rx + 10, y, `G${w + 1}`, 6, '#8a8fb0').setOrigin(0, 0.5);
@@ -633,6 +704,69 @@ export class ManagerScene extends Phaser.Scene {
         txt(this, rx + rw - 10, y, `${my}-${ot}`, 6, my > ot ? '#5be37d' : my < ot ? '#ff5a5a' : '#d8dcf0').setOrigin(1, 0.5);
       } else if (cur) txt(this, rx + rw - 10, y, 'PROSSIMA', 6, '#ffd23f').setOrigin(1, 0.5);
     }
+  }
+
+  private tableView: 'cal' | 'coppa' | 'giornata' = 'cal';
+
+  /** Tabellone della coppa: quarti, semifinali, finale. */
+  private drawCup(g: Phaser.GameObjects.Graphics, st: ManagerState, rx: number, y0: number, rw: number) {
+    const c = st.cup;
+    if (!c) return;
+    txt(this, rx + rw / 2, y0 + 8, c.name, 6, '#ffd23f');
+    if (c.late) {
+      txt(this, rx + rw / 2, y0 + 40, 'Iscrizione dalla prossima stagione.', 6, '#8a8fb0');
+      return;
+    }
+    let y = y0 + 22;
+    for (let r = 0; r < 3; r++) {
+      const teams = cupTeams(c, r);
+      const res = c.results[r];
+      txt(this, rx + 10, y, `${CUP_ROUNDS[r]}${r === c.round && !c.out ? '  (prossimo)' : ''}`, 6, r === c.round ? '#3fd0ff' : '#5a5f80').setOrigin(0, 0.5);
+      y += 11;
+      if (!teams.length) {
+        txt(this, rx + 16, y, '?', 6, '#5a5f80').setOrigin(0, 0.5);
+        y += 11;
+        continue;
+      }
+      for (let i = 0; i < teams.length; i += 2) {
+        const a = teams[i];
+        const b = teams[i + 1];
+        const m = res?.[i / 2];
+        const mine = a === ME || b === ME;
+        if (mine) g.fillStyle(0x3a3060).fillRect(rx + 6, y - 6, rw - 12, 12);
+        const name = (id: string) => clubOf(st, id).short;
+        const won = (id: string) => m && m.winner === id;
+        txt(this, rx + 12, y, name(a), 6, won(a) ? '#5be37d' : m ? '#8a8fb0' : '#ffffff').setOrigin(0, 0.5);
+        txt(this, rx + 50, y, 'vs', 6, '#5a5f80').setOrigin(0, 0.5);
+        txt(this, rx + 70, y, name(b), 6, won(b) ? '#5be37d' : m ? '#8a8fb0' : '#ffffff').setOrigin(0, 0.5);
+        if (m) txt(this, rx + rw - 10, y, `${m.ga}-${m.gb}${m.pens ? ' rig.' : ''}`, 6, '#d8dcf0').setOrigin(1, 0.5);
+        y += 12;
+      }
+      y += 2;
+    }
+    if (c.champion) txt(this, rx + rw / 2, y + 4, c.champion === ME ? 'COPPA VINTA!' : `Vince: ${clubOf(st, c.champion).name}`, 6, c.champion === ME ? '#ffd23f' : '#d8dcf0');
+  }
+
+  /** Risultati dell'ultima giornata giocata. */
+  private drawRound(g: Phaser.GameObjects.Graphics, st: ManagerState, rx: number, y0: number, rw: number) {
+    const w = st.week - 1;
+    if (w < 0) {
+      txt(this, rx + rw / 2, y0 + 30, 'Nessuna giornata giocata.', 6, '#8a8fb0');
+      return;
+    }
+    txt(this, rx + rw / 2, y0 + 8, `GIORNATA ${w + 1}`, 6, '#ffd23f');
+    st.fixtures[w].forEach((f, i) => {
+      const y = y0 + 26 + i * 20;
+      const mine = f.h === ME || f.a === ME;
+      if (mine) g.fillStyle(0x3a3060).fillRect(rx + 6, y - 8, rw - 12, 16);
+      const h = clubOf(st, f.h);
+      const a = clubOf(st, f.a);
+      g.fillStyle(h.colors.shirt).fillRect(rx + 10, y - 4, 4, 8);
+      txt(this, rx + 18, y, h.short, 6, '#ffffff').setOrigin(0, 0.5);
+      txt(this, rx + rw / 2, y, `${f.gh ?? '-'} - ${f.ga ?? '-'}`, 8, '#ffffff');
+      txt(this, rx + rw - 18, y, a.short, 6, '#ffffff').setOrigin(1, 0.5);
+      g.fillStyle(a.colors.shirt).fillRect(rx + rw - 14, y - 4, 4, 8);
+    });
   }
 
   // ------------------------------------------------------------ SOCIETÀ
@@ -661,7 +795,7 @@ export class ManagerScene extends Phaser.Scene {
     txt(this, 18, top + 110, `Premio fine stagione: fino a ${money(DIVISIONS[st.division].prize)}`, 6, '#8a8fb0').setOrigin(0, 0.5);
     if (st.budget < 0) txt(this, 8 + lw / 2, top + 126, 'In rosso! Vendi qualcuno o fai salire i tifosi.', 6, '#ff5a5a');
     // albo d'oro
-    txt(this, 8 + lw / 2, top + 146, `ALBO · TITOLI VINTI: ${st.titles}`, 6, '#ffd23f');
+    txt(this, 8 + lw / 2, top + 146, `ALBO · TITOLI ${st.titles} · COPPE ${st.cups ?? 0}`, 6, '#ffd23f');
     st.history.slice(-5).reverse().forEach((h, i) => {
       txt(this, 18, top + 162 + i * 12, `Stagione ${h.season} · ${DIVISIONS[h.division].short}`, 6, '#d8dcf0').setOrigin(0, 0.5);
       txt(this, lw - 2, top + 162 + i * 12, `${h.pos}°`, 6, h.pos === 1 ? '#ffd23f' : '#d8dcf0').setOrigin(1, 0.5);
@@ -729,10 +863,10 @@ export class ManagerScene extends Phaser.Scene {
         col,
       ],
       [`Premio: +${money(se.prize)}`, '#5be37d'],
+      [se.objective ? `Obiettivo "${se.objective.label}": ${se.objective.met ? `centrato! +${money(se.objective.bonus)}` : 'mancato. Il presidente sbuffa.'}` : '', se.objective?.met ? '#5be37d' : '#ff9a9a'],
       [se.retired.length ? `Si ritirano: ${se.retired.join(', ')}` : 'Nessun ritiro', '#d8dcf0'],
       [se.youth.length ? `Dal vivaio: ${se.youth.join(', ')} (16 anni)` : '', '#ff7ab8'],
-      ['Tutti un anno più vecchi: i giovani crescono,', '#8a8fb0'],
-      ['i veterani calano un po\'.', '#8a8fb0'],
+      ['Tutti un anno più vecchi: i giovani crescono, i veterani calano.', '#8a8fb0'],
     ];
     lines.forEach(([s, cl], i) => c.add(txt(this, W / 2, 94 + i * 18, s, 6, cl, { wordWrap: { width: 330 }, align: 'center' })));
     if (se.outcome !== 'retrocesso' && se.outcome !== 'salvo') sfx.fanfare();
@@ -744,12 +878,14 @@ export class ManagerScene extends Phaser.Scene {
   // ------------------------------------------------------------ partite
   private play() {
     const st = this.st();
-    const opp = st && opponentOf(st);
-    if (!st || !opp) return;
+    const nm = st && nextMatch(st);
+    if (!st || !nm) return;
+    const opp = nm.opp;
     const me = myTeamDef(st);
     const launch: MatchLaunch = {
       mode: 'manager',
-      modeData: { season: st.season, week: st.week },
+      modeData: { season: st.season, week: st.week, cup: nm.cup ? st.cup!.round : -1 },
+      hudGoal: nm.cup ? `${st.cup!.europe ? 'EUROPA' : 'COPPA'}: ${CUP_ROUNDS[st.cup!.round]}` : undefined,
       config: {
         home: me,
         away: fixKits(me, clubTeamDef(st, opp)),
@@ -758,7 +894,7 @@ export class ManagerScene extends Phaser.Scene {
         difficulty: st.difficulty,
         durationSec: load().settings.duration,
         powerUps: load().settings.powerUps,
-        goldenGoal: false,
+        goldenGoal: nm.cup,
         humanTeam: 0,
       },
     };
@@ -768,17 +904,19 @@ export class ManagerScene extends Phaser.Scene {
 
   private simulate() {
     const st = this.st();
-    const opp = st && opponentOf(st);
-    if (!st || !opp || this.sim) return;
+    const nm = st && nextMatch(st);
+    if (!st || !nm || this.sim) return;
+    const opp = nm.opp;
     sfx.whistle();
-    const home = isHome(st);
+    const home = nm.home;
     const result = simulateMyMatch(st);
     const mine = result.scorers.filter((s) => s.team === 0).map((s) => s.name);
-    let report!: WeekReport;
+    const chances = this.makeChances(st, result);
+    let applied: MatchApplied = {};
     save((s) => {
-      if (s.manager) report = applyManagerResult(s.manager, result.score[0], result.score[1], mine);
+      if (s.manager) applied = applyMatch(s.manager, result.score[0], result.score[1], mine);
     });
-    this.sim = { result, report, home, oppName: opp.short, oppColor: opp.colors.shirt, t: 0, done: false };
+    this.sim = { result, applied, label: nm.label, chances, home, oppName: opp.short, oppColor: opp.colors.shirt, t: 0, done: false };
     this.build();
     let lastGoals = 0;
     this.simTimer = this.time.addEvent({
@@ -832,16 +970,18 @@ export class ManagerScene extends Phaser.Scene {
     c.add(txt(this, W / 2, 62, sm.done ? 'FINALE' : `${Math.floor(sm.t)}'`, 6, sm.done ? '#ffd23f' : '#5be37d'));
     // barra del tempo
     this.bar(g, W / 2 - 150, 76, 300, 3, sm.t / 90, COLORS.accent2);
-    // cronaca
+    // cronaca: gol e occasioni
     let y = 96;
-    c.add(txt(this, W / 2, y - 6, 'CRONACA', 6, '#8a8fb0'));
+    c.add(txt(this, W / 2, y - 6, `CRONACA · ${sm.label}`, 6, '#8a8fb0'));
     y += 6;
-    const lines = shown.slice(-8);
-    if (!lines.length) c.add(txt(this, W / 2, y + 8, sm.t < 3 ? 'Fischio d\'inizio!' : 'Partita bloccata, nessun gol...', 6, '#8a8fb0'));
-    for (const s of lines) {
-      const mine = s.team === 0;
-      c.add(txt(this, W / 2, y + 8, `${minuteOf(s.time, SIM_DURATION)}'  GOL! ${s.name}  (${mine ? st.club.short : sm.oppName})`, 6, mine ? '#5be37d' : '#ff9a9a'));
-      y += 14;
+    const feed = [
+      ...shown.map((s) => ({ min: minuteOf(s.time, SIM_DURATION), text: `GOL! ${s.name}  (${s.team === 0 ? st.club.short : sm.oppName})`, col: s.team === 0 ? '#5be37d' : '#ff9a9a' })),
+      ...sm.chances.filter((ch) => ch.min <= sm.t).map((ch) => ({ min: ch.min, text: ch.text, col: ch.mine ? '#9ad8b0' : '#c8a0a8' })),
+    ].sort((a, b) => a.min - b.min).slice(-8);
+    if (!feed.length) c.add(txt(this, W / 2, y + 8, sm.t < 3 ? 'Fischio d\'inizio!' : 'Squadre che si studiano...', 6, '#8a8fb0'));
+    for (const f of feed) {
+      c.add(txt(this, W / 2, y + 8, `${f.min}'  ${f.text}`, 6, f.col));
+      y += 13;
     }
     if (!sm.done) {
       this.simButton(sm.done, () => button(this, W / 2, H - 26, 120, 24, 'SALTA', () => {
@@ -852,18 +992,35 @@ export class ManagerScene extends Phaser.Scene {
       }, { size: 6, color: 0x3a3d55 }));
       return;
     }
-    const r = sm.report;
-    const [a, b] = [r.myGoals, r.oppGoals];
-    const res = a > b ? 'VITTORIA!' : a < b ? 'SCONFITTA' : 'PAREGGIO';
-    const by = Math.max(y + 18, 214);
-    c.add(txt(this, W / 2, by, res, 8, a > b ? '#ffd23f' : a < b ? '#ff5a5a' : '#ffffff'));
-    c.add(txt(this, W / 2, by + 16, `Classifica: ${r.pos}°  ·  settimana ${r.income >= 0 ? '+' : ''}${money(r.income)}`, 6, '#d8dcf0'));
-    if (r.notes[0]) c.add(txt(this, W / 2, by + 30, r.notes[0], 6, '#8a8fb0'));
+    const [a, b] = sm.result.score;
+    const lines = managerReportLines(st, sm.applied, a, b);
+    const by = Math.max(y + 14, 212);
+    lines.slice(0, 4).forEach((l, i) => c.add(txt(this, W / 2, by + i * 14, l.text, i === 0 ? 8 : 6, l.color ?? '#d8dcf0')));
     this.simButton(sm.done, () => button(this, W / 2, H - 26, 160, 26, 'CONTINUA', () => {
       this.sim = null;
       this.simTimer?.remove();
       this.time.delayedCall(0, () => this.build());
     }, { color: COLORS.good, textColor: '#1a1222' }));
+  }
+
+  /** Occasioni da gol "di contorno" per la cronaca simulata, coerenti con i tiri. */
+  private makeChances(st: ManagerState, r: MatchResult): SimShow['chances'] {
+    const out: SimShow['chances'] = [];
+    const me = myTeamDef(st);
+    const opp = clubTeamDef(st, opponentOf(st)!);
+    let seed = r.stats.shots[0] * 31 + r.stats.shots[1] * 7 + st.week;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const lines = ['Tiro di {n}: parata!', 'Palo di {n}!', '{n} calcia alto di poco.', 'Contropiede di {n}, salva il portiere.', '{n} ci prova da lontano: fuori.'];
+    [0, 1].forEach((team) => {
+      const goals = r.scorers.filter((s) => s.team === team).length;
+      const n = Math.min(3, Math.max(0, r.stats.shots[team] - goals));
+      const roster = (team === 0 ? me : opp).players.filter((p) => p.role !== 'GK');
+      for (let i = 0; i < n && roster.length; i++) {
+        const who = roster[Math.floor(rnd() * roster.length)].name;
+        out.push({ min: 2 + Math.floor(rnd() * 86), text: lines[Math.floor(rnd() * lines.length)].replace('{n}', who), mine: team === 0 });
+      }
+    });
+    return out;
   }
 
   private simButton(done: boolean, make: () => Button) {
@@ -875,13 +1032,24 @@ export class ManagerScene extends Phaser.Scene {
   }
 }
 
-/** Resoconto (per la schermata del risultato) di una partita di campionato giocata in arcade. */
-export function managerReportLines(st: ManagerState, rep: WeekReport): { text: string; color?: string }[] {
-  const lines: { text: string; color?: string }[] = [
-    { text: `Classifica: ${rep.pos}°`, color: '#ffffff' },
-    { text: `Settimana: ${rep.income >= 0 ? '+' : ''}${money(rep.income)}  (cassa ${money(st.budget)})`, color: rep.income >= 0 ? '#5be37d' : '#ff9a9a' },
-  ];
-  if (rep.notes[0]) lines.push({ text: rep.notes[0], color: '#8a8fb0' });
+/** Resoconto di una partita del manager (coppa o campionato), per cronaca e schermata del risultato. */
+export function managerReportLines(_st: ManagerState, ap: MatchApplied, a: number, b: number): { text: string; color?: string }[] {
+  const lines: { text: string; color?: string }[] = [];
+  if (ap.cup) {
+    const c = ap.cup;
+    lines.push({
+      text: c.champion ? 'COPPA VINTA!' : c.won ? `PASSAGGIO DEL TURNO${c.pens ? ' AI RIGORI' : ''}!` : `ELIMINATI${c.pens ? ' AI RIGORI' : ''}`,
+      color: c.won ? '#ffd23f' : '#ff5a5a',
+    });
+    if (c.prize) lines.push({ text: `Premio coppa: +${money(c.prize)}`, color: '#5be37d' });
+    if (c.notes[0]) lines.push({ text: c.notes[0], color: '#ff9a9a' });
+    return lines;
+  }
+  const rep = ap.week;
+  if (!rep) return lines;
+  lines.push({ text: a > b ? 'VITTORIA!' : a < b ? 'SCONFITTA' : 'PAREGGIO', color: a > b ? '#ffd23f' : a < b ? '#ff5a5a' : '#ffffff' });
+  lines.push({ text: `Classifica: ${rep.pos}°  ·  settimana ${rep.income >= 0 ? '+' : ''}${money(rep.income)}`, color: '#d8dcf0' });
+  if (rep.notes[0]) lines.push({ text: rep.notes[0], color: rep.notes[0].startsWith('Infortunio') ? '#ff9a9a' : '#8a8fb0' });
   if (rep.seasonEnd) lines.push({ text: 'Stagione finita! Guarda il resoconto.', color: '#ffd23f' });
   return lines;
 }
