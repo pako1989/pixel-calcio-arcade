@@ -103,6 +103,6 @@ export class TitleScene extends Phaser.Scene {
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.2', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.3', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }
