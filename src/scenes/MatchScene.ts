@@ -479,6 +479,11 @@ export class MatchScene extends Phaser.Scene {
         break;
       case 'switch':
         break;
+      case 'call':
+        if (!quiet) sfx.select();
+        this.fx.stars.explode(6, e.x, e.y - 14);
+        if (!demo) this.msg({ text: 'PASSALA!', color: '#3fd0ff', ms: 700 });
+        break;
     }
   }
 
@@ -659,8 +664,10 @@ export class MatchScene extends Phaser.Scene {
     let ty = b.y - b.z * Z_SCALE + b.vy * 0.15;
     const h = sim.human;
     if (h && sim.phase === 'play') {
-      tx = tx * 0.8 + h.x * 0.2;
-      ty = ty * 0.8 + h.y * 0.2;
+      // con un solo giocatore la telecamera segue di più lui
+      const w = sim.locked ? 0.4 : 0.2;
+      tx = tx * (1 - w) + h.x * w;
+      ty = ty * (1 - w) + h.y * w;
     }
     const k = Math.min(1, dt * (sim.phase === 'goal' ? 2 : 4.5));
     this.camPt.x += (tx - this.camPt.x) * k;

@@ -64,6 +64,8 @@ export class MatchSim {
   private prevShoot = false;
   private prevPass = false;
   private switchCd = 0;
+  /** Secondi in cui la richiesta di palla del giocatore resta valida. */
+  callT = 0;
   superBar: [number, number] = [0, 0];
   fireShot: [boolean, boolean] = [false, false];
   turbo: [number, number] = [0, 0];
@@ -175,7 +177,8 @@ export class MatchSim {
     kicker.y = this.H / 2;
     b.owner = kicker;
     b.lastTouch = kicker;
-    if (this.humanTeam !== null) this.humanIdx = this.humanTeam === this.kickoffTeam ? 4 : 4;
+    if (this.humanTeam !== null) this.humanIdx = this.cfg.lockHuman ?? 4;
+    this.callT = 0;
     this.charge = 0;
     this.charging = false;
   }
@@ -323,6 +326,7 @@ export class MatchSim {
     }
     this.updateWind(dt);
     this.updatePowerUps(dt);
+    if (this.callT > 0) this.callT -= dt;
 
     // decisioni
     this.handleHuman(dt, input);
@@ -392,7 +396,7 @@ export class MatchSim {
         const target = chooseHumanPassTarget(this, h, dir);
         if (target) {
           this.pass(h, target);
-          this.setHuman(target.idx);
+          if (!this.locked) this.setHuman(target.idx);
         } else {
           // nessun compagno: lancio in avanti
           this.kickBall(h, dir, 300, 40, 0);
@@ -406,14 +410,25 @@ export class MatchSim {
         const dir = mag > 0.15 ? Math.atan2(input.my, input.mx) : h.facing;
         this.startSlide(h, dir);
       }
-      if (passPressed && !this.teamHasBall(h.team)) {
+      if (passPressed && this.locked) {
+        // un solo giocatore: PASSA senza palla chiede il pallone ai compagni
+        if (this.teamHasBall(h.team) || this.ball.owner === null) {
+          this.callT = 1.6;
+          this.events.push({ type: 'call', id: h.id, x: h.x, y: h.y });
+        }
+      } else if (passPressed && !this.teamHasBall(h.team)) {
         this.switchToBest(true);
       }
     }
   }
 
+  /** Il giocatore controlla sempre lo stesso calciatore. */
+  get locked(): boolean {
+    return this.cfg.lockHuman !== undefined;
+  }
+
   setHuman(idx: number) {
-    if (this.humanTeam === null || idx === this.humanIdx) return;
+    if (this.humanTeam === null || idx === this.humanIdx || this.locked) return;
     this.humanIdx = idx;
     this.switchCd = 0.5;
     this.charging = false;
@@ -456,7 +471,7 @@ export class MatchSim {
   }
 
   private autoSwitch(dt: number) {
-    if (this.humanTeam === null) return;
+    if (this.humanTeam === null || this.locked) return;
     this.switchCd -= dt;
     const b = this.ball;
     const team = this.humanTeam;

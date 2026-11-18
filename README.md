@@ -24,7 +24,7 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 - **Partita veloce**: scegli squadre, campo, difficoltà e durata.
 - **Torneo**: la Coppa Pixel a 8 squadre, quarti, semifinale e finale. Un campo diverso a ogni turno, la finale allo Stadio. Le coppe vinte restano in bacheca.
 - **Missioni**: 12 sfide con obiettivi speciali (rimonta da 0-2, gol col super tiro, porta inviolata, gol lampo...). Si sbloccano un po' alla volta.
-- **Diventa un mito** (storia): crei il tuo campione e lo porti dal campetto di quartiere alla finale di Coppa in Serie A. 9 partite in 6 capitoli, con dialoghi, un rivale, punti abilità da spendere e abilità speciali da sbloccare.
+- **Diventa un mito** (storia): crei il tuo campione e lo porti dal campetto di quartiere alla finale di Coppa in Serie A. 9 partite in 6 capitoli, con dialoghi, un rivale, punti abilità da spendere e abilità speciali da sbloccare. Puoi scegliere se muovere **solo il tuo campione** (i compagni sono della CPU e con PASSA senza palla chiedi il pallone) o tutta la squadra.
 
 Tutto il progresso è salvato sul telefono.
 

@@ -71,6 +71,11 @@ export interface MatchConfig {
   seed?: number;
   /** Squadra controllata dal giocatore umano (0 = casa, null = CPU contro CPU). */
   humanTeam: 0 | 1 | null;
+  /**
+   * Controllo di un solo giocatore (indice nella squadra, es. 4 = attaccante):
+   * niente cambi, i compagni sono della CPU e PASSA senza palla chiede il pallone.
+   */
+  lockHuman?: number;
 }
 
 export interface MatchStats {
