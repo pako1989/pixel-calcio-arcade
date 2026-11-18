@@ -137,3 +137,36 @@ describe('campi speciali', () => {
     });
   }
 });
+
+describe('falli e stile', () => {
+  it('con i falli attivi ci sono cartellini, e la partita resta valida', () => {
+    let fouls = 0;
+    let tricks = 0;
+    for (let seed = 1; seed <= 4; seed++) {
+      const sim = new MatchSim(cfg({ seed, fouls: true, difficulty: 'difficile' }));
+      const dt = 1 / 60;
+      for (let t = 0; t < 400 && sim.phase !== 'end'; t += dt) {
+        sim.update(dt);
+        for (const e of sim.events) {
+          if (e.type === 'foul') fouls++;
+          if (e.type === 'trick') tricks++;
+        }
+        sim.events.length = 0;
+        for (const p of sim.players) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+      }
+      expect(sim.phase).toBe('end');
+    }
+    expect(fouls).toBeGreaterThan(0);
+    expect(tricks).toBeGreaterThan(0);
+  });
+  it('senza falli attivi nessun fallo', () => {
+    const sim = new MatchSim(cfg({ seed: 3, difficulty: 'difficile' }));
+    let fouls = 0;
+    for (let t = 0; t < 400 && sim.phase !== 'end'; t += 1 / 60) {
+      sim.update(1 / 60);
+      for (const e of sim.events) if (e.type === 'foul') fouls++;
+      sim.events.length = 0;
+    }
+    expect(fouls).toBe(0);
+  });
+});

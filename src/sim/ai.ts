@@ -60,7 +60,7 @@ export function chaserOf(sim: MatchSim, team: 0 | 1): Player | null {
   let bestT = Infinity;
   const b = sim.ball;
   for (const p of sim.teams[team]) {
-    if (p.isGK || p.state === 'stun') continue;
+    if (p.isGK || p.state === 'stun' || p.out > 0) continue;
     const t = b.owner ? dist(p, b) / sim.maxSpeed(p) : interceptPoint(sim, p).t;
     // chi è controllato dall'umano conta un po' di più: evita che l'IA gli "rubi" l'azione
     const tt = sim.isHuman(p) ? t * 0.8 : t;
@@ -100,7 +100,7 @@ function nearestOpp(sim: MatchSim, pt: Vec, team: 0 | 1): { p: Player | null; d:
 
 /** Valuta un compagno come destinatario di passaggio (più alto = meglio). */
 function passScore(sim: MatchSim, from: Player, to: Player): number {
-  if (to === from) return -Infinity;
+  if (to === from || to.out > 0) return -Infinity;
   const d = dist(from, to);
   if (d < 40 || d > 420) return -Infinity;
   if (!isPassSafe(sim, from, to, from.team)) return -Infinity;
@@ -133,7 +133,7 @@ export function chooseHumanPassTarget(sim: MatchSim, p: Player, dir: number): Pl
   const dx = Math.cos(dir);
   const dy = Math.sin(dir);
   for (const t of sim.teams[p.team]) {
-    if (t === p) continue;
+    if (t === p || t.out > 0) continue;
     const d = dist(p, t);
     if (d < 20) continue;
     const c = ((t.x - p.x) * dx + (t.y - p.y) * dy) / d;

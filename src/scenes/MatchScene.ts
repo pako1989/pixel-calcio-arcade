@@ -11,7 +11,9 @@ import { music } from '../audio/music';
 import { commentary } from '../audio/commentary';
 import { Controls } from '../input/controls';
 import type { MatchLaunch } from '../modes/modes';
-import { demoLaunch } from './demo';
+import { demoLaunch, fixKits } from './demo';
+import { load, progressOf } from '../save/storage';
+import { ballTint, equipped, GROWTH_MODES, grownTeam, isRival, kitVariant } from '../modes/progress';
 import { TallyTracker } from '../modes/tally';
 
 interface PSprite {
@@ -42,6 +44,13 @@ const P_FIELDS = 9;
 export class MatchScene extends Phaser.Scene {
   sim!: MatchSim;
   launch!: MatchLaunch;
+  /** La partita come l'ha preparata la modalità (per rivincita e risultato). */
+  private origLaunch!: MatchLaunch;
+  /** Si gioca contro una squadra rivale. */
+  rival = false;
+  private ballSkin = 'classico';
+  private celebration = 'salto';
+  private markG!: Phaser.GameObjects.Graphics;
   ctrl = new Controls();
   private ps: PSprite[] = [];
   private ball!: Phaser.GameObjects.Sprite;
@@ -96,7 +105,8 @@ export class MatchScene extends Phaser.Scene {
   }
 
   init(data: MatchLaunch) {
-    this.launch = data;
+    this.origLaunch = data;
+    this.launch = this.prepare(data);
     this.ps = [];
     this.puSprites = new Map();
     this.acc = 0;
@@ -123,6 +133,27 @@ export class MatchScene extends Phaser.Scene {
     this.started = false;
     this.crowdA = this.crowdB = undefined;
     this.ctrl.reset();
+  }
+
+  /**
+   * Aggiunge alla partita le scelte del giocatore: falli sì/no, crescita della squadra,
+   * maglia, pallone ed esultanza comprati nel negozio.
+   */
+  private prepare(data: MatchLaunch): MatchLaunch {
+    this.rival = false;
+    this.ballSkin = 'classico';
+    this.celebration = 'salto';
+    if (data.demo || data.config.humanTeam !== 0) return data;
+    const cfg = { ...data.config, fouls: load().settings.fouls };
+    const p = progressOf();
+    this.ballSkin = equipped(p, 'pallone');
+    this.celebration = equipped(p, 'esultanza');
+    if (GROWTH_MODES.includes(data.mode)) {
+      cfg.home = kitVariant(grownTeam(cfg.home, p), equipped(p, 'maglia'));
+      cfg.away = fixKits(cfg.home, cfg.away);
+      this.rival = isRival(p, cfg.away.id);
+    }
+    return { ...data, config: cfg };
   }
 
   create() {
@@ -193,6 +224,7 @@ export class MatchScene extends Phaser.Scene {
     this.passRing = this.add.image(0, 0, 'ring').setTint(0xffffff).setAlpha(0.45).setDepth(3.5);
     this.marker = this.add.image(0, 0, 'marker').setTint(0xffd23f).setDepth(26);
     this.chargeG = this.add.graphics().setDepth(27);
+    this.markG = this.add.graphics().setDepth(26);
     const hasHuman = cfg.humanTeam !== null;
     this.ring.setVisible(hasHuman);
     this.marker.setVisible(hasHuman);
@@ -655,10 +687,10 @@ export class MatchScene extends Phaser.Scene {
           const r = this.sim.result;
           if (this.launch.penalties && r.score[0] === r.score[1]) {
             // pareggio: si va ai rigori
-            this.scene.launch('penalties', { outcome: { launch: this.launch, result: r, tally: this.tally.t } });
+            this.scene.launch('penalties', { outcome: { launch: this.origLaunch, result: r, tally: this.tally.t, style: this.sim.stylePoints[0] } });
           } else {
             music.stop(0.3);
-            this.scene.launch('result', { launch: this.launch, result: r, tally: this.tally.t });
+            this.scene.launch('result', { launch: this.origLaunch, result: r, tally: this.tally.t, style: this.sim.stylePoints[0] });
           }
         }
       }
@@ -798,7 +830,10 @@ export class MatchScene extends Phaser.Scene {
             music.stop(1.5);
           } else if (e.kind === 'kickoff') {
             sfx.whistle(1);
-            if (!this.started) commentary.say('start');
+            if (!this.started) {
+              commentary.say(this.rival ? 'rival' : 'start');
+              if (this.rival) this.msg({ text: 'SFIDA RIVALE!', sub: `Contro ${this.launch.config.away.name}: monete doppie se vinci`, color: '#ff5a5a', ms: 2400 });
+            }
             this.started = true;
           } else if (e.kind === 'golden') {
             sfx.whistle(2);
@@ -837,11 +872,91 @@ export class MatchScene extends Phaser.Scene {
         if (!demo) this.msg({ text: 'ONDA!', color: '#8fd8ff', ms: 1200 });
         this.cameras.main.shake(400, 0.003);
         break;
+      case 'trick': {
+        const names = { tunnel: 'TUNNEL!', dribbling: 'DRIBBLING!', lontano: 'GOL DA LONTANO!', sponda: 'GOL DI SPONDA!' };
+        const goalTrick = e.kind === 'lontano' || e.kind === 'sponda';
+        if (!quiet) {
+          sfx.trick();
+          // per i gol speciali la frase arriva dopo il "gol!"
+          if (goalTrick) this.time.delayedCall(2200, () => commentary.say(e.kind, e.name));
+          else if (e.kind === 'tunnel' || Math.random() < 0.4) commentary.say(e.kind, e.name);
+        }
+        this.fx.stars.explode(goalTrick ? 6 : 10, e.x, e.y - 12);
+        if (!demo) {
+          const mine = human === null || human === e.team;
+          const show = () => this.msg({ text: names[e.kind], sub: e.name, color: mine ? '#ff7ab8' : '#c0a0b8', ms: 1300 });
+          if (goalTrick) this.time.delayedCall(2700, show);
+          else show();
+        }
+        break;
+      }
+      case 'showtime':
+        if (!quiet) {
+          sfx.roar(1);
+          sfx.chant(e.team === 0 ? 0 : 1, THEMES[this.launch.config.pitch.id].crowd);
+          commentary.say('showtime');
+        }
+        this.excite = 1;
+        this.fx.confetti.explode(30, this.sim.ball.x, this.sim.ball.y - 30);
+        if (!demo) this.msg({ text: 'SPETTACOLO!', sub: 'Super tiro più carico', color: '#ff7ab8', big: true, ms: 1800 });
+        break;
+      case 'foul': {
+        if (!quiet) {
+          sfx.whistle(2);
+          sfx.ooh();
+          if (e.card === 'red') {
+            commentary.say('red', e.by);
+            sfx.boo();
+          } else if (e.card === 'yellow') commentary.say('yellow', e.by);
+          else if (e.injury) commentary.say('injury', e.victim);
+        }
+        this.fx.dust.explode(12, e.x, e.y);
+        cam.shake(150, 0.004);
+        if (!demo) {
+          if (e.card !== 'none') {
+            this.msg({
+              text: e.card === 'red' ? 'CARTELLINO ROSSO!' : 'CARTELLINO GIALLO',
+              sub: e.card === 'red' ? `${e.by} fuori per 30 secondi` : e.by,
+              color: e.card === 'red' ? '#ff5a5a' : '#ffd23f',
+              big: e.card === 'red',
+              ms: 1800,
+            });
+          } else this.msg({ text: 'FALLO!', sub: e.by, color: '#ffffff', ms: 1100 });
+          if (e.injury) this.time.delayedCall(1900, () => this.msg({ text: 'INFORTUNIO', sub: `${e.victim} è più lento`, color: '#ff9a5a', ms: 1600 }));
+        }
+        break;
+      }
       case 'call':
         if (!quiet) sfx.select();
         this.fx.stars.explode(6, e.x, e.y - 14);
         if (!demo) this.msg({ text: 'PASSALA!', color: '#3fd0ff', ms: 700 });
         break;
+    }
+  }
+
+  /** Colore del pallone comprato nel negozio. */
+  private skinBall(t: number) {
+    const tint = ballTint(this.ballSkin, t);
+    if (tint === null) this.ball.clearTint();
+    else this.ball.setTint(tint);
+  }
+
+  /** Cartellini e infortuni sopra la testa dei giocatori. */
+  private drawMarks() {
+    const g = this.markG;
+    g.clear();
+    if (!this.sim.cfg.fouls) return;
+    for (const p of this.sim.players) {
+      const x = Math.round(p.x);
+      const y = Math.round(p.y - 34);
+      if (p.out > 0 || p.yellows > 0) {
+        g.fillStyle(0x1a1222).fillRect(x + 5, y - 1, 6, 8);
+        g.fillStyle(p.out > 0 ? 0xff3a3a : 0xffd23f).fillRect(x + 6, y, 4, 6);
+      }
+      if (p.injured) {
+        g.fillStyle(0xffffff).fillRect(x - 11, y, 6, 6);
+        g.fillStyle(0xe8443a).fillRect(x - 9, y + 1, 2, 4).fillRect(x - 10, y + 2, 4, 2);
+      }
     }
   }
 
@@ -886,6 +1001,32 @@ export class MatchScene extends Phaser.Scene {
           d = 'down';
           f = false;
           yOff = -Math.abs(Math.sin(t * 9 + p.id)) * 5;
+          if (sim.phase === 'goal' && p === sim.ball.lastTouch && p.team === this.launch.config.humanTeam && this.celebration !== 'salto') {
+            const c = this.celebration;
+            const ph = p.stateT;
+            if (c === 'capriola') {
+              // salto con giro completo ogni 1.2 s
+              const k = (ph % 1.2) / 1.2;
+              yOff = -Math.sin(k * Math.PI) * 16;
+              rot = k < 0.8 ? (k / 0.8) * Math.PI * 2 : 0;
+            } else if (c === 'scivolata') {
+              pose = ph < 1.4 ? 'slide' : 'celebrate';
+              d = 'side';
+              f = Math.cos(p.facing) < 0;
+              yOff = 0;
+            } else if (c === 'aeroplano') {
+              pose = speed > 20 ? (`run${Math.floor(p.runPhase) % 4}` as Pose) : 'celebrate';
+              d = 'side';
+              f = p.vx < 0;
+              yOff = 0;
+              rot = Math.sin(t * 4) * 0.35;
+            } else if (c === 'trottola') {
+              const seq: [Dir, boolean][] = [['down', false], ['side', false], ['up', false], ['side', true]];
+              [d, f] = seq[Math.floor(t * 12) % 4];
+              yOff = -Math.abs(Math.sin(t * 6)) * 3;
+            }
+            break;
+          }
           if (speed > 30) {
             pose = (`run${Math.floor(p.runPhase) % 4}` as Pose);
             d = dir;
@@ -929,11 +1070,12 @@ export class MatchScene extends Phaser.Scene {
       this.ball.setTint(b.superShot ? 0xfff0a0 : 0xffb070);
     } else if (b.owner && sim.fireShot[b.owner.team]) {
       if (Math.random() < 0.5) this.fx.fire.emitParticleAt(b.x, by - 2, 1);
-      this.ball.clearTint();
+      this.skinBall(t);
     } else if (b.owner && sim.superBar[b.owner.team] >= 1 && Math.random() < 0.3) {
       this.fx.spark.emitParticleAt(b.x, by - 2, 1);
-      this.ball.clearTint();
-    } else this.ball.clearTint();
+      this.skinBall(t);
+    } else this.skinBall(t);
+    this.drawMarks();
 
     // giocatore controllato
     const h = sim.human;

@@ -28,7 +28,16 @@ export type CallKind =
   | 'penMiss'
   | 'penPost'
   | 'penWin'
-  | 'wave';
+  | 'wave'
+  | 'tunnel'
+  | 'dribbling'
+  | 'lontano'
+  | 'sponda'
+  | 'showtime'
+  | 'yellow'
+  | 'red'
+  | 'injury'
+  | 'rival';
 
 const LINES: Record<CallKind, string[]> = {
   start: ['Si parte!', "Fischio d'inizio!", 'Comincia la partita!', 'Palla al centro, si gioca!'],
@@ -54,11 +63,20 @@ const LINES: Record<CallKind, string[]> = {
   penPost: ['Palo!', 'Sul legno!'],
   penWin: ['Vince {n} ai rigori!', 'È finita! Passa {n}!'],
   wave: ['Attenzione, arriva l\'onda!', 'Che ondata sul molo!'],
+  tunnel: ['Tunnel! Che umiliazione!', 'Tra le gambe! Tunnel di {n}!', 'Ma che tunnel!'],
+  dribbling: ['Che dribbling di {n}!', 'Lo salta come un birillo!', 'Finta e via!'],
+  lontano: ['Da lontanissimo! Che gol!', 'Una cannonata da fuori!'],
+  sponda: ['Di sponda! Geniale!', 'Gol di sponda, che fantasia!'],
+  showtime: ['Che spettacolo! Il pubblico è in delirio!', 'Spettacolo puro!'],
+  yellow: ['Cartellino giallo per {n}!', 'Ammonito {n}!'],
+  red: ['Rosso! {n} va fuori!', 'Espulso {n}! Che ingenuità!'],
+  injury: ['{n} resta a terra, si è fatto male.', 'Brutto colpo per {n}.'],
+  rival: ['Si gioca la sfida più sentita!', 'È il derby! Quanta tensione!', 'Partita da vincere a ogni costo, c\'è la rivalità!'],
 };
 
 /** Priorità: le frasi importanti interrompono quelle in corso. */
 const PRIORITY: Partial<Record<CallKind, number>> = {
-  goal: 3, ownGoal: 3, penWin: 3, end: 2, golden: 2, penGoal: 2, penSave: 2, penMiss: 2, penPost: 2, penStart: 2,
+  goal: 3, ownGoal: 3, penWin: 3, red: 2, end: 2, golden: 2, penGoal: 2, penSave: 2, penMiss: 2, penPost: 2, penStart: 2,
 };
 
 class Commentary {

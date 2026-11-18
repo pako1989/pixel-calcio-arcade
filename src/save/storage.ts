@@ -3,6 +3,7 @@ import type { CareerState } from '../modes/career';
 import type { ConquistaState } from '../modes/conquista';
 import type { ManagerState } from '../modes/manager';
 import type { AlbumSave } from '../modes/album';
+import { newProgress, type ProgressSave } from '../modes/progress';
 import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 
@@ -27,6 +28,8 @@ export interface SaveData {
     /** Meteo e orario scelti in Partita veloce. */
     weather: string;
     night: string;
+    /** Falli, cartellini e infortuni in partita. */
+    fouls: boolean;
   };
   record: { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number };
   /** Diventa un mito (storia). */
@@ -42,6 +45,8 @@ export interface SaveData {
   manager?: ManagerState;
   /** Album delle figurine. */
   album?: AlbumSave;
+  /** Monete, negozio, crescita dei giocatori e rivalità. */
+  progress?: ProgressSave;
 }
 
 const DEFAULTS: SaveData = {
@@ -60,6 +65,7 @@ const DEFAULTS: SaveData = {
     voice: true,
     weather: 'sereno',
     night: 'giorno',
+    fouls: false,
   },
   record: { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0 },
 };
@@ -96,4 +102,15 @@ export function save(mut?: (d: SaveData) => void) {
 export function audioPrefs() {
   const s = load().settings;
   return { muted: s.muted, music: s.music, sfx: s.sfx, crowd: s.crowd, voice: s.voice };
+}
+
+/** Progressi (monete, negozio, crescita), creati al primo uso. */
+export function progressOf(): ProgressSave {
+  const d = load();
+  if (!d.progress) d.progress = newProgress();
+  const p = d.progress;
+  // salvataggi vecchi: campi aggiunti dopo
+  p.xp = p.xp ?? {};
+  p.vs = p.vs ?? {};
+  return p;
 }

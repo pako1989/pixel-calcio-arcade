@@ -81,6 +81,10 @@ export class MatchSim {
   waveDir: 1 | -1 = 1;
   private waveT = 9;
   stats: MatchStats = { shots: [0, 0], passes: [0, 0], tackles: [0, 0], possession: [0, 0] };
+  /** Barra dello spettacolo (0..1) e punti stile totali per squadra. */
+  style: [number, number] = [0, 0];
+  stylePoints: [number, number] = [0, 0];
+  private tunnelCand: { team: 0 | 1; opp: number; by: string } | null = null;
   scorers: MatchResult['scorers'] = [];
   readonly diff: [DiffParams, DiffParams];
 
@@ -201,6 +205,12 @@ export class MatchSim {
     const name = scorerP ? scorerP.def.name + (own ? ' (aut.)' : '') : '?';
     this.scorers.push({ team, name, time: this.elapsed });
     this.events.push({ type: 'goal', team, scorer: name, x: b.x, y: b.y, own });
+    this.tunnelCand = null;
+    if (!own && scorerP && b.shotFrom) {
+      const gx = team === 0 ? this.W : 0;
+      if (Math.abs(gx - b.shotFrom.x) > 330) this.trick('lontano', team, b.x, b.y, scorerP.def.name);
+      else if (b.banked) this.trick('sponda', team, b.x, b.y, scorerP.def.name);
+    }
     this.phase = 'goal';
     this.phaseT = 3.2;
     b.fire = false;
@@ -341,6 +351,16 @@ export class MatchSim {
       p.tackleCd -= dt;
       p.pickupCd -= dt;
       p.saveCd -= dt;
+      if (p.out > 0) {
+        p.out -= dt;
+        p.wantX = p.wantY = 0;
+        if (p.out <= 0) {
+          // rientra in campo dalla linea laterale
+          p.x = this.W / 2 + (p.team === 0 ? -30 : 30);
+          p.y = 6;
+        }
+        continue;
+      }
       if (this.isHuman(p)) continue;
       if (p.isGK) {
         aiGoalkeeper(this, p, dt);
@@ -448,7 +468,7 @@ export class MatchSim {
     let best = -1;
     let bestD = Infinity;
     for (const p of team) {
-      if (p.isGK) continue;
+      if (p.isGK || p.out > 0) continue;
       // punta un po' davanti alla palla
       const d = dist(p, { x: b.x + b.vx * 0.25, y: b.y + b.vy * 0.25 });
       if (d < bestD) {
@@ -457,12 +477,13 @@ export class MatchSim {
       }
     }
     if (best < 0) return;
+    if (team[this.humanIdx].out > 0) force = false;
     if (force && best === this.humanIdx) {
       // passa al secondo più vicino
       let second = -1;
       let sd = Infinity;
       for (const p of team) {
-        if (p.isGK || p.idx === this.humanIdx) continue;
+        if (p.isGK || p.idx === this.humanIdx || p.out > 0) continue;
         const d = dist(p, b);
         if (d < sd) {
           sd = d;
@@ -481,6 +502,10 @@ export class MatchSim {
     this.switchCd -= dt;
     const b = this.ball;
     const team = this.humanTeam;
+    if (this.teams[team][this.humanIdx].out > 0) {
+      this.switchToBest(false);
+      return;
+    }
     if (b.owner && b.owner.team === team) {
       if (!b.owner.isGK && b.owner.idx !== this.humanIdx) this.setHuman(b.owner.idx);
       return;
@@ -517,6 +542,8 @@ export class MatchSim {
     b.spin = spin;
     b.passTarget = null;
     b.isShot = false;
+    b.shotFrom = null;
+    b.banked = false;
     p.kickCd = 0.32;
     p.holdT = 0;
     p.facing = dir;
@@ -563,8 +590,15 @@ export class MatchSim {
       spin = (this.rng.chance(0.5) ? 1 : -1) * 520;
       dir -= Math.sign(spin) * 0.22;
     }
+    // tiro a giro (abilità sbloccata): il pallone curva verso il palo lontano
+    if (!superShot && p.def.skills?.includes('giro') && power > 0.4) {
+      const side = p.y < this.H / 2 ? 1 : -1;
+      spin = side * Math.sign(gx - p.x) * 260;
+      dir -= Math.sign(spin) * 0.12;
+    }
     this.kickBall(p, dir, speed, vz, spin);
     const b = this.ball;
+    b.shotFrom = { x: p.x, y: p.y };
     b.fire = fire;
     b.superShot = superShot;
     b.isShot = true;
@@ -602,12 +636,21 @@ export class MatchSim {
     if (this.ball.owner === p) s *= 0.92;
     if (this.turbo[p.team] > 0) s *= 1.2;
     if (p.isGK) s *= 1.05;
+    if (p.injured) s *= 0.86;
     return s;
   }
 
   private movePlayer(p: Player, dt: number) {
     p.stateT += dt;
+    if (p.out > 0) {
+      // in panchina a bordo campo
+      p.x = this.W / 2 + (p.team === 0 ? -40 : 40) + (p.idx - 2) * 10;
+      p.y = -16;
+      p.vx = p.vy = 0;
+      return;
+    }
     const grip = this.pitch.playerGrip;
+    this.checkDribble(p);
     if (p.state === 'slide') {
       const f = Math.exp(-3.2 * dt);
       p.vx *= f;
@@ -629,7 +672,7 @@ export class MatchSim {
       // sprint e fiato
       const wantsSprint = p.wantSprint && (p.stamina > 0.05 || this.turbo[p.team] > 0);
       p.sprinting = wantsSprint && len(p.wantX, p.wantY) > 0.3;
-      if (p.sprinting && this.turbo[p.team] <= 0) p.stamina = Math.max(0, p.stamina - dt * 0.32);
+      if (p.sprinting && this.turbo[p.team] <= 0) p.stamina = Math.max(0, p.stamina - dt * 0.32 * (p.def.skills?.includes('motore') ? 0.6 : 1));
       else p.stamina = Math.min(1, p.stamina + dt * 0.18);
       const ms = this.maxSpeed(p);
       const dvx = p.wantX * ms - p.vx;
@@ -727,6 +770,10 @@ export class MatchSim {
         const ratio = p.def.stats.tackle / (owner.def.stats.control + 0.2);
         const won = this.rng.chance(clamp(0.55 + ratio * 0.3, 0.4, 0.95));
         this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team });
+        if (!won && this.cfg.fouls && dist(p, owner) < 12) {
+          this.foul(p, owner);
+          return;
+        }
         if (won) {
           b.owner = null;
           const dir = p.facing + this.rng.range(-0.6, 0.6);
@@ -876,6 +923,18 @@ export class MatchSim {
       }
     }
     b.roll += b.speed * dt * 0.25;
+    // tunnel: palla rasoterra veloce che passa tra le gambe di un avversario
+    const lt = b.lastTouch;
+    if (!b.owner && lt && !this.tunnelCand && b.z < 3 && b.speed > 140) {
+      for (const o of this.teams[lt.team === 0 ? 1 : 0]) {
+        if (o.isGK || o.out > 0) continue;
+        if (Math.abs(b.x - o.x) < 3 && Math.abs(b.y - o.y) < 3) {
+          this.tunnelCand = { team: lt.team, opp: o.id, by: lt.def.name };
+          o.pickupCd = Math.max(o.pickupCd, 0.25);
+          break;
+        }
+      }
+    }
     if (b.speed < 120) {
       b.isShot = false;
       if (b.speed < 60) {
@@ -909,6 +968,7 @@ export class MatchSim {
           b.vx -= (1 + 0.75) * vn * nx;
           b.vy -= (1 + 0.75) * vn * ny;
           if (-vn > 60) this.events.push({ type: 'wall', x: b.x, y: b.y, power: -vn });
+          if (b.shotFrom) b.banked = true;
           b.isShot = false;
           b.passTarget = null;
         }
@@ -1028,6 +1088,7 @@ export class MatchSim {
 
   private wallHit(power: number) {
     const b = this.ball;
+    if (b.isShot || b.shotFrom) b.banked = true;
     b.isShot = false;
     b.passTarget = null;
     if (power > 60) this.events.push({ type: 'wall', x: b.x, y: b.y, power });
@@ -1085,6 +1146,11 @@ export class MatchSim {
     }
     const prev = b.lastTouch;
     if (prev && prev !== p && prev.team === p.team && b.passTarget) this.addSuper(p.team, 0.08);
+    // tunnel riuscito: la palla è passata tra le gambe e la riprende la stessa squadra
+    const tc = this.tunnelCand;
+    this.tunnelCand = null;
+    if (tc && tc.team === p.team) this.trick('tunnel', p.team, b.x, b.y, tc.by);
+    p.dribCand = -1;
     b.owner = p;
     b.lastTouch = p;
     b.passTarget = null;
@@ -1171,6 +1237,89 @@ export class MatchSim {
       const m = this.rng.range(40, 110);
       this.wind = { x: Math.cos(a) * m, y: Math.sin(a) * m };
     }
+  }
+
+  // ---------- stile ----------
+  private trick(kind: 'dribbling' | 'tunnel' | 'lontano' | 'sponda', team: 0 | 1, x: number, y: number, name: string) {
+    const pts = kind === 'dribbling' ? 1 : 2;
+    this.stylePoints[team] += pts;
+    this.style[team] += pts * 0.12;
+    this.events.push({ type: 'trick', kind, team, x, y, name });
+    if (this.style[team] >= 1) {
+      this.style[team] = 0;
+      this.addSuper(team, 0.5);
+      this.events.push({ type: 'showtime', team });
+    }
+  }
+
+  /** Dribbling: chi ha palla supera un avversario che gli stava davanti. */
+  private checkDribble(p: Player) {
+    if (this.ball.owner !== p || this.phase !== 'play') return;
+    const fx = Math.cos(p.facing);
+    const fy = Math.sin(p.facing);
+    if (p.dribCand >= 0) {
+      const o = this.players[p.dribCand];
+      const ahead = (o.x - p.x) * fx + (o.y - p.y) * fy;
+      const d = dist(o, p);
+      if (ahead < -6 && d > 16 && d < 40) {
+        p.dribCand = -2; // uno per possesso
+        this.trick('dribbling', p.team, p.x, p.y, p.def.name);
+      } else if (d > 60) p.dribCand = -1;
+      return;
+    }
+    if (p.dribCand === -2) return;
+    for (const o of this.teams[p.team === 0 ? 1 : 0]) {
+      if (o.isGK || o.out > 0 || !o.canAct) continue;
+      const d = dist(o, p);
+      const ahead = (o.x - p.x) * fx + (o.y - p.y) * fy;
+      // l'avversario deve venirgli incontro, non essere solo vicino
+      const facingMe = Math.cos(o.facing - Math.atan2(p.y - o.y, p.x - o.x)) > 0.5;
+      if (d < 16 && ahead > 4 && facingMe && p.holdT > 0.3) {
+        p.dribCand = o.id;
+        return;
+      }
+    }
+  }
+
+  // ---------- falli ----------
+  private foul(by: Player, victim: Player) {
+    const b = this.ball;
+    // da dietro è più grave
+    const behind = Math.cos(by.facing - victim.facing) > 0.4;
+    let card: 'none' | 'yellow' | 'red' = 'none';
+    if (this.rng.chance(behind ? 0.08 : 0.02)) card = 'red';
+    else if (this.rng.chance(behind ? 0.6 : 0.3)) card = by.yellows >= 1 ? 'red' : 'yellow';
+    // chi è controllato da solo (Diventa un mito) non viene espulso
+    if (card === 'red' && this.locked && this.isHuman(by)) card = 'yellow';
+    if (card === 'yellow') by.yellows++;
+    const injury = this.rng.chance(behind ? 0.3 : 0.12);
+    if (injury) victim.injured = true;
+    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, victim: victim.def.name, card, injury });
+    this.events.push({ type: 'whistle', kind: 'kickoff' });
+    if (card === 'red') {
+      by.out = 30;
+      by.yellows = 0;
+      if (this.isHuman(by)) this.switchToBest(true);
+    }
+    // punizione: palla alla vittima, avversari a distanza
+    by.setState('stun', 0);
+    victim.setState('run');
+    b.stop();
+    b.owner = victim;
+    b.lastTouch = victim;
+    b.passTarget = null;
+    b.isShot = b.fire = b.superShot = false;
+    victim.holdT = 0;
+    for (const o of this.teams[by.team]) {
+      const d = dist(o, victim);
+      if (d < 50 && d > 1e-3) {
+        o.x = victim.x + ((o.x - victim.x) / d) * 50;
+        o.y = victim.y + ((o.y - victim.y) / d) * 50;
+        o.x = clamp(o.x, 4, this.W - 4);
+        o.y = clamp(o.y, 4, this.H - 4);
+      }
+    }
+    if (this.humanTeam === victim.team && !this.locked) this.setHuman(victim.idx);
   }
 
   private updateWaves(dt: number) {
