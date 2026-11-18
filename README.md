@@ -1,44 +1,56 @@
 # ⚽ Pixel Calcio Arcade
 
-Calcetto arcade mobile 100% offline per Android e Web, con comandi touch a 60 fps, grafica pixel art a 3/4 ("Stadio HD"), gestione squadra con carte collezionabili, super tiri d'effetto e tornei a coppe.
+Calcio arcade 2D in pixel art, pensato per il **telefono** (in orizzontale) con comandi touch.
+Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognuno con la sua regola.
 
----
+**Gioca:** https://pako1989.github.io/pixel-calcio-arcade/ — dal telefono puoi aggiungerlo alla schermata Home (è una PWA e funziona anche offline).
 
-## 🎮 Caratteristiche Principali
-- **Gameplay Rapido**: Partite 3v3 e 5v5 su campo sintetico con sponde e reti 3D.
-- **Visuale a 3/4 Stadio HD**: Rendering procedurale pixel art a 60 fps con pubblico animato, tabellone LED in legno e ombre morbide.
-- **Nessuna Microtransazione**: Monete guadagnate solo vincendo le partite e le coppe. Nessun acquisto con soldi reali e zero pubblicità.
-- **100% Offline (PWA)**: Service Worker integrato con precache di tutti i file e zero CDN esterne.
-- **Compatibile Mobile First**: Ottimizzato per schermi a partire da 390px (orientamento orizzontale e verticale).
+## Comandi
 
----
+| Touch | Tastiera | Cosa fa |
+| --- | --- | --- |
+| Joystick (metà sinistra dello schermo) | Frecce / WASD | Muoversi |
+| **TIRA** (tieni premuto per caricare) | J, X o Spazio | Tiro. Senza palla: **scivolata** |
+| **PASSA** | K o Z | Passaggio verso il joystick. Senza palla: **cambia giocatore** |
+| **SCATTO** | L, Shift o C | Corsa veloce (consuma fiato) |
+| II | Esc / P | Pausa |
 
-## 🚀 Avvio Locale
+- **Super tiro**: passaggi riusciti, contrasti e recuperi riempiono la barra SUPER sotto il punteggio. Quando lampeggia, un tiro caricato al massimo diventa un super tiro a effetto.
+- **Power-up** sul campo: 🔥 tiro di fuoco, ⚡ turbo per tutta la squadra, 🧱 muro davanti alla propria porta.
+- In caso di pareggio si va al **golden gol**.
+
+## Campi
+
+| Campo | Regola |
+| --- | --- |
+| Stadio Arcade | Erba perfetta, nessuna sorpresa |
+| Spiaggia | Si corre più piano e la palla si ferma presto |
+| Campo Innevato | Si scivola e la palla corre lontano |
+| Tetto in Città | Di notte, il vento sposta la palla in aria |
+| Gabbia di Quartiere | Campo piccolo e muri elastici |
+
+## Sviluppo
+
 ```bash
 npm install
-npm run dev
-```
-Apri il browser su `http://localhost:3000`.
-
----
-
-## 🧪 Test Automatici (Playwright)
-```bash
-npm test
+npm run dev      # server locale (apri l'indirizzo "Network" dal telefono sulla stessa rete Wi-Fi)
+npm test         # test della simulazione
+npm run build    # build di produzione in dist/
 ```
 
----
+Tecnologie: [Phaser 3](https://phaser.io), TypeScript, Vite. Tutta la grafica e i suoni sono generati dal codice (nessun file esterno), il font è Press Start 2P (licenza OFL).
 
-## 📦 Impacchettamento Android (Capacitor)
-```bash
-npm install @capacitor/core @capacitor/cli @capacitor/android
-npx cap init "Pixel Calcio Arcade" com.pako1989.pixelcalcio
-npx cap add android
-npx cap copy
-npx cap open android
-```
+### Struttura
 
----
+- `src/sim/` – simulazione della partita **senza grafica**: fisica, regole, IA della CPU. Si può usare anche per simulare partite (carriera, manageriale).
+- `src/data/` – squadre e campi.
+- `src/gfx/` – sprite pixel art e campi disegnati in codice.
+- `src/scenes/` – menu, scelta squadre, partita, HUD con comandi touch, risultato.
+- `src/modes/` – modalità di gioco. Oggi: partita veloce. Pronte nel menu per i prossimi passi: torneo, missioni, "Diventa un mito" (carriera) e, più avanti, il manageriale collegato.
 
-## 📄 Licenze
-Consulta `LICENZE.md` per le licenze di Phaser 3.80.1, DiceBear e delle risorse procedurali.
+L'IA della CPU riprende le idee di *SimpleSoccer* (Mat Buckland, "Programming Game AI by Example"): squadra in attacco o in difesa, un giocatore che pressa, gli altri che si smarcano nei punti di supporto o marcano, controllo che la linea di passaggio sia libera, portiere tra palla e porta.
+
+### Pubblicazione
+
+Ogni push su `main` esegue i test, costruisce il gioco e lo pubblica sul branch `gh-pages`
+(GitHub → Settings → Pages → *Deploy from a branch* → `gh-pages` / `root`).
