@@ -37,6 +37,8 @@ export interface MatchLaunch {
   superStart?: number;
   /** Obiettivo mostrato nell'HUD durante la partita. */
   hudGoal?: string;
+  /** Pareggio a fine tempo: si va ai calci di rigore. */
+  penalties?: boolean;
   /** Dati extra della modalità (es. turno del torneo, id della missione). */
   modeData?: unknown;
 }

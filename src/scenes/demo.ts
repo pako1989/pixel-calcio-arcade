@@ -37,7 +37,7 @@ export function fixKits(home: TeamDef, away: TeamDef): TeamDef {
 }
 
 /** Scene che si aprono sopra la partita dimostrativa. */
-const OVERLAYS = ['hud', 'result', 'setup', 'title', 'tournament', 'missions', 'career', 'story', 'conquista', 'manager'];
+const OVERLAYS = ['hud', 'result', 'setup', 'title', 'tournament', 'missions', 'career', 'story', 'conquista', 'manager', 'penalties', 'settings'];
 
 /** Torna a una schermata di menu con la partita dimostrativa sullo sfondo. */
 export function backToScene(from: Phaser.Scene, key: string, data?: object) {

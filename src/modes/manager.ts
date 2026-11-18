@@ -11,6 +11,7 @@ import { clamp, Rng } from '../sim/math';
 import type { Difficulty, MatchResult, PitchId, PlayerDef, PlayerStats, Role, TeamDef } from '../sim/types';
 import { makePlayers, type TeamSeed } from '../data/teams';
 import { PITCHES } from '../data/pitches';
+import { randomConditions } from '../data/weather';
 
 // ---------------------------------------------------------------- costanti
 
@@ -692,6 +693,12 @@ export function matchPitch(st: ManagerState): PitchId {
   return pool[(st.week * 7 + st.season * 3 + st.division) % pool.length];
 }
 
+/** Meteo e orario della partita della giornata (sempre gli stessi per quella giornata). */
+export function matchConditions(st: ManagerState) {
+  const rng = new Rng(st.seed * 3 + st.season * 1009 + st.week * 101 + 17);
+  return randomConditions(matchPitch(st), () => rng.next());
+}
+
 /** Partita simulata con la vera simulazione (CPU contro CPU), senza grafica. */
 export function simulateMyMatch(st: ManagerState, seed = st.seed + st.season * 1009 + st.week * 101): MatchResult {
   const me = myTeamDef(st);
@@ -701,6 +708,7 @@ export function simulateMyMatch(st: ManagerState, seed = st.seed + st.season * 1
     home: home ? me : opp,
     away: home ? opp : me,
     pitch: PITCHES[matchPitch(st)],
+    ...matchConditions(st),
     difficulty: 'normale',
     durationSec: SIM_DURATION,
     powerUps: false,

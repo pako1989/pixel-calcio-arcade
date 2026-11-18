@@ -3,7 +3,8 @@ import { MODES } from '../modes/modes';
 import { button, fadeIn, shadowTxt, txt } from '../ui/ui';
 import { goFullscreen, isTouch } from '../ui/fullscreen';
 import { sfx } from '../audio/sfx';
-import { load, save } from '../save/storage';
+import { music } from '../audio/music';
+import { load } from '../save/storage';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -12,6 +13,7 @@ export class TitleScene extends Phaser.Scene {
 
   create() {
     fadeIn(this, 400);
+    music.play('menu');
     this.build();
     this.scale.on('resize', this.rebuild, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.rebuild, this));
@@ -86,14 +88,21 @@ export class TitleScene extends Phaser.Scene {
     const r = load().record;
     this.add.rectangle(lx, H - 16, 220, 14, 0x0d0a1a, 0.85);
     txt(this, lx, H - 16, `Partite ${r.played}  V ${r.won}  P ${r.drawn}  S ${r.lost}`, 6, '#8a8fb0');
-    const mute = button(this, W - 30, H - 24, 36, 24, load().settings.muted ? 'x' : '♪', () => {
-      save((d) => (d.settings.muted = !d.settings.muted));
-      sfx.setMuted(load().settings.muted);
-      mute.setLabel(load().settings.muted ? 'x' : '♪');
+    // minigioco dei rigori, a destra
+    const pen = button(this, W - 82, H - 64, 140, 26, 'SFIDA RIGORI', () => {
+      if (isTouch()) goFullscreen();
+      sfx.unlock();
+      this.scene.launch('setup', { mode: 'rigori' });
+      this.scene.stop();
+    }, { color: 0xc0306a, badge: 'MINI', size: 6 });
+    void pen;
+    button(this, W - 30, H - 24, 36, 24, '♪', () => {
+      this.scene.launch('settings');
+      this.scene.bringToTop('settings');
     });
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.2', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.3', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }

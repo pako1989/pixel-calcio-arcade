@@ -2,6 +2,7 @@ import { Ball, Player, type PowerUp, type PowerUpKind, type SimEvent } from './e
 import { clamp, dist, len, norm, Rng, turnTowards, type Vec } from './math';
 import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef } from './types';
 import { aiThink, aiGoalkeeper, chooseHumanPassTarget, decideAiActions } from './ai';
+import { applyWeather } from '../data/weather';
 
 export const GOAL_DEPTH = 22;
 export const CROSSBAR = 28;
@@ -80,7 +81,7 @@ export class MatchSim {
   readonly diff: [DiffParams, DiffParams];
 
   constructor(readonly cfg: MatchConfig) {
-    this.pitch = cfg.pitch;
+    this.pitch = applyWeather(cfg.pitch, cfg.weather);
     this.W = cfg.pitch.width;
     this.H = cfg.pitch.height;
     this.goalTop = this.H / 2 - cfg.pitch.goalWidth / 2;

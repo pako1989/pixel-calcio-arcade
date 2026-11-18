@@ -6,7 +6,8 @@ import { load, save } from '../save/storage';
 import { frameIndex, makePlayerSheet } from '../gfx/sprites';
 import type { Difficulty } from '../sim/types';
 import type { MatchLaunch } from '../modes/modes';
-import { newTournament, roundTeams, ROUND_NAMES, userOpponent, type TournamentState } from '../modes/tournament';
+import { newTournament, roundConditions, roundTeams, ROUND_NAMES, userOpponent, type TMatch, type TournamentState } from '../modes/tournament';
+import { WEATHER_INFO } from '../data/weather';
 import { backToMenu, fixKits, startMatch } from './demo';
 import { sfx } from '../audio/sfx';
 
@@ -135,7 +136,9 @@ export class TournamentScene extends Phaser.Scene {
     const span = 172;
     // posizioni verticali: quarti (4 per lato), semifinali (2), finale (1)
     const slotY = (n: number, i: number) => top + (span / n) * (i + 0.5);
-    const box = (x: number, y: number, id: string | undefined, goals: number | undefined, won: boolean, lost: boolean) => {
+    // gol, con i rigori tra parentesi
+    const score = (m: TMatch, a: boolean) => `${a ? m.ga : m.gb}${m.pens ? `(${a ? m.pens[0] : m.pens[1]})` : ''}`;
+    const box = (x: number, y: number, id: string | undefined, goals: string | undefined, won: boolean, lost: boolean) => {
       const isMe = id === mine;
       const fill = isMe ? 0x3a3060 : 0x1b1d2e;
       g.fillStyle(0x1a1222).fillRect(x - bw / 2 - 1, y - 8, bw + 2, 16);
@@ -170,7 +173,7 @@ export class TournamentScene extends Phaser.Scene {
       const x = left ? colX[0] : colX[4];
       const y = slotY(4, i % 4);
       const m = r0?.[Math.floor(i / 2)];
-      const goals = m ? (i % 2 === 0 ? m.ga : m.gb) : undefined;
+      const goals = m ? score(m, i % 2 === 0) : undefined;
       box(x, y, qf[i], goals, !!m && m.winner === qf[i], !!m && m.winner !== qf[i]);
       const sy = slotY(2, Math.floor((i % 4) / 2));
       const sx = left ? colX[1] : colX[3];
@@ -182,7 +185,7 @@ export class TournamentScene extends Phaser.Scene {
       const y = slotY(2, i % 2);
       const id = sf[i];
       const m = r1?.[Math.floor(i / 2)];
-      const goals = m ? (i % 2 === 0 ? m.ga : m.gb) : undefined;
+      const goals = m ? score(m, i % 2 === 0) : undefined;
       box(x, y, id, goals, !!m && m.winner === id, !!m && m.winner !== id);
       const fy = slotY(1, 0) + (left ? -12 : 12);
       line(left ? x + bw / 2 : x - bw / 2, y, colX[2] + (left ? -bw / 2 : bw / 2), fy, !!m && m.winner === id);
@@ -190,7 +193,7 @@ export class TournamentScene extends Phaser.Scene {
     for (let i = 0; i < 2; i++) {
       const id = fi[i];
       const m = r2?.[0];
-      const goals = m ? (i === 0 ? m.ga : m.gb) : undefined;
+      const goals = m ? score(m, i === 0) : undefined;
       box(colX[2], slotY(1, 0) + (i === 0 ? -12 : 12), id, goals, !!m && m.winner === id, !!m && m.winner !== id);
     }
     const cup = this.drawCup(colX[2], top + 34, st.champion ? 1.6 : 1.2);
@@ -213,7 +216,9 @@ export class TournamentScene extends Phaser.Scene {
     if (opp) {
       const p = PITCHES[st.pitches[st.round]];
       txt(this, W / 2, py - 4, `${teamById(mine).name.toUpperCase()}  VS  ${teamById(opp).name.toUpperCase()}`, 6, '#ffffff');
-      txt(this, W / 2, py + 10, `Campo: ${p.name}  ·  CPU ${st.difficulty}`, 6, '#3fd0ff');
+      const c = roundConditions(st, st.round);
+      const cond = [c.weather !== 'sereno' ? WEATHER_INFO[c.weather].name : '', c.night && p.id !== 'tetto' ? 'Notte' : ''].filter(Boolean).join(', ');
+      txt(this, W / 2, py + 10, `Campo: ${p.name}${cond ? ` (${cond})` : ''}  ·  CPU ${st.difficulty}  ·  Pari = rigori`, 6, '#3fd0ff');
       txt(this, W / 2, py + 23, p.rule, 6, '#8a8fb0', { wordWrap: { width: pw - 16 }, align: 'center' });
       const play = button(this, W - 90, H - 30, 150, 34, 'GIOCA!', () => this.play(st, opp), { color: COLORS.good, size: 16, textColor: '#1a1222' });
       this.tweens.add({ targets: play.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -246,16 +251,18 @@ export class TournamentScene extends Phaser.Scene {
     const s = load().settings;
     const launch: MatchLaunch = {
       mode: 'torneo',
+      penalties: true,
       modeData: { round: st.round },
       hudGoal: st.round === 2 ? 'VINCI LA FINALE!' : undefined,
       config: {
         home,
         away: fixKits(home, teamById(opp)),
         pitch: PITCHES[st.pitches[st.round]],
+        ...roundConditions(st, st.round),
         difficulty: st.difficulty,
         durationSec: s.duration,
         powerUps: s.powerUps,
-        goldenGoal: true,
+        goldenGoal: false,
         humanTeam: 0,
       },
     };

@@ -1,7 +1,9 @@
 import { TEAMS, teamById } from '../data/teams';
 import { PITCH_ORDER } from '../data/pitches';
 import { Rng } from '../sim/math';
-import type { Difficulty, PitchId } from '../sim/types';
+import type { Difficulty, PitchId, Weather } from '../sim/types';
+import { quickShootout } from './penalties';
+import { randomConditions } from '../data/weather';
 
 /** Coppa a eliminazione diretta a 8 squadre: quarti, semifinali, finale. */
 
@@ -15,6 +17,8 @@ export interface TMatch {
   winner: string;
   /** Deciso al golden gol. */
   golden?: boolean;
+  /** Deciso ai rigori: [rigori a, rigori b]. */
+  pens?: [number, number];
 }
 
 export interface TournamentState {
@@ -79,11 +83,12 @@ export function quickMatch(a: string, b: string, rng: Rng): TMatch {
   const ga = poisson(rng, Math.max(0.6, 2.1 + (sa - sb) * 0.45));
   const gb = poisson(rng, Math.max(0.6, 2.1 + (sb - sa) * 0.45));
   if (ga !== gb) return { a, b, ga, gb, winner: ga > gb ? a : b };
-  const aWins = rng.chance(0.5 + (sa - sb) * 0.08);
-  return { a, b, ga: ga + (aWins ? 1 : 0), gb: gb + (aWins ? 0 : 1), winner: aWins ? a : b, golden: true };
+  // pareggio: calci di rigore
+  const pens = quickShootout(teamById(a), teamById(b), rng);
+  return { a, b, ga, gb, winner: pens[0] > pens[1] ? a : b, pens };
 }
 
-function playRound(st: TournamentState, rng: Rng, user?: { ga: number; gb: number; golden: boolean }) {
+function playRound(st: TournamentState, rng: Rng, user?: { ga: number; gb: number; golden: boolean; pens?: [number, number] }) {
   const teams = roundTeams(st, st.round);
   const res: TMatch[] = [];
   for (let i = 0; i < teams.length; i += 2) {
@@ -93,7 +98,9 @@ function playRound(st: TournamentState, rng: Rng, user?: { ga: number; gb: numbe
       const mineA = a === st.teamId;
       const ga = mineA ? user.ga : user.gb;
       const gb = mineA ? user.gb : user.ga;
-      res.push({ a, b, ga, gb, winner: ga > gb ? a : b, golden: user.golden });
+      const pens = user.pens && (mineA ? user.pens : ([user.pens[1], user.pens[0]] as [number, number]));
+      const aWins = pens ? pens[0] > pens[1] : ga > gb;
+      res.push({ a, b, ga, gb, winner: aWins ? a : b, golden: user.golden, pens });
     } else {
       res.push(quickMatch(a, b, rng));
     }
@@ -108,14 +115,30 @@ function playRound(st: TournamentState, rng: Rng, user?: { ga: number; gb: numbe
  * simula le altre del turno e passa al turno successivo.
  * Se il giocatore è eliminato, la coppa viene completata in automatico.
  */
-export function applyUserResult(st: TournamentState, myGoals: number, oppGoals: number, golden: boolean): 'avanti' | 'eliminato' | 'campione' {
+export function applyUserResult(
+  st: TournamentState,
+  myGoals: number,
+  oppGoals: number,
+  golden: boolean,
+  /** Rigori segnati [miei, loro] se la partita è finita in parità. */
+  pens?: [number, number],
+): 'avanti' | 'eliminato' | 'campione' {
   const rng = new Rng(st.seed + st.round * 101 + myGoals * 7 + oppGoals * 13);
-  if (myGoals === oppGoals) myGoals++; // non dovrebbe succedere: c'è il golden gol
-  playRound(st, rng, { ga: myGoals, gb: oppGoals, golden });
-  if (myGoals < oppGoals) {
+  if (myGoals === oppGoals && (!pens || pens[0] === pens[1])) pens = [1, 0]; // non dovrebbe succedere
+  playRound(st, rng, { ga: myGoals, gb: oppGoals, golden, pens: myGoals === oppGoals ? pens : undefined });
+  const lost = myGoals === oppGoals ? pens![0] < pens![1] : myGoals < oppGoals;
+  if (lost) {
     st.eliminated = true;
     while (st.round <= 2) playRound(st, rng);
     return 'eliminato';
   }
   return st.champion === st.teamId ? 'campione' : 'avanti';
+}
+
+/** Meteo e orario di una partita del torneo (sempre gli stessi per quel turno). */
+export function roundConditions(st: TournamentState, round: number): { weather: Weather; night: boolean } {
+  const rng = new Rng(st.seed * 7 + round * 977);
+  // la finale si gioca sempre di sera, sotto i riflettori
+  const c = randomConditions(st.pitches[round], () => rng.next());
+  return round === 2 ? { weather: c.weather, night: true } : c;
 }
