@@ -1,5 +1,5 @@
 /** Piccola finestra HTML per scrivere un nome (la tastiera del telefono funziona solo con un vero campo di testo). */
-export function askName(current: string, max = 12): Promise<string | null> {
+export function askName(current: string, max = 12, title = 'NOME DEL CAMPIONE'): Promise<string | null> {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.style.cssText =
@@ -8,7 +8,7 @@ export function askName(current: string, max = 12): Promise<string | null> {
     box.style.cssText =
       'background:#1b1d2e;border:3px solid #ffd23f;box-shadow:4px 4px 0 #000;padding:14px;display:flex;flex-direction:column;gap:12px;width:min(86vw,360px);';
     const label = document.createElement('div');
-    label.textContent = 'NOME DEL CAMPIONE';
+    label.textContent = title;
     label.style.cssText = 'color:#ffd23f;font-size:10px;';
     const input = document.createElement('input');
     input.value = current;

@@ -1,5 +1,6 @@
 /** Salvataggi locali: preferenze, statistiche, torneo, missioni e storia. */
 import type { CareerState } from '../modes/career';
+import type { ConquistaState } from '../modes/conquista';
 import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 
@@ -24,6 +25,8 @@ export interface SaveData {
   /** Coppe vinte nella modalità torneo. */
   trophies?: number;
   missions?: MissionsSave;
+  /** Quartiere contro Città (saga della squadra). */
+  conquista?: ConquistaState;
 }
 
 const DEFAULTS: SaveData = {

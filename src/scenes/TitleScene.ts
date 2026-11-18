@@ -56,7 +56,7 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: ball, angle: 360, duration: 1400, repeat: -1 });
 
     // menu
-    let y = 160;
+    let y = 150;
     for (const m of MODES) {
       const b = button(
         this,
@@ -73,13 +73,13 @@ export class TitleScene extends Phaser.Scene {
           this.scene.stop();
         },
         {
-          color: !m.available ? 0x3a3d55 : m.id === 'mito' ? 0x8a3fd0 : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
-          badge: !m.available ? 'PRESTO' : m.id === 'mito' ? 'STORIA' : undefined,
+          color: !m.available ? 0x3a3d55 : m.id === 'mito' ? 0x8a3fd0 : m.id === 'conquista' ? 0x2f9a50 : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
+          badge: !m.available ? 'PRESTO' : m.id === 'mito' ? 'STORIA' : m.id === 'conquista' ? 'NUOVO' : undefined,
           size: 8,
         },
       );
       if (!m.available) b.setEnabled(false);
-      y += 38;
+      y += 34;
     }
 
     // record e opzioni

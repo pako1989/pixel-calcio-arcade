@@ -5,7 +5,7 @@ import type { MatchTally } from './tally';
  * Modalità di gioco. Ogni modalità prepara le partite (MatchConfig) e decide
  * cosa succede dopo il fischio finale, sempre sopra la stessa simulazione.
  */
-export type ModeId = 'quick' | 'torneo' | 'missioni' | 'mito' | 'manager';
+export type ModeId = 'quick' | 'torneo' | 'missioni' | 'mito' | 'conquista' | 'manager';
 
 export interface ModeInfo {
   id: ModeId;
@@ -21,6 +21,7 @@ export const MODES: ModeInfo[] = [
   { id: 'torneo', title: 'TORNEO', desc: 'Coppa a eliminazione diretta', available: true, scene: 'tournament' },
   { id: 'missioni', title: 'MISSIONI', desc: 'Sfide con obiettivi speciali', available: true, scene: 'missions' },
   { id: 'mito', title: 'DIVENTA UN MITO', desc: 'Storia: dal campetto alla Serie A', available: true, scene: 'career' },
+  { id: 'conquista', title: 'QUARTIERE VS CITTÀ', desc: 'Saga: conquista l\'Italia città per città', available: true, scene: 'conquista' },
 ];
 
 /** Dati passati alla scena della partita. */

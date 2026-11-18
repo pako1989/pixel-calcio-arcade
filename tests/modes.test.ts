@@ -133,3 +133,44 @@ describe('un solo giocatore', () => {
     expect(passesToHero).toBeGreaterThan(2);
   });
 });
+
+describe('quartiere contro città', () => {
+  it('10 città con id unici, la saga si completa vincendo ogni tappa', async () => {
+    const { CITIES, newConquista, applyConquistaResult, conquistaLaunch, vicoloTeam, checkCqGoal } = await import('../src/modes/conquista');
+    expect(new Set(CITIES.map((c) => c.id)).size).toBe(CITIES.length);
+    const q = newConquista({ name: 'Nico', number: 10, look: { skin: 0, hair: 0, hairStyle: 0 } }, 0, 'normale');
+    const base = vicoloTeam(q).players[0].stats.shot;
+    for (let i = 0; i < CITIES.length; i++) {
+      const l = conquistaLaunch(q, (_h, a) => a);
+      expect(l.mode).toBe('conquista');
+      expect(l.config.home.players[4].name).toBe('Nico');
+      expect(l.config.lockHuman).toBe(4);
+      // vittoria 3-0 con gol del capitano: soddisfa ogni obiettivo
+      const o = outcome([3, 0], [{ team: 0, name: 'Nico', time: 10 }]);
+      const r = applyConquistaResult(q, o);
+      expect(r.success).toBe(true);
+    }
+    expect(q.finished).toBe(true);
+    // i ricordi rinforzano la squadra
+    expect(vicoloTeam(q, CITIES.length).players[0].stats.shot).toBeGreaterThan(base);
+    // obiettivi speciali
+    expect(checkCqGoal('winBy2', [2, 1], 0)).toBe(false);
+    expect(checkCqGoal('cleanSheet', [2, 1], 0)).toBe(false);
+    expect(checkCqGoal('captainGoal', [1, 0], 0)).toBe(false);
+  });
+  it('una sconfitta non fa avanzare', async () => {
+    const { newConquista, applyConquistaResult } = await import('../src/modes/conquista');
+    const q = newConquista({ name: 'Leo', number: 9, look: { skin: 0, hair: 0, hairStyle: 0 } }, 1, 'facile', 'squadra');
+    expect(applyConquistaResult(q, outcome([0, 1])).success).toBe(false);
+    expect(q.step).toBe(0);
+    expect(q.apps).toBe(1);
+  });
+  it('Totò lascia la squadra dopo Bologna e gioca nella Real Corvo in finale', async () => {
+    const { CITIES, newConquista, vicoloTeam, cityTeam } = await import('../src/modes/conquista');
+    const q = newConquista({ name: 'Leo', number: 9, look: { skin: 0, hair: 0, hairStyle: 0 } }, 0, 'facile');
+    const bo = CITIES.findIndex((c) => c.id === 'bologna');
+    expect(vicoloTeam(q, bo).players[3].name).toBe('Totò');
+    expect(vicoloTeam(q, bo + 1).players[3].name).toBe('Mimmo');
+    expect(cityTeam(q, CITIES.length - 1).players.map((p) => p.name)).toContain('Totò');
+  });
+});
