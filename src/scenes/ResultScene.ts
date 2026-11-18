@@ -10,6 +10,8 @@ import { teamById } from '../data/teams';
 import { applyManagerResult, DIVISIONS } from '../modes/manager';
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
+import { sfx } from '../audio/sfx';
+import { music } from '../audio/music';
 
 interface ReportLine {
   text: string;
@@ -55,7 +57,7 @@ export class ResultScene extends Phaser.Scene {
       const st = load().tournament;
       if (!st || st.round !== md.round) return undefined;
       const round = st.round;
-      const res = applyUserResult(st, a, b, d.result.goldenGoal);
+      const res = applyUserResult(st, a, b, d.result.goldenGoal, d.result.penalties);
       save((s) => {
         s.tournament = st;
         if (res === 'campione') s.trophies = (s.trophies ?? 0) + 1;
@@ -164,8 +166,16 @@ export class ResultScene extends Phaser.Scene {
     const [a, b] = result.score;
     this.add.rectangle(0, 0, W, H, 0x0d0a1a, 0.72).setOrigin(0).setInteractive();
     const rep = this.report;
-    const title = rep?.title ?? (a > b ? 'VITTORIA!' : a < b ? 'SCONFITTA' : 'PAREGGIO');
-    const col = rep?.title ? rep.titleColor ?? '#ffffff' : a > b ? '#ffd23f' : a < b ? '#ff5a5a' : '#ffffff';
+    // con i rigori conta chi ha vinto la serie
+    const pa = result.penalties ? a * 100 + result.penalties[0] : a;
+    const pb = result.penalties ? b * 100 + result.penalties[1] : b;
+    const title = rep?.title ?? (pa > pb ? 'VITTORIA!' : pa < pb ? 'SCONFITTA' : 'PAREGGIO');
+    const col = rep?.title ? rep.titleColor ?? '#ffffff' : pa > pb ? '#ffd23f' : pa < pb ? '#ff5a5a' : '#ffffff';
+    if (cfg.humanTeam === 0) {
+      if (pa > pb) sfx.fanfare();
+      else if (pa < pb) sfx.sadJingle();
+    }
+    this.time.delayedCall(2600, () => music.play('menu'));
     const t = shadowTxt(this, W / 2, 34, title, title.length > 12 ? 16 : 24, col, '#1a1222', 3);
     t.c.setScale(0.3);
     this.tweens.add({ targets: t.c, scale: 1, duration: 450, ease: 'Back.easeOut' });
@@ -178,6 +188,7 @@ export class ResultScene extends Phaser.Scene {
     txt(this, W / 2 + 100, 84, cfg.away.short, 8);
     shadowTxt(this, W / 2, 84, `${a} - ${b}`, 24, '#ffffff');
     if (result.goldenGoal) txt(this, W / 2, 106, 'GOLDEN GOL', 6, '#ffd23f');
+    if (result.penalties) txt(this, W / 2, 106, `RIGORI ${result.penalties[0]} - ${result.penalties[1]}`, 6, '#ffd23f');
 
     // marcatori
     const home = result.scorers.filter((s) => s.team === 0);

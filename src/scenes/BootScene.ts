@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { makeBall, makeCommonTextures } from '../gfx/sprites';
-import { load } from '../save/storage';
+import { audioPrefs } from '../save/storage';
 import { sfx } from '../audio/sfx';
 import { demoLaunch } from './demo';
 
@@ -19,7 +19,7 @@ export class BootScene extends Phaser.Scene {
     }
     makeCommonTextures(this);
     makeBall(this);
-    sfx.setMuted(load().settings.muted);
+    sfx.setPrefs(audioPrefs());
     this.scene.start('match', demoLaunch());
     this.scene.launch('title');
   }

@@ -28,6 +28,7 @@ export class HudScene extends Phaser.Scene {
   private goldenT!: Phaser.GameObjects.Text;
   private goalT?: Phaser.GameObjects.Text;
   private windT?: Phaser.GameObjects.Text;
+  private condT?: Phaser.GameObjects.Text;
   private buttons: TouchButton[] = [];
   private joy = { pointer: null as number | null, bx: 0, by: 0, kx: 0, ky: 0 };
   private touch = true;
@@ -62,6 +63,10 @@ export class HudScene extends Phaser.Scene {
       this.goalT = txt(this, 0, 0, 'OBIETTIVO: ' + goal, 6, '#5be37d', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } });
     }
     if (cfg.pitch.wind) this.windT = txt(this, 0, 0, 'VENTO', 6, '#bfe6ff');
+    const cond = [cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '', cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '']
+      .filter(Boolean)
+      .join(' · ');
+    if (cond) this.condT = txt(this, 0, 0, cond, 6, '#bfe6ff', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } }).setOrigin(0, 0.5);
     this.pauseBtn = button(this, 0, 0, 26, 22, 'II', () => this.togglePause(true), { size: 8 });
 
     if (this.touch) {
@@ -117,6 +122,7 @@ export class HudScene extends Phaser.Scene {
     this.goldenT.setPosition(W / 2, 50);
     this.goalT?.setPosition(W / 2, H - 12);
     this.windT?.setPosition(46, 14);
+    this.condT?.setPosition(8, this.windT ? 46 : 14);
     this.pauseBtn.c.setPosition(W - 22, 18);
     // pulsanti touch: arco in basso a destra
     const pos: Record<string, [number, number, number]> = {
@@ -369,12 +375,10 @@ export class HudScene extends Phaser.Scene {
       const bg = this.add.rectangle(0, 0, W, H, 0x0a0816, 0.7).setOrigin(0).setInteractive();
       c.add(bg);
       c.add(shadowTxt(this, W / 2, H / 2 - 80, 'PAUSA', 24, '#ffd23f').c);
-      const s = load().settings;
       const b1 = button(this, W / 2, H / 2 - 30, 180, 26, 'RIPRENDI', () => this.togglePause(false), { color: 0x2f8be0 });
-      const b2 = button(this, W / 2, H / 2 + 6, 180, 26, s.muted ? 'AUDIO: NO' : 'AUDIO: SÌ', () => {
-        save((d) => (d.settings.muted = !d.settings.muted));
-        sfx.setMuted(load().settings.muted);
-        b2.setLabel(load().settings.muted ? 'AUDIO: NO' : 'AUDIO: SÌ');
+      const b2 = button(this, W / 2, H / 2 + 6, 180, 26, 'AUDIO', () => {
+        this.scene.launch('settings');
+        this.scene.bringToTop('settings');
       });
       const b3 = button(this, W / 2, H / 2 + 42, 180, 26, this.match.launch.mode === 'quick' ? 'ESCI AL MENU' : 'ABBANDONA', () => this.quit(), { color: 0x8a3040 });
       c.add([b1.c, b2.c, b3.c]);

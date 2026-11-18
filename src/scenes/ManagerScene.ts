@@ -10,11 +10,12 @@ import { backToMenu, fixKits, startMatch } from './demo';
 import { sfx } from '../audio/sfx';
 import {
   applyManagerResult, autoLineup, buy, buyPrice, canBuy, canSell, CLUB_KITS, clubOf, clubRating, clubTeamDef, DIVISIONS,
-  FORMATION_ORDER, FORMATIONS, isHome, matchPitch, ME, minuteOf, money, myTeamDef, newManager,
+  FORMATION_ORDER, FORMATIONS, isHome, matchConditions, matchPitch, ME, minuteOf, money, myTeamDef, newManager,
   opponentOf, playerOvr, playerValue, potOvr, ROLE_LABEL, sell, sellPrice, SIM_DURATION, simulateMyMatch, STADIUM_LEVELS,
   STAT_KEYS, STAT_LABEL, swapPlayers, table, teamRating, TRAINING_LEVELS, TRAINING_ORDER, TRAININGS, upgrade, upgradeCost,
   weeklyBalance, type ManagerState, type MPlayer, type WeekReport,
 } from '../modes/manager';
+import { WEATHER_INFO } from '../data/weather';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
 type Tab = 'club' | 'rosa' | 'mercato' | 'allena' | 'classifica' | 'societa';
@@ -272,7 +273,9 @@ export class ManagerScene extends Phaser.Scene {
       const row = table(st).findIndex((r) => r.id === opp.id) + 1;
       txt(this, cx, top + 152, `Avversario ${row}° in classifica`, 6, '#8a8fb0');
       const pitch = PITCHES[matchPitch(st)];
-      txt(this, cx, top + 166, `Campo: ${pitch.name}`, 6, '#3fd0ff');
+      const cond = matchConditions(st);
+      const extra = [cond.weather !== 'sereno' ? WEATHER_INFO[cond.weather].name : '', cond.night && pitch.id !== 'tetto' ? 'Notte' : ''].filter(Boolean).join(', ');
+      txt(this, cx, top + 166, `Campo: ${pitch.name}${extra ? ` (${extra})` : ''}`, 6, '#3fd0ff');
       const tired = st.lineup.map((id) => st.squad.find((p) => p.id === id)).filter((p) => p && p.energy < 50);
       if (tired.length) txt(this, cx, top + 182, `${tired.length} titolari stanchi: guarda la ROSA`, 6, '#ff9a9a');
       else txt(this, cx, top + 182, 'Squadra in forma.', 6, '#5be37d');
@@ -751,6 +754,7 @@ export class ManagerScene extends Phaser.Scene {
         home: me,
         away: fixKits(me, clubTeamDef(st, opp)),
         pitch: PITCHES[matchPitch(st)],
+        ...matchConditions(st),
         difficulty: st.difficulty,
         durationSec: load().settings.duration,
         powerUps: load().settings.powerUps,

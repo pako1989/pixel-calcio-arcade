@@ -7,6 +7,8 @@ import { drawCrowd, drawGoals, drawPitch, MARGIN, THEMES, Z_SCALE, BAR_H } from 
 import { GOAL_DEPTH } from '../sim/match';
 import { FRAME, frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
 import { sfx } from '../audio/sfx';
+import { music } from '../audio/music';
+import { commentary } from '../audio/commentary';
 import { Controls } from '../input/controls';
 import type { MatchLaunch } from '../modes/modes';
 import { demoLaunch } from './demo';
@@ -58,9 +60,16 @@ export class MatchScene extends Phaser.Scene {
     confetti: Phaser.GameObjects.Particles.ParticleEmitter;
     stars: Phaser.GameObjects.Particles.ParticleEmitter;
     weather?: Phaser.GameObjects.Particles.ParticleEmitter;
+    splash?: Phaser.GameObjects.Particles.ParticleEmitter;
   };
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private nightOverlay?: Phaser.GameObjects.Rectangle;
+  private fog?: Phaser.GameObjects.Image;
+  private fogWisps: Phaser.GameObjects.Image[] = [];
+  private rainOn = false;
+  private thunderT = 0;
+  private chantT = 0;
+  private started = false;
   private vignette?: Phaser.GameObjects.Image;
   private demoT = 0;
   finished = false;
@@ -86,6 +95,12 @@ export class MatchScene extends Phaser.Scene {
     this.tally = new TallyTracker();
     this.vignette = undefined;
     this.nightOverlay = undefined;
+    this.fog = undefined;
+    this.fogWisps = [];
+    this.rainOn = false;
+    this.thunderT = 14 + Math.random() * 10;
+    this.chantT = 12 + Math.random() * 10;
+    this.started = false;
     this.crowdA = this.crowdB = undefined;
     this.ctrl.reset();
   }
@@ -185,7 +200,40 @@ export class MatchScene extends Phaser.Scene {
         emitting: false,
       }).setDepth(25),
     };
-    if (pitch.id === 'neve') {
+    const weather = cfg.weather ?? 'sereno';
+    const night = th.night || !!cfg.night;
+    if (weather === 'pioggia') {
+      this.rainOn = true;
+      if (!this.textures.exists('streak')) {
+        const sg = this.add.graphics();
+        sg.fillStyle(0xffffff).fillRect(0, 0, 1, 7);
+        sg.generateTexture('streak', 1, 7);
+        sg.destroy();
+      }
+      this.fx.weather = this.add.particles(0, 0, 'streak', {
+        x: { min: -60, max: 900 },
+        y: -12,
+        lifespan: 900,
+        speedY: { min: 420, max: 520 },
+        speedX: { min: -70, max: -50 },
+        rotate: 8,
+        alpha: { min: 0.35, max: 0.7 },
+        tint: [0xcfe0ff, 0x9fb8e8],
+        frequency: 6,
+        quantity: 2,
+      }).setDepth(28).setScrollFactor(0);
+      this.fx.splash = this.add.particles(0, 0, 'px2', {
+        lifespan: { min: 160, max: 280 },
+        speed: { min: 12, max: 30 },
+        angle: { min: 200, max: 340 },
+        gravityY: 120,
+        scale: { start: 0.8, end: 0.2 },
+        alpha: { start: 0.8, end: 0 },
+        tint: 0xd8e6ff,
+        emitting: false,
+      }).setDepth(9);
+      this.add.rectangle(0, 0, 4000, 4000, 0x1a2a4a, night ? 0.12 : 0.22).setOrigin(0.5).setScrollFactor(0).setDepth(22.5);
+    } else if (pitch.id === 'neve') {
       this.fx.weather = this.add.particles(0, 0, 'px2', {
         x: { min: 0, max: 900 },
         y: -10,
@@ -196,7 +244,7 @@ export class MatchScene extends Phaser.Scene {
         alpha: { min: 0.6, max: 1 },
         frequency: 40,
       }).setDepth(28).setScrollFactor(0);
-    } else if (pitch.id === 'tetto') {
+    } else if (pitch.id === 'tetto' && weather === 'sereno') {
       this.fx.weather = this.add.particles(0, 0, 'px2', {
         x: { min: -100, max: 900 },
         y: { min: -10, max: 380 },
@@ -207,17 +255,35 @@ export class MatchScene extends Phaser.Scene {
         frequency: 70,
       }).setDepth(28).setScrollFactor(0);
     }
+    if (weather === 'nebbia') this.makeFog(night);
 
     // --- luci ---
-    if (th.night) {
-      this.nightOverlay = this.add.rectangle(0, 0, 10, 10, 0x0a0d26, 0.32).setOrigin(0).setScrollFactor(0).setDepth(23);
+    if (night) {
+      // notte: campo scuro e quattro torri faro che illuminano il prato
+      this.nightOverlay = this.add.rectangle(0, 0, 10, 10, 0x060920, th.night ? 0.32 : 0.55).setOrigin(0).setScrollFactor(0).setDepth(23);
       for (const [x, y] of [
         [W * 0.25, -20],
         [W * 0.75, -20],
         [W * 0.25, H + 20],
         [W * 0.75, H + 20],
       ]) {
-        this.add.image(x, y, 'glow').setScale(9, 6).setAlpha(0.22).setBlendMode('ADD').setDepth(23.5).setTint(0xbfe6ff);
+        if (th.night) this.add.image(x, y, 'glow').setScale(9, 6).setAlpha(0.22).setBlendMode('ADD').setDepth(23.5).setTint(0xbfe6ff);
+      }
+      if (!th.night) {
+        for (const [x, y] of [
+          [-MARGIN + 18, -MARGIN + 14],
+          [W + MARGIN - 18, -MARGIN + 14],
+          [-MARGIN + 18, H + MARGIN - 14],
+          [W + MARGIN - 18, H + MARGIN - 14],
+        ]) this.floodlight(x, y);
+        // pozze di luce dei fari sul prato
+        for (const [x, y] of [
+          [W * 0.22, H * 0.28],
+          [W * 0.78, H * 0.28],
+          [W * 0.22, H * 0.72],
+          [W * 0.78, H * 0.72],
+          [W * 0.5, H * 0.5],
+        ]) this.add.image(x, y, 'glow').setScale(W / 110, H / 90).setAlpha(0.07).setBlendMode('ADD').setDepth(23.5).setTint(0xfff4d8);
       }
     } else if (pitch.id === 'stadio') {
       for (const [x, y] of [
@@ -260,8 +326,81 @@ export class MatchScene extends Phaser.Scene {
     if (!this.launch.demo) {
       this.scene.launch('hud');
       sfx.startCrowd(th.crowd);
-    }
+      if (this.rainOn) sfx.startRain();
+      music.play('match');
+      const cond = weather === 'pioggia' ? 'rain' : weather === 'nebbia' ? 'fog' : night && !th.night ? 'night' : null;
+      if (cond) this.time.delayedCall(400, () => commentary.say(cond));
+    } else if (music.playing !== 'menu') music.play('menu');
     this.syncSprites(0);
+  }
+
+  /** Torre faro: palo, pannello di lampade e alone. */
+  private floodlight(x: number, y: number) {
+    const g = this.add.graphics().setDepth(1.5);
+    g.fillStyle(0x1a1222).fillRect(x - 2, y - 2, 4, 26);
+    g.fillStyle(0x4a5068).fillRect(x - 1, y, 2, 24);
+    g.fillStyle(0x1a1222).fillRect(x - 9, y - 8, 18, 9);
+    g.fillStyle(0x5a6078).fillRect(x - 8, y - 7, 16, 7);
+    for (let i = 0; i < 4; i++) g.fillStyle(0xfffbe0).fillRect(x - 7 + i * 4, y - 6, 3, 2), g.fillStyle(0xfffbe0).fillRect(x - 7 + i * 4, y - 3, 3, 2);
+    this.add.image(x, y - 4, 'glow').setScale(1.4).setAlpha(0.9).setBlendMode('ADD').setDepth(23.6).setTint(0xfff6d0);
+    this.add.image(x, y - 4, 'glow').setScale(5).setAlpha(0.25).setBlendMode('ADD').setDepth(23.5).setTint(0xfff6d0);
+  }
+
+  /** Nebbia: si vede bene solo intorno alla palla. */
+  private makeFog(night: boolean) {
+    const key = night ? 'fogN' : 'fogD';
+    const R = 520;
+    if (!this.textures.exists(key)) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = R * 2;
+      const ctx = cv.getContext('2d')!;
+      const col = night ? '28,32,48' : '196,204,214';
+      const gr = ctx.createRadialGradient(R, R, 70, R, R, 260);
+      gr.addColorStop(0, `rgba(${col},0.05)`);
+      gr.addColorStop(0.45, `rgba(${col},0.55)`);
+      gr.addColorStop(1, `rgba(${col},0.93)`);
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, R * 2, R * 2);
+      this.textures.addCanvas(key, cv);
+    }
+    this.fog = this.add.image(0, 0, key).setDepth(22.8).setScale(1.6);
+    for (let i = 0; i < 7; i++) {
+      const w = this.add.image(Math.random() * this.sim.W, Math.random() * this.sim.H, 'glow')
+        .setScale(5 + Math.random() * 4, 2 + Math.random() * 2)
+        .setAlpha(0.18)
+        .setTint(night ? 0x3a4060 : 0xe0e6ee)
+        .setDepth(22.7);
+      this.fogWisps.push(w);
+    }
+  }
+
+  private updateWeather(dt: number) {
+    const b = this.sim.ball;
+    if (this.fog) {
+      // la "finestra" segue la palla con un po' di ritardo
+      const tx = b.x;
+      const ty = b.y - b.z * Z_SCALE;
+      this.fog.x += (tx - this.fog.x) * Math.min(1, dt * 3);
+      this.fog.y += (ty - this.fog.y) * Math.min(1, dt * 3);
+      for (const [i, w] of this.fogWisps.entries()) {
+        w.x += (8 + i * 2) * dt;
+        if (w.x > this.sim.W + 150) w.x = -150;
+      }
+    }
+    if (this.rainOn && this.fx.splash) {
+      const v = this.cameras.main.worldView;
+      const n = Math.random() < dt * 40 ? 2 : 0;
+      for (let i = 0; i < n; i++) this.fx.splash.explode(3, v.x + Math.random() * v.width, v.y + Math.random() * v.height);
+      if (!this.launch.demo) {
+        this.thunderT -= dt;
+        if (this.thunderT <= 0) {
+          this.thunderT = 16 + Math.random() * 18;
+          this.cameras.main.flash(90, 200, 210, 255);
+          this.time.delayedCall(160, () => this.cameras.main.flash(60, 160, 170, 220));
+          sfx.thunder();
+        }
+      }
+    }
   }
 
   private onResize() {
@@ -338,6 +477,7 @@ export class MatchScene extends Phaser.Scene {
     this.syncSprites(dt);
     this.updateCamera(dt);
     this.updateCrowd(dt);
+    this.updateWeather(dt);
 
     if (this.sim.phase === 'end') {
       this.endT += dt;
@@ -346,7 +486,14 @@ export class MatchScene extends Phaser.Scene {
         if (this.launch.demo) this.scene.restart(demoLaunch());
         else {
           this.scene.stop('hud');
-          this.scene.launch('result', { launch: this.launch, result: this.sim.result, tally: this.tally.t });
+          const r = this.sim.result;
+          if (this.launch.penalties && r.score[0] === r.score[1]) {
+            // pareggio: si va ai rigori
+            this.scene.launch('penalties', { outcome: { launch: this.launch, result: r, tally: this.tally.t } });
+          } else {
+            music.stop(0.3);
+            this.scene.launch('result', { launch: this.launch, result: r, tally: this.tally.t });
+          }
         }
       }
     }
@@ -381,7 +528,12 @@ export class MatchScene extends Phaser.Scene {
         this.fx.dust.explode(3, e.x, e.y);
         break;
       case 'shot': {
-        if (!quiet) e.superShot ? sfx.superShot() : sfx.kick(e.power);
+        if (!quiet) {
+          if (e.superShot) {
+            sfx.superShot();
+            commentary.say('super');
+          } else sfx.kick(e.power);
+        }
         this.fx.dust.explode(8, e.x, e.y);
         this.fx.spark.explode(e.superShot ? 24 : Math.round(4 + e.power * 8), this.sim.ball.x, this.sim.ball.y - 2);
         if (e.power > 0.8 || e.superShot || e.fire) {
@@ -396,7 +548,14 @@ export class MatchScene extends Phaser.Scene {
         break;
       }
       case 'goal': {
-        if (!quiet) sfx.goal();
+        if (!quiet) {
+          sfx.goal();
+          sfx.net();
+          commentary.say(e.own ? 'ownGoal' : 'goal', e.scorer);
+          // il pubblico di chi ha segnato attacca un coro
+          this.time.delayedCall(2600, () => sfx.chant(0, THEMES[this.launch.config.pitch.id].crowd));
+          this.chantT = 20 + Math.random() * 10;
+        }
         this.excite = 1;
         this.slowT = 0.9;
         cam.shake(380, 0.012);
@@ -421,14 +580,20 @@ export class MatchScene extends Phaser.Scene {
         break;
       }
       case 'save':
-        if (!quiet) sfx.save();
+        if (!quiet) {
+          sfx.save();
+          commentary.say(e.catch ? 'catch' : 'save');
+        }
         this.fx.stars.explode(12, e.x, e.y - 6);
         cam.shake(120, 0.005);
         this.excite = Math.max(this.excite, 0.7);
         if (!demo) this.msg({ text: e.catch ? 'PRESA!' : 'PARATA!', color: '#3fd0ff' });
         break;
       case 'post':
-        if (!quiet) sfx.post();
+        if (!quiet) {
+          sfx.post();
+          commentary.say('post');
+        }
         cam.shake(140, 0.006);
         this.fx.spark.explode(10, e.x, e.y - BAR_H / 2);
         this.excite = Math.max(this.excite, 0.8);
@@ -443,7 +608,10 @@ export class MatchScene extends Phaser.Scene {
         if (!quiet) sfx.bounce(Math.min(0.4, e.power / 300));
         break;
       case 'tackle':
-        if (!quiet) sfx.tackle();
+        if (!quiet) {
+          sfx.tackle();
+          if (Math.random() < 0.12) commentary.say('tackle');
+        }
         this.fx.dust.explode(10, e.x, e.y);
         break;
       case 'slide':
@@ -454,9 +622,18 @@ export class MatchScene extends Phaser.Scene {
         break;
       case 'whistle':
         if (!quiet) {
-          if (e.kind === 'end') sfx.whistle(3, true);
-          else if (e.kind === 'kickoff') sfx.whistle(1);
-          else if (e.kind === 'golden') sfx.whistle(2);
+          if (e.kind === 'end') {
+            sfx.whistle(3, true);
+            commentary.say('end');
+            music.stop(1.5);
+          } else if (e.kind === 'kickoff') {
+            sfx.whistle(1);
+            if (!this.started) commentary.say('start');
+            this.started = true;
+          } else if (e.kind === 'golden') {
+            sfx.whistle(2);
+            commentary.say('golden');
+          }
         }
         if (!demo) {
           if (e.kind === 'golden') this.msg({ text: 'GOLDEN GOL!', sub: 'Chi segna vince', color: '#ffd23f', big: true, ms: 2200 });
@@ -464,7 +641,10 @@ export class MatchScene extends Phaser.Scene {
         }
         break;
       case 'powerup': {
-        if (!quiet) sfx.powerup();
+        if (!quiet) {
+          sfx.powerup();
+          commentary.say(e.kind === 'fuoco' ? 'fire' : e.kind === 'turbo' ? 'turbo' : 'wall');
+        }
         this.fx.stars.explode(16, e.x, e.y);
         const names = { fuoco: 'TIRO DI FUOCO', turbo: 'TURBO', muro: 'MURO IN PORTA' };
         if (!demo) this.msg({ text: names[e.kind] + '!', sub: teamName(e.team), color: human === null || human === e.team ? '#5be37d' : '#ff9a5a' });
@@ -689,5 +869,12 @@ export class MatchScene extends Phaser.Scene {
       this.crowdA.setVisible(!v);
     }
     sfx.crowdLevel(this.excite);
+    if (!this.launch.demo && this.sim.phase === 'play') {
+      this.chantT -= dt;
+      if (this.chantT <= 0) {
+        this.chantT = 22 + Math.random() * 16;
+        sfx.chant(undefined, THEMES[this.launch.config.pitch.id].crowd);
+      }
+    }
   }
 }

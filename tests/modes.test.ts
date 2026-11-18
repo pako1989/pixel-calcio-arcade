@@ -36,7 +36,7 @@ describe('torneo', () => {
     expect(st.round).toBe(3);
     expect(st.champion).toBeDefined();
     expect(st.champion).not.toBe('aquile');
-    for (const r of st.results) for (const m of r) expect(m.ga).not.toBe(m.gb);
+    for (const r of st.results) for (const m of r) if (m.ga === m.gb) expect(m.pens).toBeDefined();
   });
 });
 

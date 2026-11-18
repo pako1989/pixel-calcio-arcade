@@ -12,6 +12,10 @@ import { CareerScene } from './scenes/CareerScene';
 import { StoryScene } from './scenes/StoryScene';
 import { ConquistaScene } from './scenes/ConquistaScene';
 import { ManagerScene } from './scenes/ManagerScene';
+import { SettingsScene } from './scenes/SettingsScene';
+import { PenaltyScene } from './scenes/PenaltyScene';
+import { sfx } from './audio/sfx';
+import { commentary } from './audio/commentary';
 
 export const GAME_H = 360;
 
@@ -38,7 +42,7 @@ const game = new Phaser.Game({
   },
   input: { activePointers: 4 },
   fps: { target: 60, min: 30 },
-  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene, TournamentScene, MissionsScene, CareerScene, StoryScene, ConquistaScene, ManagerScene],
+  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene, TournamentScene, MissionsScene, CareerScene, StoryScene, ConquistaScene, ManagerScene, PenaltyScene, SettingsScene],
 });
 
 let resizeT: number | undefined;
@@ -51,6 +55,16 @@ window.addEventListener('resize', () => {
 });
 
 document.getElementById('loading')?.remove();
+
+// il primo tocco sblocca audio e voce (richiesto dai browser dei telefoni)
+const unlockAudio = () => {
+  sfx.unlock();
+  commentary.unlock();
+  window.removeEventListener('pointerdown', unlockAudio);
+  window.removeEventListener('keydown', unlockAudio);
+};
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

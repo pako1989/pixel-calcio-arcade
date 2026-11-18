@@ -42,6 +42,9 @@ export type Difficulty = 'facile' | 'normale' | 'difficile';
 
 export type PitchId = 'stadio' | 'spiaggia' | 'neve' | 'tetto' | 'quartiere';
 
+/** Meteo della partita: cambia la fisica (pioggia) o la visuale (nebbia). */
+export type Weather = 'sereno' | 'pioggia' | 'nebbia';
+
 export interface PitchDef {
   id: PitchId;
   name: string;
@@ -76,6 +79,10 @@ export interface MatchConfig {
    * niente cambi, i compagni sono della CPU e PASSA senza palla chiede il pallone.
    */
   lockHuman?: number;
+  /** Meteo (predefinito: sereno). */
+  weather?: Weather;
+  /** Partita in notturna con i riflettori. */
+  night?: boolean;
 }
 
 export interface MatchStats {
@@ -89,5 +96,7 @@ export interface MatchResult {
   score: [number, number];
   stats: MatchStats;
   goldenGoal: boolean;
+  /** Esito dei calci di rigore, se ci sono stati. */
+  penalties?: [number, number];
   scorers: { team: 0 | 1; name: string; time: number }[];
 }

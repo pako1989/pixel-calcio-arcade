@@ -8,9 +8,13 @@ import type { Difficulty, PitchId, TeamDef } from '../sim/types';
 import type { MatchLaunch } from '../modes/modes';
 import { fixKits, backToMenu } from './demo';
 import { sfx } from '../audio/sfx';
+import { alwaysNight, randomConditions, weatherAllowed } from '../data/weather';
+import type { PenaltyData } from './PenaltyScene';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
 const DURS = [120, 150, 180, 300];
+const WEATHER_OPTS = ['sereno', 'pioggia', 'nebbia', 'caso'] as const;
+const TIME_OPTS = ['giorno', 'notte', 'caso'] as const;
 
 export class SetupScene extends Phaser.Scene {
   private home = 0;
@@ -19,13 +23,23 @@ export class SetupScene extends Phaser.Scene {
   private diff: Difficulty = 'normale';
   private dur = 150;
   private pu = true;
+  private weather: (typeof WEATHER_OPTS)[number] = 'sereno';
+  private night: (typeof TIME_OPTS)[number] = 'giorno';
+  /** Sfida ai rigori invece della partita. */
+  private pens = false;
 
   constructor() {
     super('setup');
   }
 
+  init(d?: { mode?: string }) {
+    this.pens = d?.mode === 'rigori';
+  }
+
   create() {
     const s = load().settings;
+    this.weather = (WEATHER_OPTS as readonly string[]).includes(s.weather) ? (s.weather as typeof this.weather) : 'sereno';
+    this.night = (TIME_OPTS as readonly string[]).includes(s.night) ? (s.night as typeof this.night) : 'giorno';
     this.home = Math.max(0, TEAMS.findIndex((t) => t.id === s.homeTeam));
     this.away = Math.max(0, TEAMS.findIndex((t) => t.id === s.awayTeam));
     if (this.away === this.home) this.away = (this.home + 1) % TEAMS.length;
@@ -75,7 +89,7 @@ export class SetupScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
     this.add.rectangle(0, 0, W, H, 0x0d0a1a, 0.78).setOrigin(0).setInteractive();
-    shadowTxt(this, W / 2, 18, 'PARTITA VELOCE', 16, '#ffd23f');
+    shadowTxt(this, W / 2, 18, this.pens ? 'SFIDA AI RIGORI' : 'PARTITA VELOCE', 16, this.pens ? '#ff7ab8' : '#ffd23f');
 
     const cy = 92;
     const gap = Math.min(110, W * 0.17);
@@ -92,6 +106,11 @@ export class SetupScene extends Phaser.Scene {
       sfx.select();
       this.rebuild();
     });
+
+    if (this.pens) {
+      this.buildPens(W, H);
+      return;
+    }
 
     // campo
     const p = PITCHES[PITCH_ORDER[this.pitch]];
@@ -124,13 +143,52 @@ export class SetupScene extends Phaser.Scene {
         bs.push(b);
       });
     };
-    row(222, 'CPU', ['FACILE', 'NORMALE', 'DIFFICILE'], DIFFS.indexOf(this.diff), (i) => (this.diff = DIFFS[i]));
-    row(248, 'DURATA', DURS.map((d) => `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`), DURS.indexOf(this.dur), (i) => (this.dur = DURS[i]));
-    row(274, 'POWER-UP', ['SÌ', 'NO'], this.pu ? 0 : 1, (i) => (this.pu = i === 0));
+    row(216, 'CPU', ['FACILE', 'NORMALE', 'DIFFICILE'], DIFFS.indexOf(this.diff), (i) => (this.diff = DIFFS[i]));
+    row(240, 'DURATA', DURS.map((d) => `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`), DURS.indexOf(this.dur), (i) => (this.dur = DURS[i]));
+    row(264, 'POWER-UP', ['SÌ', 'NO'], this.pu ? 0 : 1, (i) => (this.pu = i === 0));
+    row(288, 'METEO', ['SERENO', 'PIOGGIA', 'NEBBIA', 'A CASO'], WEATHER_OPTS.indexOf(this.weather), (i) => (this.weather = WEATHER_OPTS[i]));
+    if (alwaysNight(p.id)) txt(this, W / 2 - 140, 312, 'ORA: sempre di notte su questo campo', 6, '#8a8fb0').setOrigin(0, 0.5);
+    else row(312, 'ORA', ['GIORNO', 'NOTTE', 'A CASO'], TIME_OPTS.indexOf(this.night), (i) => (this.night = TIME_OPTS[i]));
 
     button(this, 64, H - 28, 96, 28, 'INDIETRO', () => backToMenu(this), { color: 0x3a3d55 });
     const play = button(this, W - 90, H - 30, 150, 34, 'GIOCA!', () => this.start(), { color: COLORS.good, size: 16, textColor: '#1a1222' });
     this.tweens.add({ targets: play.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Schermata ridotta della sfida ai rigori: squadre e bravura della CPU. */
+  private buildPens(W: number, H: number) {
+    const g = this.add.graphics();
+    panel(g, W / 2 - 200, 166, 400, 52, 0x1b1d2e, 0x2e3250, 0.92);
+    txt(this, W / 2, 180, 'Cinque rigori a testa, poi a oltranza.', 6, '#d8dcf0');
+    txt(this, W / 2, 196, 'Tiri: tocca la porta per mirare, poi ferma la barra nel verde.', 6, '#8a8fb0');
+    txt(this, W / 2, 208, 'In porta: tocca dove tuffarti, anche appena parte il tiro.', 6, '#8a8fb0');
+    const bs: Button[] = [];
+    txt(this, W / 2 - 150, 246, 'CPU', 6, '#8a8fb0').setOrigin(1, 0.5);
+    DIFFS.forEach((d, i) => {
+      const b = button(this, W / 2 - 98 + i * 96, 246, 90, 20, d.toUpperCase(), () => {
+        this.diff = d;
+        bs.forEach((x, j) => x.setSelected(j === i));
+      }, { size: 6 });
+      b.setSelected(d === this.diff);
+      bs.push(b);
+    });
+    button(this, 64, H - 28, 96, 28, 'INDIETRO', () => backToMenu(this), { color: 0x3a3d55 });
+    const play = button(this, W - 90, H - 30, 150, 34, 'CALCIA!', () => this.startPens(), { color: 0xc0306a, size: 16 });
+    this.tweens.add({ targets: play.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  private startPens() {
+    const home = TEAMS[this.home];
+    const away = fixKits(home, TEAMS[this.away]);
+    save((d) => {
+      d.settings.homeTeam = home.id;
+      d.settings.awayTeam = TEAMS[this.away].id;
+      d.settings.difficulty = this.diff;
+    });
+    sfx.unlock();
+    const data: PenaltyData = { standalone: { home, away, difficulty: this.diff } };
+    this.scene.launch('penalties', data);
+    this.scene.stop();
   }
 
   private start() {
@@ -144,7 +202,13 @@ export class SetupScene extends Phaser.Scene {
       d.settings.difficulty = this.diff;
       d.settings.duration = this.dur;
       d.settings.powerUps = this.pu;
+      d.settings.weather = this.weather;
+      d.settings.night = this.night;
     });
+    const rnd = randomConditions(pitch.id, Math.random);
+    let weather = this.weather === 'caso' ? rnd.weather : this.weather;
+    if (!weatherAllowed(pitch.id, weather)) weather = 'sereno';
+    const night = alwaysNight(pitch.id) || (this.night === 'caso' ? Math.random() < 0.4 : this.night === 'notte');
     const launch: MatchLaunch = {
       mode: 'quick',
       config: {
@@ -156,6 +220,8 @@ export class SetupScene extends Phaser.Scene {
         powerUps: this.pu,
         goldenGoal: true,
         humanTeam: 0,
+        weather,
+        night,
       },
     };
     sfx.unlock();

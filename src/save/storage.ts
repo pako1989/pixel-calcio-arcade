@@ -17,6 +17,15 @@ export interface SaveData {
     duration: number;
     powerUps: boolean;
     tutorialSeen: boolean;
+    /** Volumi 0..1 di musica, effetti e pubblico. */
+    music: number;
+    sfx: number;
+    crowd: number;
+    /** Telecronaca a voce. */
+    voice: boolean;
+    /** Meteo e orario scelti in Partita veloce. */
+    weather: string;
+    night: string;
   };
   record: { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number };
   /** Diventa un mito (storia). */
@@ -42,6 +51,12 @@ const DEFAULTS: SaveData = {
     duration: 150,
     powerUps: true,
     tutorialSeen: false,
+    music: 0.6,
+    sfx: 0.8,
+    crowd: 0.8,
+    voice: true,
+    weather: 'sereno',
+    night: 'giorno',
   },
   record: { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0 },
 };
@@ -72,4 +87,10 @@ export function save(mut?: (d: SaveData) => void) {
   } catch {
     /* ignora */
   }
+}
+
+/** Applica all'audio le preferenze salvate. */
+export function audioPrefs() {
+  const s = load().settings;
+  return { muted: s.muted, music: s.music, sfx: s.sfx, crowd: s.crowd, voice: s.voice };
 }
