@@ -33,7 +33,7 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 
 ```bash
 npm install
-npm run dev      # server locale (apri l'indirizzo "Network" dal telefono sulla stessa rete Wi-Fi)
+npm run dev      # server locale: apri /game.html (anche dal telefono, indirizzo "Network")
 npm test         # test della simulazione
 npm run build    # build di produzione in dist/
 ```
@@ -52,5 +52,7 @@ L'IA della CPU riprende le idee di *SimpleSoccer* (Mat Buckland, "Programming Ga
 
 ### Pubblicazione
 
-Ogni push su `main` esegue i test, costruisce il gioco e lo pubblica sul branch `gh-pages`
-(GitHub → Settings → Pages → *Deploy from a branch* → `gh-pages` / `root`).
+GitHub Pages serve la radice del branch `main`. La pagina sorgente è `game.html`;
+`index.html`, `assets/`, `icons/`, `sw.js` e `manifest.webmanifest` nella radice sono la **build pubblicata**
+e non vanno modificati a mano: a ogni push su `main` il workflow `deploy.yml` esegue i test,
+ricostruisce il gioco e li aggiorna da solo.

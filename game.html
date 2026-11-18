@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#14111f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Pixel Calcio" />
+    <meta name="description" content="Calcio arcade 2D in pixel art: 5 contro 5 contro la CPU, da giocare sul telefono." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <title>Pixel Calcio Arcade</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #14111f;
+        overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+      #game canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      #rotate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #14111f;
+        color: #ffd23f;
+        font: 14px/1.8 monospace;
+        text-align: center;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      #rotate .phone {
+        width: 46px;
+        height: 80px;
+        border: 4px solid #ffd23f;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        animation: turn 1.6s ease-in-out infinite;
+      }
+      @keyframes turn {
+        0%, 30% { transform: rotate(0deg); }
+        60%, 100% { transform: rotate(-90deg); }
+      }
+      @media (orientation: portrait) and (max-width: 900px) {
+        #rotate { display: flex; }
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8a8fb0;
+        font: 12px monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Caricamento…</div>
+    <div id="game"></div>
+    <div id="rotate">
+      <div class="phone"></div>
+      <div>Ruota il telefono<br />per giocare</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

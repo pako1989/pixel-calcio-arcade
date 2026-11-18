@@ -1,5 +1,7 @@
 name: Pubblica su GitHub Pages
 
+# GitHub Pages serve la radice del branch main: questo workflow costruisce il gioco
+# e mette la build (index.html, assets/, sw.js, icone) nella radice di main.
 on:
   push:
     branches: [main]
@@ -10,7 +12,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-deploy:
@@ -24,14 +26,21 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # Il sito viene servito dal branch gh-pages (Impostazioni > Pages > Branch: gh-pages / root)
-      - name: Pubblica la build sul branch gh-pages
+      - name: Copia la build nella radice
         run: |
-          cd dist
+          rm -rf assets icons
+          cp -r dist/assets dist/icons .
+          cp dist/game.html index.html
+          cp dist/sw.js dist/manifest.webmanifest .
           touch .nojekyll
-          git init -q -b gh-pages
+      - name: Salva la build su main
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Build ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          git add -A index.html assets icons sw.js manifest.webmanifest .nojekyll
+          if git diff --cached --quiet; then
+            echo "Build già aggiornata"
+          else
+            git commit -m "Pubblica build ${GITHUB_SHA::7}"
+            git push
+          fi
