@@ -284,7 +284,7 @@ export class HudScene extends Phaser.Scene {
         cg.fillStyle(b.color, pressed ? 0.75 : 0.42).fillCircle(b.x, b.y, r);
         cg.lineStyle(2, 0xffffff, pressed ? 0.95 : 0.55).strokeCircle(b.x, b.y, r);
         if (b.id === 'shoot') b.label.setText(owns ? 'TIRA' : 'SCIVOLA');
-        if (b.id === 'pass') b.label.setText(owns || teamHas ? 'PASSA' : 'CAMBIA');
+        if (b.id === 'pass') b.label.setText(owns ? 'PASSA' : sim.locked ? 'CHIEDI' : teamHas ? 'PASSA' : 'CAMBIA');
       }
       // anello di carica sul tasto TIRA
       if (sim.charging) {

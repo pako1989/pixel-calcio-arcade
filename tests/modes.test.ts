@@ -107,3 +107,29 @@ describe('diventa un mito', () => {
     }
   });
 });
+
+describe('un solo giocatore', () => {
+  it('il controllo resta sul campione e chiedendo palla i compagni la passano', () => {
+    const sim = new MatchSim({
+      home: TEAMS[0], away: TEAMS[7], pitch: PITCHES.stadio, difficulty: 'facile', durationSec: 90,
+      powerUps: false, goldenGoal: false, seed: 3, humanTeam: 0, lockHuman: 4,
+    });
+    const hero = sim.teams[0][4];
+    let calls = 0;
+    let passesToHero = 0;
+    let wasTarget = false;
+    for (let f = 0; f < 90 * 60 && sim.phase !== 'end'; f++) {
+      // il giocatore resta fermo e preme PASSA ogni mezzo secondo
+      const press = f % 30 < 2;
+      sim.update(1 / 60, { mx: 0, my: 0, shoot: false, pass: press, sprint: false });
+      for (const e of sim.events) if (e.type === 'call') calls++;
+      sim.events.length = 0;
+      expect(sim.humanIdx).toBe(4);
+      const isT = sim.ball.passTarget === hero;
+      if (isT && !wasTarget) passesToHero++;
+      wasTarget = isT;
+    }
+    expect(calls).toBeGreaterThan(0);
+    expect(passesToHero).toBeGreaterThan(2);
+  });
+});

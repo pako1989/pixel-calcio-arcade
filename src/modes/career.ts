@@ -31,9 +31,14 @@ export interface Hero {
   look: PlayerDef['look'];
 }
 
+/** Chi controlli in partita: solo il tuo campione o tutta la squadra (con i cambi). */
+export type CareerControl = 'solo' | 'squadra';
+
 export interface CareerState {
   hero: Hero;
   difficulty: Difficulty;
+  /** Assente nei salvataggi vecchi: vale 'solo'. */
+  control?: CareerControl;
   attrs: Record<AttrId, number>;
   points: number;
   step: number;
@@ -268,10 +273,11 @@ export const GOAL_TEXT: Record<CareerGoal, string> = {
 export const HERO_NAMES = ['Nico', 'Ciro', 'Leo', 'Dario', 'Tino', 'Sandro', 'Gigi', 'Enzo', 'Marco', 'Peppe', 'Luca', 'Sami'];
 export const HERO_NUMBERS = [7, 9, 10, 11, 17, 21, 99];
 
-export function newCareer(hero: Hero, difficulty: Difficulty): CareerState {
+export function newCareer(hero: Hero, difficulty: Difficulty, control: CareerControl = 'solo'): CareerState {
   return {
     hero,
     difficulty,
+    control,
     attrs: { speed: 0, shot: 0, pass: 0, control: 0, tackle: 0 },
     points: 2,
     step: 0,
@@ -349,6 +355,7 @@ export function careerLaunch(c: CareerState, fixKits: (h: TeamDef, a: TeamDef) =
       powerUps: true,
       goldenGoal: step.goldenGoal,
       humanTeam: 0,
+      lockHuman: c.control === 'squadra' ? undefined : 4,
     },
   };
 }

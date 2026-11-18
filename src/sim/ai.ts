@@ -108,6 +108,8 @@ function passScore(sim: MatchSim, from: Player, to: Player): number {
   const open = Math.min(1, nearestOpp(sim, to, from.team).d / 90);
   let s = progress * 2.2 + open * 0.9 - d / 900;
   if (to.isGK) s -= 1.2;
+  // con un solo giocatore controllato, i compagni lo cercano più spesso
+  if (sim.locked && sim.isHuman(to)) s += 0.35;
   return s;
 }
 
@@ -255,6 +257,15 @@ function carrierThink(sim: MatchSim, p: Player) {
   const opp = sim.teams[p.team === 0 ? 1 : 0];
   const gk = opp[0];
 
+  // il giocatore umano ha chiesto la palla: gliela passo
+  const hero = sim.human;
+  if (sim.locked && sim.callT > 0 && hero && hero.team === p.team && hero !== p && p.holdT > 0.1) {
+    sim.callT = 0;
+    if (dist(p, hero) > 24 && hero.state !== 'stun') {
+      sim.pass(p, hero);
+      return;
+    }
+  }
   if (p.holdT > 0.15) {
     // tiro?
     const range = 250 * p.def.stats.shot;

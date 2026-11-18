@@ -5,7 +5,7 @@ import { frameIndex, HAIR, makePlayerSheet, SKIN } from '../gfx/sprites';
 import type { Difficulty } from '../sim/types';
 import {
   ATTRS, clubById, GOAL_TEXT, heroDef, HERO_NAMES, HERO_NUMBERS, MAX_LEVEL, newCareer, PERKS, STORY,
-  teamsFor, type CareerState, type Hero,
+  teamsFor, type CareerControl, type CareerState, type Hero,
 } from '../modes/career';
 import { PITCHES } from '../data/pitches';
 import { backToMenu, backToScene } from './demo';
@@ -19,6 +19,7 @@ const STYLE_NAMES = ['CORTI', 'RASATI', 'LUNGHI', 'CIUFFO'];
 export class CareerScene extends Phaser.Scene {
   private draft!: Hero;
   private diff: Difficulty = 'facile';
+  private control: CareerControl = 'solo';
   private confirmReset = false;
 
   constructor() {
@@ -110,9 +111,21 @@ export class CareerScene extends Phaser.Scene {
       bs.push(b);
     });
 
+    txt(this, rx - 120, 256, 'CONTROLLI', 6, '#8a8fb0').setOrigin(0, 0.5);
+    const cs: Button[] = [];
+    (['solo', 'squadra'] as const).forEach((k, i) => {
+      const b = button(this, rx - 13 + i * 105, 256, 99, 20, k === 'solo' ? 'SOLO IL MIO' : 'TUTTA LA SQUADRA', () => {
+        this.control = k;
+        cs.forEach((x, j) => x.setSelected(j === i));
+      }, { size: 6 });
+      b.setSelected(k === this.control);
+      cs.push(b);
+    });
+    txt(this, rx + 40, 276, this.control === 'solo' ? 'Solo il tuo campione: PASSA senza palla la chiede.' : 'Controlli tutta la squadra e cambi giocatore.', 6, '#5a5f80');
+
     button(this, 64, H - 28, 96, 28, 'INDIETRO', () => backToMenu(this), { color: 0x3a3d55 });
     const go = button(this, W - 110, H - 30, 190, 34, 'INIZIA LA STORIA', () => {
-      const c = newCareer({ ...this.draft, look: { ...this.draft.look } }, this.diff);
+      const c = newCareer({ ...this.draft, look: { ...this.draft.look } }, this.diff, this.control);
       save((s) => (s.career = c));
       sfx.select();
       backToScene(this, 'story', { lines: STORY[0].before, step: 0, then: 'match' });
@@ -217,6 +230,14 @@ export class CareerScene extends Phaser.Scene {
     }
 
     button(this, 64, H - 24, 96, 26, 'MENU', () => backToMenu(this), { color: 0x3a3d55 });
+    const solo = c.control !== 'squadra';
+    button(this, W / 2 - (W < 640 ? 18 : 0), H - 24, 150, 26, solo ? 'GIOCHI: SOLO TU' : 'GIOCHI: SQUADRA', () => {
+      save((s) => {
+        if (s.career) s.career.control = s.career.control === 'squadra' ? 'solo' : 'squadra';
+      });
+      sfx.select();
+      this.build();
+    }, { size: 6, color: solo ? 0x8a3fd0 : 0x2f6fd0 });
     button(this, W - 80, H - 24, 132, 26, this.confirmReset ? 'SICURO?' : 'NUOVA CARRIERA', () => {
       if (!this.confirmReset) {
         this.confirmReset = true;
