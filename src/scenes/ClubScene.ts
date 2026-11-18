@@ -401,7 +401,10 @@ export class ClubScene extends Phaser.Scene {
     const cols = ['V', 'P', 'S'];
     cols.forEach((c, i) => txt(this, x0 + pw - 150 + i * 34, 102, c, 6, '#8a8fb0'));
     const list = TEAMS.map((t) => ({ t, r: p.vs[t.id] ?? { w: 0, d: 0, l: 0 } }))
-      .sort((a, b) => b.r.l - b.r.w - (a.r.l - a.r.w));
+      .filter((x) => x.r.w + x.r.d + x.r.l > 0)
+      .sort((a, b) => b.r.l - b.r.w - (a.r.l - a.r.w))
+      .slice(0, 8);
+    if (!list.length) txt(this, W / 2, 140, 'Gioca qualche partita per vedere i tuoi avversari.', 6, '#5a5f80');
     list.forEach(({ t, r }, i) => {
       const y = 118 + i * 23;
       const rival = isRival(p, t.id);

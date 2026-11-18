@@ -11,7 +11,7 @@ import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
 import { teamById } from '../data/teams';
-import { applyManagerResult, DIVISIONS } from '../modes/manager';
+import { applyMatch, cupDue, DIVISIONS, ensureManager, nextMatch } from '../modes/manager';
 import { newAlbum, owned as ownedStickers, packsForMatch } from '../modes/album';
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
@@ -168,7 +168,7 @@ export class ResultScene extends Phaser.Scene {
 
   private makeReport(d: MatchOutcome): ModeReport | undefined {
     const [a, b] = d.result.score;
-    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number; season?: number; week?: number };
+    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number; season?: number; week?: number; cup?: number };
     if (d.launch.mode === 'torneo') {
       const st = load().tournament;
       if (!st || st.round !== md.round) return undefined;
@@ -198,15 +198,20 @@ export class ResultScene extends Phaser.Scene {
       return { title, titleColor: '#ffd23f', lines, retry: false, next: { label: 'TABELLONE', go: (s) => backToScene(s, 'tournament') } };
     }
     if (d.launch.mode === 'manager') {
-      const m = load().manager;
+      const m = load().manager && ensureManager(load().manager!);
       if (!m || m.season !== md.season || m.week !== md.week) return undefined;
-      const week = m.week;
-      const div = DIVISIONS[m.division].name;
+      const isCup = cupDue(m);
+      if ((md.cup ?? -1) !== (isCup ? m.cup!.round : -1)) return undefined;
+      const label = `${nextMatch(m)?.label ?? ''} · ${isCup ? m.cup!.name : DIVISIONS[m.division].name}`;
       const mine = d.result.scorers.filter((s) => s.team === 0).map((s) => s.name);
-      const rep = applyManagerResult(m, a, b, mine);
+      const pens = d.result.penalties ? d.result.penalties[0] > d.result.penalties[1] : undefined;
+      const ap = applyMatch(m, a, b, mine, pens);
       save((s) => (s.manager = m));
+      const rl = managerReportLines(m, ap, a, b);
       return {
-        lines: [{ text: `GIORNATA ${week + 1} · ${div}`, color: '#8a8fb0' }, ...managerReportLines(m, rep)],
+        title: ap.cup ? rl[0].text : undefined,
+        titleColor: rl[0].color,
+        lines: [{ text: label, color: '#8a8fb0' }, ...rl.slice(1)],
         retry: false,
         next: { label: 'CLUB', go: (s) => backToScene(s, 'manager') },
       };

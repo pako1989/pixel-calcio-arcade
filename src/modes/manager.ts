@@ -9,7 +9,7 @@
 import { MatchSim } from '../sim/match';
 import { clamp, Rng } from '../sim/math';
 import type { Difficulty, MatchResult, PitchId, PlayerDef, PlayerStats, Role, TeamDef } from '../sim/types';
-import { makePlayers, type TeamSeed } from '../data/teams';
+import { FAMOUS_EU, FAMOUS_IT, FAMOUS_PROV, makePlayers, type TeamSeed } from '../data/teams';
 import { PITCHES } from '../data/pitches';
 import { randomConditions } from '../data/weather';
 
@@ -107,24 +107,9 @@ const CLUB_SEEDS: TeamSeed[][] = [
     { id: 'm_giardini', name: 'Giardini', short: 'GIA', colors: { shirt: 0x2fbf5a, shirt2: 0xffffff, shorts: 0xffffff, socks: 0x2fbf5a, gk: 0xe0457b }, pattern: 'stripes', stars: 2 },
     { id: 'm_castello', name: 'Castello', short: 'CAS', colors: { shirt: 0xd8d8d8, shirt2: 0x7a2a2a, shorts: 0x7a2a2a, socks: 0xd8d8d8, gk: 0xf5c400 }, pattern: 'sash', stars: 2 },
   ],
-  [
-    { id: 'm_marina', name: 'Marina Azzurra', short: 'MAR', colors: { shirt: 0x2a9fd6, shirt2: 0x1d3f8f, shorts: 0x1d3f8f, socks: 0x2a9fd6, gk: 0xff7a1a }, pattern: 'stripes', stars: 3 },
-    { id: 'm_collina', name: 'Collina Verde', short: 'COL', colors: { shirt: 0x1f9e4a, shirt2: 0x1a1a1a, shorts: 0x1a1a1a, socks: 0x1f9e4a, gk: 0xf5c400 }, pattern: 'half', stars: 3 },
-    { id: 'm_vulcano', name: 'Vulcano', short: 'VUL', colors: { shirt: 0x8a1018, shirt2: 0xff6a00, shorts: 0x1a1a1a, socks: 0x8a1018, gk: 0x29c7c7 }, pattern: 'hoops', stars: 3 },
-    { id: 'm_saline', name: 'Saline', short: 'SAL', colors: { shirt: 0xffffff, shirt2: 0xff5a5a, shorts: 0xff5a5a, socks: 0xffffff, gk: 0x1d3f8f }, pattern: 'sash', stars: 3 },
-    { id: 'm_altopiano', name: 'Altopiano', short: 'ALT', colors: { shirt: 0x8a5a2a, shirt2: 0xf5c400, shorts: 0xf5c400, socks: 0x8a5a2a, gk: 0x7d5cff }, pattern: 'plain', stars: 3 },
-    { id: 'm_faro', name: 'Faro', short: 'FAR', colors: { shirt: 0xf5c400, shirt2: 0xc8202a, shorts: 0xc8202a, socks: 0xf5c400, gk: 0x2fbf5a }, pattern: 'hoops', stars: 3 },
-    { id: 'm_valle', name: 'Valle d\'Oro', short: 'VAL', colors: { shirt: 0x6a2bbf, shirt2: 0xf5c400, shorts: 0x6a2bbf, socks: 0xf5c400, gk: 0xff7a1a }, pattern: 'stripes', stars: 3 },
-  ],
-  [
-    { id: 'm_corona', name: 'Corona Reale', short: 'CRN', colors: { shirt: 0xffd23f, shirt2: 0x6a2bbf, shorts: 0x6a2bbf, socks: 0xffd23f, gk: 0x2fbf5a }, pattern: 'plain', stars: 5 },
-    { id: 'm_fulmine', name: 'Fulmine', short: 'FUL', colors: { shirt: 0x1a1a1a, shirt2: 0x3fd0ff, shorts: 0x1a1a1a, socks: 0x3fd0ff, gk: 0xff7a1a }, pattern: 'stripes', stars: 5 },
-    { id: 'm_leoni', name: 'Leoni d\'Argento', short: 'LEO', colors: { shirt: 0xd8d8d8, shirt2: 0x1d3f8f, shorts: 0x1d3f8f, socks: 0xd8d8d8, gk: 0xe04040 }, pattern: 'sash', stars: 4 },
-    { id: 'm_stella', name: 'Stella Polare', short: 'STE', colors: { shirt: 0x1d3f8f, shirt2: 0xffffff, shorts: 0xffffff, socks: 0x1d3f8f, gk: 0xf5c400 }, pattern: 'hoops', stars: 4 },
-    { id: 'm_tempesta', name: 'Tempesta', short: 'TEM', colors: { shirt: 0x5a6a7a, shirt2: 0xf5c400, shorts: 0x1a1a1a, socks: 0x5a6a7a, gk: 0xe0457b }, pattern: 'half', stars: 4 },
-    { id: 'm_drago', name: 'Drago Rosso', short: 'DRG', colors: { shirt: 0xc8202a, shirt2: 0x1a1a1a, shorts: 0x1a1a1a, socks: 0xc8202a, gk: 0x9bd12a }, pattern: 'stripes', stars: 4 },
-    { id: 'm_aurora', name: 'Aurora', short: 'AUR', colors: { shirt: 0xff7ab8, shirt2: 0x1a1a1a, shorts: 0x1a1a1a, socks: 0xff7ab8, gk: 0x3fd0ff }, pattern: 'plain', stars: 4 },
-  ],
+  // dalla Lega Regionale in su si incontrano i club "famosi" (nomi di fantasia)
+  FAMOUS_PROV,
+  FAMOUS_IT,
 ];
 
 /** Colori tra cui scegliere per il proprio club. */
@@ -157,6 +142,8 @@ export interface MPlayer {
   look: PlayerDef['look'];
   goals: number;
   apps: number;
+  /** Settimane di stop per infortunio (0/assente = disponibile). */
+  injured?: number;
 }
 
 export interface MClub {
@@ -195,6 +182,8 @@ export interface SeasonEnd {
   prize: number;
   retired: string[];
   youth: string[];
+  /** Obiettivo del presidente. */
+  objective?: { label: string; met: boolean; bonus: number };
 }
 
 export interface ManagerState {
@@ -227,6 +216,49 @@ export interface ManagerState {
   seasonEnd?: SeasonEnd;
   /** Ultimo resoconto settimanale delle finanze. */
   lastWeek?: { tickets: number; sponsor: number; salaries: number };
+  /** Coppa della stagione (nazionale, o d'Europa in Serie Pixel). */
+  cup?: CupState;
+  /** Coppe vinte. */
+  cups?: number;
+  /** Obiettivo stagionale del presidente. */
+  objective?: { pos: number; label: string };
+  /** Evento della settimana in attesa di una scelta. */
+  event?: ManagerEvent;
+}
+
+export interface CupMatch {
+  a: string;
+  b: string;
+  ga: number;
+  gb: number;
+  winner: string;
+  /** Decisa ai rigori. */
+  pens?: boolean;
+}
+
+export interface CupState {
+  name: string;
+  europe: boolean;
+  clubs: MClub[];
+  /** 8 squadre in ordine di tabellone. */
+  bracket: string[];
+  /** 0 quarti, 1 semifinale, 2 finale, 3 finita. */
+  round: number;
+  results: CupMatch[][];
+  out: boolean;
+  champion?: string;
+  /** Salvataggio vecchio a stagione iniziata: si gioca dalla prossima. */
+  late?: boolean;
+}
+
+export interface ManagerEvent {
+  id: string;
+  title: string;
+  text: string;
+  options: { label: string; desc: string }[];
+  /** Dati dell'evento (giocatore coinvolto, cifra...). */
+  pid?: number;
+  amount?: number;
 }
 
 export const ME = 'me';
@@ -375,11 +407,13 @@ function setupLeague(st: ManagerState) {
   }
   st.fixtures = roundRobin(ids);
   st.week = 0;
+  st.cup = newCup(st, rng);
+  st.objective = makeObjective(st);
 }
 
 export function clubOf(st: ManagerState, id: string): MClub {
   if (id === ME) return st.club;
-  return st.clubs.find((c) => c.id === id) ?? st.clubs[0];
+  return st.clubs.find((c) => c.id === id) ?? st.cup?.clubs.find((c) => c.id === id) ?? st.clubs[0];
 }
 
 export function table(st: ManagerState): TableRow[] {
@@ -426,14 +460,32 @@ export function myFixture(st: ManagerState): Fixture | null {
   return round.find((f) => f.h === ME || f.a === ME) ?? null;
 }
 
-export function opponentOf(st: ManagerState): MClub | null {
+/** La prossima partita: di coppa (se è il suo turno) o di campionato. */
+export interface NextMatch {
+  cup: boolean;
+  opp: MClub;
+  home: boolean;
+  /** Es. "GIORNATA 4" o "COPPA · SEMIFINALE". */
+  label: string;
+}
+
+export function nextMatch(st: ManagerState): NextMatch | null {
+  if (cupDue(st)) {
+    const c = st.cup!;
+    const opp = cupOpponent(c);
+    if (opp) return { cup: true, opp: clubOf(st, opp), home: c.round !== 1, label: `${c.europe ? 'EUROPA' : 'COPPA'} · ${CUP_ROUNDS[c.round]}` };
+  }
   const f = myFixture(st);
   if (!f) return null;
-  return clubOf(st, f.h === ME ? f.a : f.h);
+  return { cup: false, opp: clubOf(st, f.h === ME ? f.a : f.h), home: f.h === ME, label: `GIORNATA ${st.week + 1}` };
+}
+
+export function opponentOf(st: ManagerState): MClub | null {
+  return nextMatch(st)?.opp ?? null;
 }
 
 export function isHome(st: ManagerState): boolean {
-  return myFixture(st)?.h === ME;
+  return nextMatch(st)?.home ?? false;
 }
 
 // ---------------------------------------------------------------- nuova carriera
@@ -561,13 +613,14 @@ export function sell(st: ManagerState, id: number): boolean {
 
 /** Completa la formazione se manca qualcuno (dopo una cessione, un ritiro...). */
 export function fixLineup(st: ManagerState) {
-  const ids = new Set(st.squad.map((p) => p.id));
+  const ids = new Set(st.squad.filter((p) => !p.injured).map((p) => p.id));
   const lu = st.lineup.filter((id) => ids.has(id));
   const roles = FORMATIONS[st.formation].roles;
   while (lu.length < 5) {
     const slot = lu.length;
     const want = roles[slot];
-    const free = st.squad.filter((p) => !lu.includes(p.id));
+    const free = st.squad.filter((p) => !lu.includes(p.id) && !p.injured);
+    if (!free.length) free.push(...st.squad.filter((p) => !lu.includes(p.id)));
     free.sort((a, b) => (b.role === want ? 1 : 0) - (a.role === want ? 1 : 0) || playerOvr(b) - playerOvr(a));
     if (!free[0]) break;
     lu.push(free[0].id);
@@ -576,9 +629,12 @@ export function fixLineup(st: ManagerState) {
 }
 
 /** Scambia due giocatori (titolari o riserve). */
-export function swapPlayers(st: ManagerState, a: number, b: number) {
+export function swapPlayers(st: ManagerState, a: number, b: number): boolean {
   const ia = st.lineup.indexOf(a);
   const ib = st.lineup.indexOf(b);
+  const inj = (id: number) => !!st.squad.find((p) => p.id === id)?.injured;
+  // un infortunato non può entrare in campo
+  if ((ia >= 0 && ib < 0 && inj(b)) || (ib >= 0 && ia < 0 && inj(a))) return false;
   if (ia >= 0 && ib >= 0) {
     st.lineup[ia] = b;
     st.lineup[ib] = a;
@@ -590,6 +646,7 @@ export function swapPlayers(st: ManagerState, a: number, b: number) {
     const pb = st.squad.findIndex((p) => p.id === b);
     if (pa >= 0 && pb >= 0) [st.squad[pa], st.squad[pb]] = [st.squad[pb], st.squad[pa]];
   }
+  return true;
 }
 
 /** Formazione migliore in automatico: per ogni posto il più forte disponibile (contando l'energia). */
@@ -601,7 +658,7 @@ export function autoLineup(st: ManagerState) {
     let best: MPlayer | null = null;
     let bestV = -1;
     for (const p of st.squad) {
-      if (taken.has(p.id)) continue;
+      if (taken.has(p.id) || p.injured) continue;
       const v = ovr(effectiveStats(p, role), role);
       if (v > bestV) {
         bestV = v;
@@ -614,6 +671,7 @@ export function autoLineup(st: ManagerState) {
     }
   }
   st.lineup = lu;
+  fixLineup(st);
 }
 
 export function starters(st: ManagerState): MPlayer[] {
@@ -688,6 +746,8 @@ export function clubTeamDef(st: ManagerState, c: MClub): TeamDef {
 }
 
 export function matchPitch(st: ManagerState): PitchId {
+  const nm = nextMatch(st);
+  if (nm?.cup && st.cup!.round === 2) return 'stadio';
   if (isHome(st)) return DIVISIONS[st.division].pitch;
   const pool: PitchId[] = ['stadio', 'spiaggia', 'neve', 'tetto', 'quartiere'];
   return pool[(st.week * 7 + st.season * 3 + st.division) % pool.length];
@@ -695,12 +755,12 @@ export function matchPitch(st: ManagerState): PitchId {
 
 /** Meteo e orario della partita della giornata (sempre gli stessi per quella giornata). */
 export function matchConditions(st: ManagerState) {
-  const rng = new Rng(st.seed * 3 + st.season * 1009 + st.week * 101 + 17);
+  const rng = new Rng(st.seed * 3 + st.season * 1009 + st.week * 101 + 17 + (cupDue(st) ? 500 + st.cup!.round * 7 : 0));
   return randomConditions(matchPitch(st), () => rng.next());
 }
 
 /** Partita simulata con la vera simulazione (CPU contro CPU), senza grafica. */
-export function simulateMyMatch(st: ManagerState, seed = st.seed + st.season * 1009 + st.week * 101): MatchResult {
+export function simulateMyMatch(st: ManagerState, seed = st.seed + st.season * 1009 + st.week * 101 + (cupDue(st) ? 300 + st.cup!.round : 0)): MatchResult {
   const me = myTeamDef(st);
   const opp = clubTeamDef(st, opponentOf(st)!);
   const home = isHome(st);
@@ -786,27 +846,17 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
   const notes: string[] = [];
   const won = myGoals > oppGoals;
   const lost = myGoals < oppGoals;
-
-  // giocatori: energia, morale, presenze, gol
-  const startersIds = new Set(st.lineup);
+  // infortuni della settimana prima: si guarisce
   for (const p of st.squad) {
-    const starter = startersIds.has(p.id);
-    if (starter) {
-      p.apps++;
-      p.energy -= 20;
-      p.morale += 3;
-    } else {
-      p.morale -= 2;
-    }
-    p.morale += won ? 7 : lost ? -7 : 1;
-  }
-  for (const name of myScorers) {
-    const p = st.squad.find((x) => x.name === name);
-    if (p) {
-      p.goals++;
-      p.morale += 4;
+    if (p.injured) {
+      p.injured--;
+      if (!p.injured) {
+        delete p.injured;
+        notes.push(`${p.name} è guarito e torna disponibile.`);
+      }
     }
   }
+  playersAfterMatch(st, won, lost, myScorers, rng, 20, notes);
 
   // allenamento della settimana
   const tr = TRAININGS[st.training];
@@ -861,8 +911,42 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
 
   const rep: WeekReport = { myGoals, oppGoals, opp: oppId, home, income: tickets + sponsor - salaries, tickets, salaries, sponsor, pos: position(st), notes };
   if (st.week >= st.fixtures.length) rep.seasonEnd = endSeason(st, rng);
+  else if (!st.event && rng.chance(0.4)) st.event = makeEvent(st, rng);
   st.news = st.news.slice(0, 12);
   return rep;
+}
+
+/** Energia, morale, presenze, gol e infortuni dopo una partita. */
+function playersAfterMatch(st: ManagerState, won: boolean, lost: boolean, scorers: string[], rng: Rng, cost: number, notes: string[]) {
+  const startersIds = new Set(st.lineup);
+  for (const p of st.squad) {
+    const starter = startersIds.has(p.id);
+    if (starter) {
+      p.apps++;
+      p.energy -= cost;
+      p.morale += 3;
+      // chi è stanco si fa male più facilmente
+      const risk = p.energy < 40 ? 0.09 : p.energy < 60 ? 0.045 : 0.025;
+      if (!p.injured && rng.chance(risk)) {
+        p.injured = 1 + Math.floor(rng.next() * 3);
+        notes.unshift(`Infortunio! ${p.name} starà fuori ${p.injured} ${p.injured === 1 ? 'settimana' : 'settimane'}.`);
+      }
+    } else {
+      p.morale -= 2;
+    }
+    p.morale += won ? 7 : lost ? -7 : 1;
+  }
+  for (const name of scorers) {
+    const p = st.squad.find((x) => x.name === name);
+    if (p) {
+      p.goals++;
+      p.morale += 4;
+    }
+  }
+  for (const p of st.squad) {
+    p.energy = clamp(Math.round(p.energy), 5, 100);
+    p.morale = clamp(Math.round(p.morale), 5, 100);
+  }
 }
 
 // ---------------------------------------------------------------- fine stagione
@@ -876,6 +960,14 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
   else if (pos >= 7 && div > 0) outcome = 'retrocesso';
   const prize = Math.round((DIVISIONS[div].prize * (9 - pos)) / 8 / 500) * 500;
   st.budget += prize;
+  let objective: SeasonEnd['objective'];
+  if (st.objective) {
+    const met = pos <= st.objective.pos;
+    const bonus = met ? Math.round(DIVISIONS[div].prize / 2 / 500) * 500 : 0;
+    st.budget += bonus;
+    objective = { label: st.objective.label, met, bonus };
+    for (const p of st.squad) p.morale += met ? 10 : -10;
+  }
   st.history.push({ season: st.season, division: div, pos });
   if (pos === 1) st.titles++;
   if ((outcome === 'campione' || outcome === 'promosso') && div < TOP_DIVISION) st.division++;
@@ -897,6 +989,7 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
   }
   for (const p of st.squad) {
     p.energy = 100;
+    delete p.injured;
     p.morale = clamp(Math.round(p.morale * 0.5 + 35), 30, 90);
     p.goals = 0;
     p.apps = 0;
@@ -915,7 +1008,7 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
     youth.push(p.name);
   }
   assignNumbers(st);
-  const se: SeasonEnd = { season: st.season, division: div, pos, outcome, prize, retired, youth };
+  const se: SeasonEnd = { season: st.season, division: div, pos, outcome, prize, retired, youth, objective };
   st.season++;
   setupLeague(st);
   refreshMarket(st, rng);
@@ -960,4 +1053,333 @@ export function money(v: number): string {
 /** Minuto "da telecronaca" (0..90) di un momento della partita. */
 export function minuteOf(time: number, duration: number): number {
   return clamp(Math.round((time / duration) * 90), 1, 90);
+}
+
+// ---------------------------------------------------------------- coppa
+
+export const CUP_ROUNDS = ['QUARTI', 'SEMIFINALE', 'FINALE'];
+/** Giornate di campionato prima delle quali si gioca il turno di coppa. */
+export const CUP_WEEKS = [3, 7, 11];
+/** Premio per ogni turno superato e per la vittoria, per divisione. */
+const CUP_PRIZE = [2000, 4000, 8000, 15000];
+const EURO_PRIZE = 30000;
+
+function shuffle<T>(rng: Rng, a: T[]): T[] {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng.next() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Coppa a eliminazione a 8 squadre. Nelle divisioni minori è la Coppa
+ * Nazionale con club di tutte le categorie (si possono sfidare i giganti!);
+ * in Serie Pixel è la Coppa d'Europa con le grandi straniere.
+ */
+export function newCup(st: ManagerState, rng: Rng): CupState {
+  const europe = st.division === TOP_DIVISION;
+  let clubs: MClub[];
+  if (europe) {
+    clubs = shuffle(rng, FAMOUS_EU.slice()).slice(0, 7).map((s) => ({
+      id: s.id, name: s.name, short: s.short, colors: s.colors, pattern: s.pattern,
+      level: round3(clamp(3.9 + (s.stars - 4) * 0.45 + rng.range(-0.2, 0.3), 3.6, 5)),
+    }));
+  } else {
+    const league = new Set(st.clubs.map((c) => c.id));
+    const pool: MClub[] = [];
+    CLUB_SEEDS.forEach((list, d) => list.forEach((s) => !league.has(s.id) && pool.push(clubFromSeed(s, d, rng))));
+    // almeno due "giganti" delle divisioni più alte
+    const big = shuffle(rng, pool.filter((c) => c.level >= DIV_LEVEL[Math.min(TOP_DIVISION, st.division + 2)][0]));
+    const rest = shuffle(rng, pool.filter((c) => !big.slice(0, 2).includes(c)));
+    clubs = [...big.slice(0, 2), ...rest.slice(0, 5)];
+    // ...e qualche avversario della propria categoria
+    if (clubs.length < 7) clubs.push(...rest.slice(5, 5 + 7 - clubs.length));
+  }
+  const bracket = shuffle(rng, [ME, ...clubs.map((c) => c.id)]);
+  return {
+    name: europe ? 'COPPA D\'EUROPA PIXEL' : 'COPPA NAZIONALE',
+    europe,
+    clubs,
+    bracket,
+    round: 0,
+    results: [],
+    out: false,
+  };
+}
+
+export function cupTeams(c: CupState, r: number): string[] {
+  if (r === 0) return c.bracket;
+  return (c.results[r - 1] ?? []).map((m) => m.winner);
+}
+
+function cupOpponent(c: CupState): string | null {
+  if (c.out || c.round > 2) return null;
+  const t = cupTeams(c, c.round);
+  const i = t.indexOf(ME);
+  return i < 0 ? null : t[i ^ 1];
+}
+
+/** Tocca alla coppa prima della prossima giornata di campionato? */
+export function cupDue(st: ManagerState): boolean {
+  const c = st.cup;
+  return !!c && !c.out && c.round <= 2 && st.week >= CUP_WEEKS[c.round] && cupOpponent(c) !== null;
+}
+
+function cupRound(st: ManagerState, rng: Rng, mine?: CupMatch) {
+  const c = st.cup!;
+  const t = cupTeams(c, c.round);
+  const res: CupMatch[] = [];
+  for (let i = 0; i < t.length; i += 2) {
+    const a = t[i];
+    const b = t[i + 1];
+    if (mine && (a === ME || b === ME)) {
+      res.push(a === ME ? mine : { a, b, ga: mine.gb, gb: mine.ga, winner: mine.winner, pens: mine.pens });
+      continue;
+    }
+    const [ga, gb] = quickScore(rng, clubOf(st, a), clubOf(st, b));
+    let winner = ga > gb ? a : b;
+    let pens = false;
+    if (ga === gb) {
+      pens = true;
+      winner = rng.chance(0.5 + (clubOf(st, a).level - clubOf(st, b).level) * 0.08) ? a : b;
+    }
+    res.push({ a, b, ga, gb, winner, pens });
+  }
+  c.results[c.round] = res;
+  c.round++;
+  if (c.round > 2) c.champion = res[0].winner;
+}
+
+export interface CupReport {
+  won: boolean;
+  pens: boolean;
+  round: number;
+  prize: number;
+  champion: boolean;
+  notes: string[];
+}
+
+/**
+ * Registra la partita di coppa (pens: chi ha vinto ai rigori, se pari).
+ * Chi perde è fuori e il resto della coppa si gioca da solo.
+ */
+export function applyCupResult(st: ManagerState, my: number, opp: number, scorers: string[], pensWon?: boolean): CupReport {
+  const c = st.cup!;
+  const rng = new Rng(st.seed + st.season * 313 + c.round * 71 + my * 5 + opp);
+  const oppId = cupOpponent(c)!;
+  const round = c.round;
+  let won = my > opp;
+  let pens = false;
+  if (my === opp) {
+    pens = true;
+    won = pensWon ?? rng.chance(0.5 + (teamRating(st) - clubRating(st, clubOf(st, oppId))) * 0.01);
+  }
+  cupRound(st, rng, { a: ME, b: oppId, ga: my, gb: opp, winner: won ? ME : oppId, pens });
+  const notes: string[] = [];
+  playersAfterMatch(st, won, !won, scorers, rng, 12, notes);
+  const base = c.europe ? EURO_PRIZE : CUP_PRIZE[st.division];
+  let prize = 0;
+  const oppName = clubOf(st, oppId).name;
+  if (won) {
+    prize = base * (round + 1);
+    st.fans = Math.round(st.fans * (c.europe ? 1.08 : 1.05));
+    if (round === 2) {
+      prize += base * 4;
+      st.cups = (st.cups ?? 0) + 1;
+      st.news.unshift(`${c.name} VINTA! Battuto ${oppName} in finale.`);
+    } else st.news.unshift(`${c.name}: superato ${oppName} ${my}-${opp}${pens ? ' ai rigori' : ''}. Avanti!`);
+  } else {
+    c.out = true;
+    while (c.round <= 2) cupRound(st, rng);
+    st.news.unshift(`${c.name}: eliminati da ${oppName} ${my}-${opp}${pens ? ' ai rigori' : ''}.`);
+  }
+  st.budget += prize;
+  st.news.unshift(...notes);
+  st.news = st.news.slice(0, 12);
+  fixLineup(st);
+  return { won, pens, round, prize, champion: won && round === 2, notes };
+}
+
+export interface MatchApplied {
+  cup?: CupReport;
+  week?: WeekReport;
+}
+
+/** Applica il risultato della prossima partita, di coppa o di campionato. */
+export function applyMatch(st: ManagerState, my: number, opp: number, scorers: string[], pensWon?: boolean): MatchApplied {
+  if (cupDue(st)) return { cup: applyCupResult(st, my, opp, scorers, pensWon) };
+  return { week: applyManagerResult(st, my, opp, scorers) };
+}
+
+// ---------------------------------------------------------------- obiettivi
+
+/** Obiettivo del presidente in base alla forza della rosa rispetto al campionato. */
+export function makeObjective(st: ManagerState): { pos: number; label: string } {
+  const mine = teamRating(st);
+  const better = st.clubs.filter((c) => clubRating(st, c) > mine + 1).length;
+  const exp = better + 1;
+  const top = st.division === TOP_DIVISION;
+  if (exp <= 2) return top ? { pos: 1, label: 'Vincere lo scudetto Pixel' } : { pos: 2, label: 'Promozione (primi 2 posti)' };
+  if (exp <= 5) return { pos: 4, label: 'Arrivare tra le prime 4' };
+  return st.division > 0 ? { pos: 6, label: 'Salvezza (non finire ultimi 2)' } : { pos: 6, label: 'Non finire ultimi 2' };
+}
+
+// ---------------------------------------------------------------- eventi
+
+/** Eventi della settimana: piccole storie del club con una scelta. */
+export function makeEvent(st: ManagerState, rng: Rng): ManagerEvent | undefined {
+  const fit = st.squad.filter((p) => !p.injured);
+  const best = [...st.squad].sort((a, b) => playerOvr(b) - playerOvr(a))[0];
+  const anyP = rng.pick(fit.length ? fit : st.squad);
+  const div = st.division;
+  const sc = [1, 2, 4, 8][div];
+  const pool: (() => ManagerEvent | undefined)[] = [
+    () => ({
+      id: 'sponsor', title: 'NUOVO SPONSOR',
+      text: `${rng.pick(['La pizzeria', 'Il panificio', 'L\'officina', 'La ferramenta', 'Il bar'])} ${rng.pick(['di Zio Gennaro', 'Da Rino', 'Lampo', 'del Corso'])} offre ${money(3000 * sc)} per il suo logo sulle maglie.`,
+      options: [{ label: 'ACCETTA', desc: `+${money(3000 * sc)}` }, { label: 'RIFIUTA', desc: 'Tifosi orgogliosi: +5%' }],
+      amount: 3000 * sc,
+    }),
+    () => ({
+      id: 'aumento', title: 'RICHIESTA DI AUMENTO', pid: anyP.id,
+      text: `${anyP.name} bussa alla porta: vuole uno stipendio più alto.`,
+      options: [{ label: 'CONCEDI', desc: 'Stipendio +30%, morale alle stelle' }, { label: 'NO', desc: 'Morale di ' + anyP.name + ' giù' }],
+    }),
+    () => (best && st.squad.length > MIN_SQUAD ? {
+      id: 'offerta', title: 'OFFERTA IRRINUNCIABILE?', pid: best.id, amount: Math.round((playerValue(best) * 1.6) / 500) * 500,
+      text: `Un grande club offre ${money(Math.round((playerValue(best) * 1.6) / 500) * 500)} per ${best.name}, il tuo migliore.`,
+      options: [{ label: 'VENDI', desc: 'Soldi subito, ma lo perdi' }, { label: 'TIENILO', desc: `${best.name} apprezza: morale +` }],
+    } : undefined),
+    () => ({
+      id: 'festa', title: 'FESTA DEI TIFOSI',
+      text: 'I tifosi organizzano una grigliata con la squadra la sera prima della partita.',
+      options: [{ label: 'ANDIAMO!', desc: 'Morale +10 a tutti, energia -10' }, { label: 'A LETTO', desc: 'Energia +8 a tutti' }],
+    }),
+    () => (st.squad.length < MAX_SQUAD ? {
+      id: 'provino', title: 'UN RAGAZZO AL CANCELLO',
+      text: 'Un ragazzino del quartiere palleggia da ore fuori dal campo e chiede un provino.',
+      options: [{ label: 'PRENDILO', desc: 'Un 16enne in rosa (chissà...)' }, { label: 'NON ORA', desc: 'Nulla cambia' }],
+    } : undefined),
+    () => ({
+      id: 'ritiro', title: 'RITIRO IN MONTAGNA', amount: 1500 * sc,
+      text: `Una settimana di ritiro in montagna costa ${money(1500 * sc)}: aria buona e tanta corsa.`,
+      options: [{ label: 'PARTIAMO', desc: 'Velocità + a tutti, energia -15' }, { label: 'NO', desc: 'Si risparmia' }],
+    }),
+    () => ({
+      id: 'discoteca', title: 'NOTTE BRAVA', pid: anyP.id,
+      text: `${anyP.name} è stato visto ballare fino all'alba prima dell'allenamento.`,
+      options: [{ label: 'MULTA', desc: `${money(500 * sc)} in cassa, morale suo giù` }, { label: 'PERDONA', desc: 'Lui contento, gli altri un po\' meno' }],
+      amount: 500 * sc,
+    }),
+    () => ({
+      id: 'tv', title: 'LA TV LOCALE', amount: 2000 * sc,
+      text: 'Una TV vuole trasmettere la prossima partita in diretta, ma chiede interviste e riprese agli allenamenti.',
+      options: [{ label: 'SÌ', desc: `+${money(2000 * sc)}, tifosi +8%, energia -5` }, { label: 'NO', desc: 'Si lavora tranquilli' }],
+    }),
+    () => ({
+      id: 'portafortuna', title: 'IL PORTAFORTUNA', amount: 800 * sc,
+      text: `Un vecchio tifoso vende un cornetto "che ha fatto vincere tre campionati" per ${money(800 * sc)}.`,
+      options: [{ label: 'COMPRA', desc: 'Morale +8 a tutti' }, { label: 'MA DAI', desc: 'Nulla cambia' }],
+    }),
+  ];
+  for (let i = 0; i < 6; i++) {
+    const ev = rng.pick(pool)();
+    if (ev) return ev;
+  }
+  return undefined;
+}
+
+/** Applica la scelta (0 o 1) dell'evento in attesa. Restituisce una frase di esito. */
+export function resolveEvent(st: ManagerState, choice: number): string {
+  const ev = st.event;
+  if (!ev) return '';
+  delete st.event;
+  const p = st.squad.find((x) => x.id === ev.pid);
+  const all = (f: (q: MPlayer) => void) => st.squad.forEach(f);
+  const fix = () => all((q) => {
+    q.energy = clamp(Math.round(q.energy), 5, 100);
+    q.morale = clamp(Math.round(q.morale), 5, 100);
+  });
+  const a = ev.amount ?? 0;
+  let out = '';
+  switch (ev.id) {
+    case 'sponsor':
+      if (choice === 0) (st.budget += a), (out = `Logo sulle maglie: +${money(a)}.`);
+      else (st.fans = Math.round(st.fans * 1.05)), (out = 'I tifosi apprezzano: maglia pulita!');
+      break;
+    case 'aumento':
+      if (!p) break;
+      if (choice === 0) (p.salary = Math.round((p.salary * 1.3) / 10) * 10), (p.morale = 100), (out = `${p.name} firma felice.`);
+      else (p.morale -= 25), (out = `${p.name} non la prende bene.`);
+      break;
+    case 'offerta':
+      if (!p) break;
+      if (choice === 0 && st.squad.length > MIN_SQUAD) {
+        st.budget += a;
+        st.squad.splice(st.squad.indexOf(p), 1);
+        st.lineup = st.lineup.filter((x) => x !== p.id);
+        fixLineup(st);
+        out = `${p.name} parte per ${money(a)}. Buona fortuna!`;
+      } else (p.morale += 20), (out = `${p.name} resta e giura amore alla maglia.`);
+      break;
+    case 'festa':
+      if (choice === 0) all((q) => ((q.morale += 10), (q.energy -= 10))), (out = 'Che serata! Squadra unita.');
+      else all((q) => (q.energy += 8)), (out = 'Tutti a nanna presto.');
+      break;
+    case 'provino':
+      if (choice === 0 && st.squad.length < MAX_SQUAD) {
+        const rng = new Rng(st.seed + st.week * 991 + st.season);
+        const used = new Set(st.squad.map((q) => q.name));
+        const np = newPlayer(rng, st.nextId++, rng.pick(['DEF', 'MID', 'FWD'] as Role[]), DIV_LEVEL[st.division][0] - 0.3, 16, used);
+        np.pot = round3(Math.min(1.2, np.pot + rng.range(0, 0.08)));
+        st.squad.push(np);
+        assignNumbers(st);
+        out = `${np.name} entra in rosa: potenziale ${potOvr(np)}!`;
+      } else out = 'Il ragazzo torna a palleggiare al parco.';
+      break;
+    case 'ritiro':
+      if (choice === 0) {
+        st.budget -= a;
+        all((q) => {
+          q.stats.speed = round3(Math.min(1.25, q.stats.speed + 0.012));
+          q.energy -= 15;
+        });
+        out = 'Gambe d\'acciaio: velocità in su per tutti.';
+      } else out = 'Niente montagna.';
+      break;
+    case 'discoteca':
+      if (!p) break;
+      if (choice === 0) (st.budget += a), (p.morale -= 15), (out = `${p.name} paga la multa.`);
+      else (p.morale += 10), all((q) => q !== p && (q.morale -= 3)), (out = 'Perdonato, ma lo spogliatoio mugugna.');
+      break;
+    case 'tv':
+      if (choice === 0) (st.budget += a), (st.fans = Math.round(st.fans * 1.08)), all((q) => (q.energy -= 5)), (out = 'In diretta: tutti vi conoscono!');
+      else out = 'Niente telecamere.';
+      break;
+    case 'portafortuna':
+      if (choice === 0) (st.budget -= a), all((q) => (q.morale += 8)), (out = 'Il cornetto è appeso nello spogliatoio.');
+      else out = 'Niente scaramanzie.';
+      break;
+  }
+  fix();
+  if (out) st.news.unshift(out);
+  st.news = st.news.slice(0, 12);
+  return out;
+}
+
+/** Sistema i salvataggi delle versioni precedenti. */
+export function ensureManager(st: ManagerState): ManagerState {
+  if (st.cup === undefined) {
+    const rng = new Rng(st.seed + st.season * 977 + 5);
+    st.cup = newCup(st, rng);
+    // stagione già avanzata: si parte dal turno giusto
+    if (st.week > CUP_WEEKS[0]) {
+      st.cup.out = true;
+      st.cup.late = true;
+      while (st.cup.round <= 2) cupRound(st, rng);
+    }
+  }
+  if (!st.objective) st.objective = makeObjective(st);
+  return st;
 }

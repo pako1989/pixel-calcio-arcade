@@ -74,7 +74,53 @@ const SEEDS: TeamSeed[] = [
   { id: 'aquile', name: 'Aquile Viola', short: 'AQU', colors: { shirt: 0x6a2bbf, shirt2: 0xf2f2f2, shorts: 0xf2f2f2, socks: 0x6a2bbf, gk: 0x9bd12a }, pattern: 'plain', stars: 2 },
 ];
 
-export const TEAMS: TeamDef[] = SEEDS.map((s, i) => ({
+const k = (shirt: number, shirt2: number, shorts: number, socks: number, gk: number) => ({ shirt, shirt2, shorts, socks, gk });
+
+/**
+ * Squadre "leggendarie" ispirate ai club famosi: soprannomi e colori che li
+ * ricordano, ma nomi, stemmi e maglie sono di fantasia (nessun marchio reale).
+ */
+export const FAMOUS_IT: TeamSeed[] = [
+  { id: 'zebre', name: 'Zebre Torinesi', short: 'ZEB', colors: k(0xf2f2f2, 0x1a1a1a, 0xf2f2f2, 0xf2f2f2, 0xf5c400), pattern: 'stripes', stars: 5 },
+  { id: 'diavoli', name: 'Diavoli Rossoneri', short: 'DIA', colors: k(0xc8202a, 0x1a1a1a, 0xf2f2f2, 0x1a1a1a, 0x2fbf5a), pattern: 'stripes', stars: 5 },
+  { id: 'biscioni', name: 'Biscioni Nerazzurri', short: 'BIS', colors: k(0x1d3f8f, 0x1a1a1a, 0x1a1a1a, 0x1a1a1a, 0xff7a1a), pattern: 'stripes', stars: 5 },
+  { id: 'ciucci', name: 'Ciucci Azzurri', short: 'CIU', colors: k(0x3a9ae0, 0xf2f2f2, 0xf2f2f2, 0x3a9ae0, 0x9bd12a), pattern: 'plain', stars: 5 },
+  { id: 'lupacchiotti', name: 'Lupacchiotti Giallorossi', short: 'GRS', colors: k(0x8a1a24, 0xf5b400, 0xf2f2f2, 0x1a1a1a, 0x3fd0ff), pattern: 'sash', stars: 4 },
+  { id: 'aquilotti', name: 'Aquilotti Biancocelesti', short: 'ABC', colors: k(0x8fd0f5, 0xf2f2f2, 0xf2f2f2, 0x8fd0f5, 0xe0457b), pattern: 'plain', stars: 4 },
+  { id: 'dea', name: 'Dea Orobica', short: 'DEA', colors: k(0x1a1a1a, 0x2a6fe0, 0x1a1a1a, 0x1a1a1a, 0xf5c400), pattern: 'stripes', stars: 4 },
+];
+
+/** Club di provincia ispirati alla tradizione (nomi di fantasia). */
+export const FAMOUS_PROV: TeamSeed[] = [
+  { id: 'gigli', name: 'Gigli Viola', short: 'GIG', colors: k(0x5a2a9a, 0xf2f2f2, 0xf2f2f2, 0x5a2a9a, 0xf5c400), pattern: 'plain', stars: 3 },
+  { id: 'grifoni', name: 'Grifoni Rossoblù', short: 'GRI', colors: k(0xa81c2a, 0x1d2f6f, 0xf2f2f2, 0x1a1a1a, 0x9bd12a), pattern: 'half', stars: 3 },
+  { id: 'torelli', name: 'Torelli Granata', short: 'TOR', colors: k(0x7a1a24, 0xf2f2f2, 0xf2f2f2, 0x7a1a24, 0x3fd0ff), pattern: 'plain', stars: 3 },
+  { id: 'felsinei', name: 'Felsinei Rossoblù', short: 'FEL', colors: k(0x1d2f6f, 0xc8202a, 0xf2f2f2, 0x1d2f6f, 0xf5c400), pattern: 'stripes', stars: 3 },
+  { id: 'blucerchiati', name: 'Blucerchiati della Lanterna', short: 'BLU', colors: k(0x1d4fae, 0xf2f2f2, 0xf2f2f2, 0x1d4fae, 0xff7a1a), pattern: 'hoops', stars: 3 },
+  { id: 'scaligeri', name: 'Scaligeri Gialloblù', short: 'SCA', colors: k(0x1d3f8f, 0xf5c400, 0x1d3f8f, 0xf5c400, 0xe04040), pattern: 'half', stars: 3 },
+  { id: 'gialloverdi', name: 'Canarini Gialloverdi', short: 'CAN', colors: k(0xf5d13b, 0x1f9e4a, 0x1f9e4a, 0xf5d13b, 0x7d5cff), pattern: 'sash', stars: 2 },
+];
+
+/** Grandi d'Europa (di fantasia) per la Coppa d'Europa Pixel. */
+export const FAMOUS_EU: TeamSeed[] = [
+  { id: 'merengues', name: 'Merengues Blancos', short: 'BLA', colors: k(0xf5f5f5, 0xd4af37, 0xf5f5f5, 0xf5f5f5, 0x2fbf5a), pattern: 'plain', stars: 5 },
+  { id: 'blaugrana', name: 'Blaugrana Catalani', short: 'BLG', colors: k(0x1d3f8f, 0xa01c3a, 0x1d3f8f, 0x1d3f8f, 0xf5c400), pattern: 'stripes', stars: 5 },
+  { id: 'bavaresi', name: 'Bavaresi Rossi', short: 'BAV', colors: k(0xd8202a, 0xf2f2f2, 0xd8202a, 0xd8202a, 0x1a1a1a), pattern: 'plain', stars: 5 },
+  { id: 'celesti', name: 'Celesti di Manchester', short: 'CEL', colors: k(0x7cc0ee, 0xf2f2f2, 0xf2f2f2, 0x7cc0ee, 0xf5c400), pattern: 'plain', stars: 5 },
+  { id: 'diavolirossi', name: 'Diavoli Rossi del Nord', short: 'DRN', colors: k(0xd8202a, 0x1a1a1a, 0xf2f2f2, 0x1a1a1a, 0x2fbf5a), pattern: 'plain', stars: 4 },
+  { id: 'mersey', name: 'Rossi della Mersey', short: 'RSM', colors: k(0xb81c2a, 0xf5c400, 0xb81c2a, 0xb81c2a, 0x7d5cff), pattern: 'plain', stars: 5 },
+  { id: 'principi', name: 'Principi di Parigi', short: 'PAR', colors: k(0x14204a, 0xd8202a, 0x14204a, 0x14204a, 0xf5c400), pattern: 'sash', stars: 5 },
+  { id: 'gialloneri', name: 'Gialloneri della Ruhr', short: 'RUH', colors: k(0xf5d10a, 0x1a1a1a, 0x1a1a1a, 0xf5d10a, 0x3a7bff), pattern: 'plain', stars: 4 },
+  { id: 'lancieri', name: 'Lancieri di Amsterdam', short: 'LAN', colors: k(0xf2f2f2, 0xc8202a, 0xf2f2f2, 0xf2f2f2, 0x1a1a1a), pattern: 'half', stars: 4 },
+  { id: 'colchoneros', name: 'Materassai di Madrid', short: 'MAT', colors: k(0xc8202a, 0xf2f2f2, 0x1d3f8f, 0xc8202a, 0x2fbf5a), pattern: 'stripes', stars: 4 },
+  { id: 'cannonieri', name: 'Cannonieri di Londra', short: 'LON', colors: k(0xd8202a, 0xf2f2f2, 0xf2f2f2, 0xd8202a, 0xf5c400), pattern: 'half', stars: 4 },
+  { id: 'aquile_lisbona', name: 'Aquile di Lisbona', short: 'LIS', colors: k(0xc8202a, 0xf2f2f2, 0xf2f2f2, 0xc8202a, 0x3a7bff), pattern: 'plain', stars: 4 },
+];
+
+/** Le squadre selezionabili: le classiche del gioco più le "leggende" italiane ed europee. */
+const ALL_SEEDS: TeamSeed[] = [...SEEDS, ...FAMOUS_IT, ...FAMOUS_EU.slice(0, 8)];
+
+export const TEAMS: TeamDef[] = ALL_SEEDS.map((s, i) => ({
   ...s,
   players: makePlayers(1000 + i * 77, s.stars),
 }));

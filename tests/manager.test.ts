@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyManagerResult, autoLineup, buy, canSell, MAX_SQUAD, ME, myFixture, myTeamDef, newManager, position,
+  applyManagerResult, applyMatch, cupDue, fixLineup, makeEvent, nextMatch, resolveEvent, swapPlayers, autoLineup, buy, canSell, MAX_SQUAD, ME, myFixture, myTeamDef, newManager, position,
   roundRobin, sell, simulateMyMatch, starters, table, upgrade, type ManagerState,
 } from '../src/modes/manager';
+import { Rng } from '../src/sim/math';
 
 function playSeason(st: ManagerState, mine: (st: ManagerState) => [number, number]) {
   const s = st.season;
@@ -107,5 +108,70 @@ describe('manager', () => {
       expect(p.energy).toBeGreaterThan(0);
       expect(Number.isFinite(p.stats.shot)).toBe(true);
     }
+  });
+});
+
+describe('manager: coppa, eventi, infortuni', () => {
+  it('la coppa si gioca alle giornate giuste e vincendo si alza il trofeo', () => {
+    const st = newManager('Borgo FC', 0, 'normale', 7);
+    expect(st.cup!.bracket).toContain(ME);
+    expect(new Set(st.cup!.bracket).size).toBe(8);
+    let cupGames = 0;
+    let guard = 0;
+    while (st.season === 1 && guard++ < 40) {
+      const nm = nextMatch(st)!;
+      if (nm.cup) cupGames++;
+      applyMatch(st, 3, 0, []);
+      st.event = undefined;
+    }
+    expect(cupGames).toBe(3);
+    expect(st.cups).toBe(1);
+    expect(st.seasonEnd?.objective).toBeDefined();
+  });
+  it('eliminati in coppa: il resto si gioca da solo', () => {
+    const st = newManager('Borgo FC', 0, 'normale', 8);
+    while (!cupDue(st)) applyManagerResult(st, 1, 1, []);
+    const r = applyMatch(st, 0, 2, []);
+    expect(r.cup?.won).toBe(false);
+    expect(st.cup!.champion).toBeDefined();
+    expect(cupDue(st)).toBe(false);
+    // pareggio deciso ai rigori
+    const st2 = newManager('Borgo FC', 0, 'normale', 9);
+    while (!cupDue(st2)) applyManagerResult(st2, 1, 1, []);
+    expect(applyMatch(st2, 1, 1, [], true).cup?.pens).toBe(true);
+    expect(st2.cup!.out).toBe(false);
+  });
+  it('in Serie Pixel la coppa è europea', () => {
+    const st = newManager('Borgo FC', 0, 'normale', 10);
+    for (let i = 0; i < 3; i++) playSeason(st, () => [3, 0]);
+    expect(st.division).toBe(3);
+    expect(st.cup!.europe).toBe(true);
+    expect(st.clubs.map((c) => c.id)).toContain('zebre');
+  });
+  it('eventi: ogni scelta si applica senza errori', () => {
+    const st = newManager('Borgo FC', 0, 'normale', 11);
+    let seen = new Set<string>();
+    for (let i = 0; i < 300 && seen.size < 9; i++) {
+      const ev = makeEvent(st, new Rng(i));
+      if (!ev) continue;
+      seen.add(ev.id);
+      st.event = ev;
+      resolveEvent(st, i % 2);
+      expect(st.event).toBeUndefined();
+      expect(starters(st).length).toBe(5);
+      for (const p of st.squad) expect(p.morale).toBeGreaterThanOrEqual(5);
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(8);
+  });
+  it('gli infortunati non vanno in campo', () => {
+    const st = newManager('Borgo FC', 0, 'normale', 12);
+    const p = starters(st)[4];
+    p.injured = 2;
+    fixLineup(st);
+    expect(st.lineup).not.toContain(p.id);
+    expect(starters(st).length).toBe(5);
+    const bench = st.squad.find((x) => !st.lineup.includes(x.id) && x.id !== p.id)!;
+    expect(swapPlayers(st, st.lineup[1], p.id)).toBe(false);
+    expect(swapPlayers(st, st.lineup[1], bench.id)).toBe(true);
   });
 });
