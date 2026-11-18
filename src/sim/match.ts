@@ -37,7 +37,20 @@ export const DIFFICULTY: Record<Difficulty, DiffParams> = {
   difficile: { speed: 1.01, think: 0.16, tackle: 2.0, shotErr: 0.07, keeper: 1.05, steal: 1.2, decision: 0.9 },
 };
 
-export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end';
+export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end' | 'freekick';
+
+/** Punizione dal limite: chi tira, dove mira, quanto effetto. */
+export interface FreeKick {
+  taker: Player;
+  aim: number;
+  curl: number;
+  /** Direzione della mira quando si è iniziato a caricare (per l'effetto). */
+  aim0: number | null;
+  wall: Player[];
+}
+
+/** Distanza massima dalla porta per una punizione da calciare in porta. */
+export const FREEKICK_RANGE = 300;
 
 export class MatchSim {
   readonly pitch: PitchDef;
@@ -84,7 +97,7 @@ export class MatchSim {
   /** Barra dello spettacolo (0..1) e punti stile totali per squadra. */
   style: [number, number] = [0, 0];
   stylePoints: [number, number] = [0, 0];
-  private tunnelCand: { team: 0 | 1; opp: number; by: string } | null = null;
+  private tunnelCand: { team: 0 | 1; opp: number; by: Player } | null = null;
   scorers: MatchResult['scorers'] = [];
   readonly diff: [DiffParams, DiffParams];
 
@@ -204,12 +217,12 @@ export class MatchSim {
     this.score[team]++;
     const name = scorerP ? scorerP.def.name + (own ? ' (aut.)' : '') : '?';
     this.scorers.push({ team, name, time: this.elapsed });
-    this.events.push({ type: 'goal', team, scorer: name, x: b.x, y: b.y, own });
+    this.events.push({ type: 'goal', team, scorer: name, x: b.x, y: b.y, own, idx: scorerP ? scorerP.idx : -1 });
     this.tunnelCand = null;
     if (!own && scorerP && b.shotFrom) {
       const gx = team === 0 ? this.W : 0;
-      if (Math.abs(gx - b.shotFrom.x) > 330) this.trick('lontano', team, b.x, b.y, scorerP.def.name);
-      else if (b.banked) this.trick('sponda', team, b.x, b.y, scorerP.def.name);
+      if (Math.abs(gx - b.shotFrom.x) > 330) this.trick('lontano', scorerP, b.x, b.y);
+      else if (b.banked) this.trick('sponda', scorerP, b.x, b.y);
     }
     this.phase = 'goal';
     this.phaseT = 3.2;
@@ -266,6 +279,9 @@ export class MatchSim {
       case 'end':
         this.updatePlayersIdle(dt, true);
         this.updateBallPhysics(dt);
+        break;
+      case 'freekick':
+        this.updateFreeKick(dt, input);
         break;
     }
     this.prevShoot = input.shoot;
@@ -426,7 +442,7 @@ export class MatchSim {
         } else {
           // nessun compagno: lancio in avanti
           this.kickBall(h, dir, 300, 40, 0);
-          this.events.push({ type: 'pass', x: h.x, y: h.y, team: h.team });
+          this.events.push({ type: 'pass', x: h.x, y: h.y, team: h.team, idx: h.idx });
         }
       }
     } else {
@@ -603,7 +619,7 @@ export class MatchSim {
     b.superShot = superShot;
     b.isShot = true;
     this.stats.shots[team]++;
-    this.events.push({ type: 'shot', x: p.x, y: p.y, power, team, superShot, fire });
+    this.events.push({ type: 'shot', x: p.x, y: p.y, power, team, superShot, fire, idx: p.idx });
   }
 
   pass(p: Player, target: Player) {
@@ -619,7 +635,7 @@ export class MatchSim {
     this.kickBall(p, dir, lob ? speed * 0.85 : speed, lob, 0);
     b.passTarget = target;
     this.stats.passes[p.team]++;
-    this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team });
+    this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team, idx: p.idx });
   }
 
   addSuper(team: 0 | 1, amount: number) {
@@ -769,7 +785,7 @@ export class MatchSim {
       if (dist(p, b) < 11 || dist(p, owner) < 12) {
         const ratio = p.def.stats.tackle / (owner.def.stats.control + 0.2);
         const won = this.rng.chance(clamp(0.55 + ratio * 0.3, 0.4, 0.95));
-        this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team });
+        this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team, idx: p.idx });
         if (!won && this.cfg.fouls && dist(p, owner) < 12) {
           this.foul(p, owner);
           return;
@@ -819,7 +835,7 @@ export class MatchSim {
         p.holdT = 0;
         owner.pickupCd = 0.7;
         owner.setState('stun', 0.15);
-        this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team });
+        this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team, idx: p.idx });
         this.stats.tackles[p.team]++;
         this.addSuper(p.team, 0.1);
         return;
@@ -929,7 +945,7 @@ export class MatchSim {
       for (const o of this.teams[lt.team === 0 ? 1 : 0]) {
         if (o.isGK || o.out > 0) continue;
         if (Math.abs(b.x - o.x) < 3 && Math.abs(b.y - o.y) < 3) {
-          this.tunnelCand = { team: lt.team, opp: o.id, by: lt.def.name };
+          this.tunnelCand = { team: lt.team, opp: o.id, by: lt };
           o.pickupCd = Math.max(o.pickupCd, 0.25);
           break;
         }
@@ -1149,7 +1165,7 @@ export class MatchSim {
     // tunnel riuscito: la palla è passata tra le gambe e la riprende la stessa squadra
     const tc = this.tunnelCand;
     this.tunnelCand = null;
-    if (tc && tc.team === p.team) this.trick('tunnel', p.team, b.x, b.y, tc.by);
+    if (tc && tc.team === p.team) this.trick('tunnel', tc.by, b.x, b.y);
     p.dribCand = -1;
     b.owner = p;
     b.lastTouch = p;
@@ -1192,7 +1208,7 @@ export class MatchSim {
       const canCatch = !b.fire && !b.superShot && s < 330 * kp;
       if (canCatch) {
         this.keeperCatch(gk);
-        this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team });
+        this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team, idx: gk.idx });
       } else {
         // respinta
         const out = this.dirOf(gk.team);
@@ -1208,7 +1224,7 @@ export class MatchSim {
         b.spin = 0;
         b.passTarget = null;
         gk.kickCd = 0.4;
-        this.events.push({ type: 'save', x: b.x, y: b.y, catch: false, team: gk.team });
+        this.events.push({ type: 'save', x: b.x, y: b.y, catch: false, team: gk.team, idx: gk.idx });
       }
       return;
     }
@@ -1240,11 +1256,13 @@ export class MatchSim {
   }
 
   // ---------- stile ----------
-  private trick(kind: 'dribbling' | 'tunnel' | 'lontano' | 'sponda', team: 0 | 1, x: number, y: number, name: string) {
+  private trick(kind: 'dribbling' | 'tunnel' | 'lontano' | 'sponda', by: Player, x: number, y: number) {
+    const team = by.team;
+    const name = by.def.name;
     const pts = kind === 'dribbling' ? 1 : 2;
     this.stylePoints[team] += pts;
     this.style[team] += pts * 0.12;
-    this.events.push({ type: 'trick', kind, team, x, y, name });
+    this.events.push({ type: 'trick', kind, team, x, y, name, idx: by.idx });
     if (this.style[team] >= 1) {
       this.style[team] = 0;
       this.addSuper(team, 0.5);
@@ -1263,7 +1281,7 @@ export class MatchSim {
       const d = dist(o, p);
       if (ahead < -6 && d > 16 && d < 40) {
         p.dribCand = -2; // uno per possesso
-        this.trick('dribbling', p.team, p.x, p.y, p.def.name);
+        this.trick('dribbling', p, p.x, p.y);
       } else if (d > 60) p.dribCand = -1;
       return;
     }
@@ -1294,7 +1312,7 @@ export class MatchSim {
     if (card === 'yellow') by.yellows++;
     const injury = this.rng.chance(behind ? 0.3 : 0.12);
     if (injury) victim.injured = true;
-    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, victim: victim.def.name, card, injury });
+    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, byIdx: by.idx, victim: victim.def.name, card, injury });
     this.events.push({ type: 'whistle', kind: 'kickoff' });
     if (card === 'red') {
       by.out = 30;
@@ -1320,6 +1338,133 @@ export class MatchSim {
       }
     }
     if (this.humanTeam === victim.team && !this.locked) this.setHuman(victim.idx);
+    // vicino alla porta: punizione da calciare
+    const gx = this.oppGoalX(victim.team);
+    if (Math.abs(gx - victim.x) < FREEKICK_RANGE && Math.abs(victim.y - this.H / 2) < 190 && Math.abs(gx - victim.x) > 70) {
+      this.setupFreeKick(victim, by.team);
+    }
+  }
+
+  // ---------- punizioni ----------
+  freeKick: FreeKick | null = null;
+
+  private setupFreeKick(taker: Player, defTeam: 0 | 1) {
+    const gx = this.oppGoalX(taker.team);
+    const aim = Math.atan2(this.H / 2 - taker.y, gx - taker.x);
+    // barriera: i due difensori più vicini, a 55 px sulla linea della porta
+    const cand = this.teams[defTeam].filter((o) => !o.isGK && o.out <= 0).sort((a, b) => dist(a, taker) - dist(b, taker));
+    const wall = cand.slice(0, 2);
+    const cx = taker.x + Math.cos(aim) * 55;
+    const cy = taker.y + Math.sin(aim) * 55;
+    wall.forEach((o, i) => {
+      const off = (i - (wall.length - 1) / 2) * 11;
+      o.x = cx - Math.sin(aim) * off;
+      o.y = cy + Math.cos(aim) * off;
+      o.vx = o.vy = 0;
+      o.facing = aim + Math.PI;
+      o.setState('run');
+    });
+    // gli altri lontani dal pallone
+    for (const o of this.players) {
+      if (o === taker || wall.includes(o) || o.isGK) continue;
+      const d = dist(o, taker);
+      if (d < 60 && d > 1e-3) {
+        o.x = clamp(taker.x + ((o.x - taker.x) / d) * 60, 4, this.W - 4);
+        o.y = clamp(taker.y + ((o.y - taker.y) / d) * 60, 4, this.H - 4);
+      }
+    }
+    taker.facing = aim;
+    taker.vx = taker.vy = 0;
+    this.freeKick = { taker, aim, curl: 0, aim0: null, wall };
+    this.phase = 'freekick';
+    this.phaseT = this.isHuman(taker) ? 7 : 1.6;
+    this.charging = false;
+    this.charge = 0;
+    this.events.push({ type: 'freekick', team: taker.team, x: taker.x, y: taker.y, human: this.isHuman(taker) });
+  }
+
+  private updateFreeKick(dt: number, input: HumanInput) {
+    const fk = this.freeKick;
+    if (!fk || this.ball.owner !== fk.taker) {
+      this.phase = 'play';
+      this.freeKick = null;
+      return;
+    }
+    for (const p of this.players) {
+      p.vx = p.vy = 0;
+      p.stateT += dt;
+    }
+    const t = fk.taker;
+    this.syncOwnedBall();
+    if (this.isHuman(t)) {
+      const mag = Math.min(1, len(input.mx, input.my));
+      const shootPressed = input.shoot && !this.prevShoot;
+      const shootReleased = !input.shoot && this.prevShoot;
+      if (!this.charging && mag > 0.3) {
+        // la mira gira piano verso la levetta, solo verso la porta
+        const want = Math.atan2(input.my, input.mx);
+        const base = Math.atan2(this.H / 2 - t.y, this.oppGoalX(t.team) - t.x);
+        const rel = clamp(Math.atan2(Math.sin(want - base), Math.cos(want - base)), -0.9, 0.9);
+        const target = base + rel;
+        fk.aim += Math.atan2(Math.sin(target - fk.aim), Math.cos(target - fk.aim)) * Math.min(1, dt * 5);
+      }
+      if (shootPressed) {
+        this.charging = true;
+        this.charge = 0;
+        fk.aim0 = fk.aim;
+      }
+      if (this.charging) {
+        this.charge = Math.min(1, this.charge + dt / CHARGE_TIME);
+        // levetta di lato rispetto alla mira = effetto
+        if (mag > 0.25) {
+          const side = -Math.sin(fk.aim) * input.mx + Math.cos(fk.aim) * input.my;
+          fk.curl = clamp(side, -1, 1);
+        } else fk.curl *= 1 - Math.min(1, dt * 4);
+      }
+      if (this.charging && shootReleased) {
+        this.takeFreeKick(0.3 + this.charge * 0.7);
+        return;
+      }
+      if (input.pass && !this.prevPass && !this.charging) {
+        // punizione corta
+        const target = chooseHumanPassTarget(this, t, fk.aim);
+        this.endFreeKick();
+        if (target) {
+          this.pass(t, target);
+          if (!this.locked) this.setHuman(target.idx);
+        }
+        return;
+      }
+      if (this.phaseT <= 0) this.takeFreeKick(0.75);
+    } else if (this.phaseT <= 0) {
+      // CPU: verso il palo più lontano dalla barriera, con effetto a rientrare
+      const gx = this.oppGoalX(t.team);
+      const side = this.rng.chance(0.5) ? 1 : -1;
+      const ty = this.H / 2 + side * (this.pitch.goalWidth / 2 - 14);
+      fk.aim = Math.atan2(ty - t.y, gx - t.x);
+      fk.curl = -side * Math.sign(gx - t.x) * this.rng.range(0.4, 0.9);
+      this.takeFreeKick(this.rng.range(0.65, 0.95));
+    }
+  }
+
+  private endFreeKick() {
+    this.phase = 'play';
+    this.freeKick = null;
+    this.charging = false;
+    this.charge = 0;
+  }
+
+  private takeFreeKick(power: number) {
+    const fk = this.freeKick!;
+    const t = fk.taker;
+    const curl = fk.curl;
+    this.endFreeKick();
+    // il tiro parte spostato dalla parte opposta all'effetto e poi curva verso la levetta
+    this.shoot(t, fk.aim - curl * 0.2, power, false);
+    const b = this.ball;
+    // spin positivo = la traiettoria gira verso angoli crescenti (dalla parte della levetta)
+    b.spin = curl * 360;
+    b.vz = Math.max(b.vz, 70 + power * 40);
   }
 
   private updateWaves(dt: number) {

@@ -5,7 +5,9 @@ import { TEAMS } from '../data/teams';
 import { FRAME, frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
 import { sfx } from '../audio/sfx';
 import { backToMenu } from './demo';
-import { newAlbum } from '../modes/album';
+import { newAlbum, owned as ownedStickers } from '../modes/album';
+import { DAILY_ALL_BONUS, dailyState, dailyText } from '../modes/daily';
+import { newTotals, TROPHIES, trophyValue } from '../modes/trophies';
 import {
   ballTint,
   buy,
@@ -23,7 +25,7 @@ import {
   type ShopItem,
 } from '../modes/progress';
 
-type Tab = 'giocatori' | 'negozio' | 'rivali';
+type Tab = 'giocatori' | 'negozio' | 'sfide' | 'trofei' | 'rivali';
 
 const ROLE_NAME = { GK: 'POR', DEF: 'DIF', MID: 'CEN', FWD: 'ATT' } as const;
 const CAT_NAME: Record<ShopCat, string> = { pallone: 'PALLONI', maglia: 'MAGLIE', esultanza: 'ESULTANZE' };
@@ -73,19 +75,25 @@ export class ClubScene extends Phaser.Scene {
     const tabs: [Tab, string][] = [
       ['giocatori', 'GIOCATORI'],
       ['negozio', 'NEGOZIO'],
+      ['sfide', 'SFIDE'],
+      ['trofei', 'TROFEI'],
       ['rivali', 'RIVALI'],
     ];
+    const daily = dailyState(p.daily);
+    const left = daily.done.filter((x) => !x).length;
     tabs.forEach(([id, label], i) => {
-      const b = button(this, W / 2 + (i - 1) * 124, 44, 116, 20, label, () => {
+      const b = button(this, W / 2 + (i - 2) * 104, 44, 98, 20, label, () => {
         this.tab = id;
         sfx.select();
         this.rebuild();
-      }, { size: 6 });
+      }, { size: 6, badge: id === 'sfide' && left > 0 ? `${left}` : undefined });
       b.setSelected(this.tab === id);
     });
 
     if (this.tab === 'giocatori') this.buildPlayers();
     else if (this.tab === 'negozio') this.buildShop();
+    else if (this.tab === 'sfide') this.buildDaily();
+    else if (this.tab === 'trofei') this.buildTrophies();
     else this.buildRivals();
 
     button(this, 64, H - 24, 96, 26, 'MENU', () => backToMenu(this), { color: 0x3a3d55 });
@@ -301,6 +309,82 @@ export class ClubScene extends Phaser.Scene {
     const W = this.scale.width;
     const t = txt(this, W / 2, 300, s, 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 4, y: 3 } }).setDepth(10);
     this.tweens.add({ targets: t, alpha: 0, delay: 1400, duration: 400, onComplete: () => t.destroy() });
+  }
+
+  // ---------- sfide del giorno ----------
+
+  private buildDaily() {
+    const W = this.scale.width;
+    const p = progressOf();
+    const d = dailyState(p.daily);
+    const g = this.add.graphics();
+    const pw = Math.min(W - 40, 520);
+    const x0 = W / 2 - pw / 2;
+    panel(g, x0, 60, pw, 252, 0x1b1d2e, 0x2e3250, 0.96);
+    txt(this, W / 2, 78, 'SFIDE DI OGGI', 8, '#ffd23f');
+    const now = new Date();
+    const mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const h = Math.max(1, Math.ceil((mid.getTime() - now.getTime()) / 3600000));
+    txt(this, W / 2, 94, `Valgono tutte le modalità · nuove sfide tra ${h} or${h === 1 ? 'a' : 'e'}`, 6, '#8a8fb0');
+    d.list.forEach((c, i) => {
+      const y = 128 + i * 46;
+      const done = d.done[i];
+      g.fillStyle(done ? 0x24402e : 0x262a42).fillRect(x0 + 12, y - 18, pw - 24, 38);
+      // casella
+      g.fillStyle(0x1a1222).fillRect(x0 + 24, y - 7, 14, 14);
+      g.fillStyle(done ? 0x5be37d : 0x3a3d55).fillRect(x0 + 26, y - 5, 10, 10);
+      txt(this, x0 + 50, y - 6, dailyText(c), 8, done ? '#5be37d' : '#ffffff').setOrigin(0, 0.5);
+      const bw = 160;
+      g.fillStyle(0x1a1222).fillRect(x0 + 50, y + 6, bw, 6);
+      g.fillStyle(done ? 0x5be37d : 0x3fd0ff).fillRect(x0 + 51, y + 7, Math.round((bw - 2) * (d.got[i] / c.n)), 4);
+      txt(this, x0 + 56 + bw, y + 9, `${d.got[i]}/${c.n}`, 6, '#8a8fb0').setOrigin(0, 0.5);
+      this.coinIcon(g, x0 + pw - 70, y);
+      txt(this, x0 + pw - 58, y, done ? 'PRESO' : `+${c.reward}`, 6, done ? '#5be37d' : '#ffd23f').setOrigin(0, 0.5);
+    });
+    const all = d.done.every(Boolean);
+    txt(this, W / 2, 280, all ? 'Tutte fatte! Torna domani per le nuove.' : `Completale tutte e tre: +${DAILY_ALL_BONUS} monete in più`, 6, all ? '#5be37d' : '#ffd23f');
+  }
+
+  // ---------- trofei ----------
+
+  private buildTrophies() {
+    const W = this.scale.width;
+    const p = progressOf();
+    const sv = load();
+    const have = p.trophies ?? [];
+    const ctx = {
+      totals: p.totals ?? newTotals(),
+      cups: sv.trophies ?? 0,
+      stickers: sv.album ? ownedStickers(sv.album) : 0,
+      maxLevelPlayers: Object.values(p.xp).flat().filter((x) => levelOf(x) >= MAX_LEVEL).length,
+    };
+    const g = this.add.graphics();
+    const pw = Math.min(W - 20, 640);
+    const x0 = W / 2 - pw / 2;
+    panel(g, x0, 60, pw, 252, 0x1b1d2e, 0x2e3250, 0.96);
+    txt(this, W / 2, 72, `BACHECA  ${have.length}/${TROPHIES.length}`, 8, '#ffd23f');
+    const cols = 3;
+    const cw = (pw - 16) / cols;
+    const rows = Math.ceil(TROPHIES.length / cols);
+    const rh = Math.min(26, (252 - 32) / rows);
+    TROPHIES.forEach((t, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = x0 + 8 + col * cw;
+      const y = 86 + row * rh + rh / 2;
+      const got = have.includes(t.id);
+      g.fillStyle(got ? 0x3a2a14 : (row + col) % 2 ? 0x22253a : 0x262a42).fillRect(x + 1, y - rh / 2 + 1, cw - 2, rh - 2);
+      // coppetta
+      const c = got ? 0xffd23f : 0x3a3d55;
+      g.fillStyle(c).fillRect(x + 6, y - 5, 8, 5).fillRect(x + 9, y, 2, 3).fillRect(x + 7, y + 3, 6, 2);
+      txt(this, x + 20, y - 4, t.name, 6, got ? '#ffd23f' : '#d8dcf0').setOrigin(0, 0.5);
+      const v = Math.min(t.n, trophyValue(t, ctx));
+      txt(this, x + 20, y + 5, t.desc, 6, got ? '#a08a50' : '#6a6e90', { fontSize: '5px' }).setOrigin(0, 0.5);
+      if (!got) {
+        txt(this, x + cw - 6, y - 4, `+${t.reward}`, 6, '#8a7a40').setOrigin(1, 0.5);
+        txt(this, x + cw - 6, y + 5, `${v}/${t.n}`, 6, '#6a6e90', { fontSize: '5px' }).setOrigin(1, 0.5);
+      }
+    });
   }
 
   // ---------- rivali ----------

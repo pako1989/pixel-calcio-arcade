@@ -113,16 +113,16 @@ export interface PowerUp {
 
 export type SimEvent =
   | { type: 'kick'; x: number; y: number; power: number; team: 0 | 1 }
-  | { type: 'shot'; x: number; y: number; power: number; team: 0 | 1; superShot: boolean; fire: boolean }
-  | { type: 'pass'; x: number; y: number; team: 0 | 1 }
-  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean }
-  | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1 }
+  | { type: 'shot'; x: number; y: number; power: number; team: 0 | 1; superShot: boolean; fire: boolean; idx?: number }
+  | { type: 'pass'; x: number; y: number; team: 0 | 1; idx?: number }
+  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number }
+  | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1; idx?: number }
   | { type: 'post'; x: number; y: number }
   | { type: 'wall'; x: number; y: number; power: number }
   | { type: 'bounce'; x: number; y: number; power: number }
-  | { type: 'tackle'; x: number; y: number; won: boolean; team: 0 | 1 }
+  | { type: 'tackle'; x: number; y: number; won: boolean; team: 0 | 1; idx?: number }
   | { type: 'slide'; x: number; y: number }
-  | { type: 'steal'; x: number; y: number; team: 0 | 1 }
+  | { type: 'steal'; x: number; y: number; team: 0 | 1; idx?: number }
   | { type: 'whistle'; kind: 'start' | 'end' | 'kickoff' | 'golden' }
   | { type: 'powerup'; kind: PowerUpKind; team: 0 | 1; x: number; y: number }
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }
@@ -130,9 +130,10 @@ export type SimEvent =
   | { type: 'switch'; id: number }
   | { type: 'call'; id: number; x: number; y: number }
   | { type: 'wave'; dir: 1 | -1 }
-  | { type: 'trick'; kind: TrickKind; team: 0 | 1; x: number; y: number; name: string }
+  | { type: 'freekick'; team: 0 | 1; x: number; y: number; human: boolean }
+  | { type: 'trick'; kind: TrickKind; team: 0 | 1; x: number; y: number; name: string; idx?: number }
   | { type: 'showtime'; team: 0 | 1 }
-  | { type: 'foul'; x: number; y: number; team: 0 | 1; by: string; victim: string; card: 'none' | 'yellow' | 'red'; injury: boolean };
+  | { type: 'foul'; x: number; y: number; team: 0 | 1; by: string; byIdx?: number; victim: string; card: 'none' | 'yellow' | 'red'; injury: boolean };
 
 /** Giocate di stile: dribbling, tunnel, gol da lontano, gol di sponda. */
 export type TrickKind = 'dribbling' | 'tunnel' | 'lontano' | 'sponda';

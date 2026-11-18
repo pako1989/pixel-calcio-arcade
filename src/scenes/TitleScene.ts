@@ -4,6 +4,7 @@ import { button, fadeIn, shadowTxt, txt } from '../ui/ui';
 import { goFullscreen, isTouch } from '../ui/fullscreen';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
+import { dailyState } from '../modes/daily';
 import { load } from '../save/storage';
 
 export class TitleScene extends Phaser.Scene {
@@ -102,12 +103,20 @@ export class TitleScene extends Phaser.Scene {
       this.scene.launch('album');
       this.scene.stop();
     }, { color: 0xc08a1a, badge: packs > 0 ? `${packs} PACCH.` : undefined, size: 6 });
-    const coins = load().progress?.coins ?? 100;
+    const prog = load().progress;
+    const coins = prog?.coins ?? 100;
+    const sfide = dailyState(prog?.daily).done.filter((x) => !x).length;
+    button(this, W - 82, H - 166, 140, 26, 'ALLENAMENTO', () => {
+      if (isTouch()) goFullscreen();
+      sfx.unlock();
+      this.scene.launch('training');
+      this.scene.stop();
+    }, { color: 0x2f6fd0, badge: 'NUOVO', size: 6 });
     button(this, W - 82, H - 132, 140, 26, 'CLUB E NEGOZIO', () => {
       sfx.unlock();
       this.scene.launch('club');
       this.scene.stop();
-    }, { color: 0x2f9a8a, badge: `${coins} MONETE`, size: 6 });
+    }, { color: 0x2f9a8a, badge: sfide > 0 ? `${sfide} SFIDE OGGI` : `${coins} MONETE`, size: 6 });
     button(this, W - 30, H - 24, 36, 24, '♪', () => {
       this.scene.launch('settings');
       this.scene.bringToTop('settings');
@@ -115,6 +124,6 @@ export class TitleScene extends Phaser.Scene {
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.5', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.7', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }

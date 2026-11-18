@@ -2,14 +2,17 @@ import Phaser from 'phaser';
 import type { MatchOutcome } from '../modes/modes';
 import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
 import { load, progressOf, save } from '../save/storage';
-import { addMatchXp, coinsForMatch, GROWTH_MODES, recordVs } from '../modes/progress';
+import { addMatchXp, coinsForMatch, GROWTH_MODES, levelOf, MAX_LEVEL, recordVs } from '../modes/progress';
+import { applyDaily, DAILY_ALL_BONUS, dailyState, dailyText } from '../modes/daily';
+import { addMatchTotals, checkTrophies, newTotals } from '../modes/trophies';
+import { bestOnPitch, teamRatings } from '../modes/ratings';
 import { backToMenu, backToScene, startMatch } from './demo';
 import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
 import { teamById } from '../data/teams';
 import { applyManagerResult, DIVISIONS } from '../modes/manager';
-import { newAlbum, packsForMatch } from '../modes/album';
+import { newAlbum, owned as ownedStickers, packsForMatch } from '../modes/album';
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
 import { sfx } from '../audio/sfx';
@@ -36,6 +39,7 @@ export class ResultScene extends Phaser.Scene {
   private coins = 0;
   /** Righe extra sotto il riquadro: livelli, abilità, rivalità. */
   private news: { text: string; color: string }[] = [];
+  private trophyWon = false;
   private report?: ModeReport;
   constructor() {
     super('result');
@@ -59,13 +63,14 @@ export class ResultScene extends Phaser.Scene {
         s.album = s.album ?? newAlbum();
         s.album.packs += this.packs;
       });
-      this.rewards(d, won);
     } else {
       this.packs = 0;
       this.coins = 0;
       this.news = [];
     }
     this.report = this.makeReport(d);
+    // dopo il resoconto della modalità (le coppe vinte contano per i trofei)
+    if (d.launch.config.humanTeam === 0) this.rewards(d, r.penalties ? r.penalties[0] > r.penalties[1] : r.score[0] > r.score[1]);
   }
 
   /** Monete, esperienza dei giocatori e rivalità. */
@@ -90,8 +95,75 @@ export class ResultScene extends Phaser.Scene {
       if (ups.length > 2) this.news.push({ text: `...e altri ${ups.length - 2} giocatori crescono`, color: '#3fd0ff' });
     }
     this.coins = coinsForMatch(r.score[0], res, d.style ?? 0, rival);
+
+    // migliore in campo
+    const home = teamRatings(cfg.home, 0, d.tally, r);
+    const best = bestOnPitch(home, teamRatings(cfg.away, 1, d.tally, r), r);
+    this.news.unshift({ text: `Migliore in campo: ${best.name} (${best.vote})`, color: best.team === 0 ? '#ffd23f' : '#d8dcf0' });
+
+    // sfide del giorno
+    const daily = (p.daily = dailyState(p.daily));
+    const doneBefore = daily.done.every(Boolean);
+    const fresh = applyDaily(daily, d);
+    const totals = (p.totals = p.totals ?? newTotals());
+    for (const c of fresh) {
+      this.coins += c.reward;
+      totals.sfide++;
+      this.news.push({ text: `Sfida completata: ${dailyText(c)}  +${c.reward}`, color: '#5be37d' });
+    }
+    if (!doneBefore && daily.done.every(Boolean)) {
+      this.coins += DAILY_ALL_BONUS;
+      this.news.push({ text: `Tutte le sfide di oggi!  +${DAILY_ALL_BONUS}`, color: '#5be37d' });
+    }
+
+    // trofei
+    addMatchTotals(totals, d, rival && res === 'w');
+    const have = (p.trophies = p.trophies ?? []);
+    const sv = load();
+    const newT = checkTrophies(have, {
+      totals,
+      cups: sv.trophies ?? 0,
+      stickers: sv.album ? ownedStickers(sv.album) : 0,
+      maxLevelPlayers: Object.values(p.xp).flat().filter((x) => levelOf(x) >= MAX_LEVEL).length,
+    });
+    for (const t of newT) {
+      this.coins += t.reward;
+      this.news.push({ text: `TROFEO: ${t.name}  +${t.reward}`, color: '#ff7ab8' });
+    }
+    this.trophyWon = newT.length > 0;
+
     p.coins += this.coins;
     save();
+  }
+
+  /** Voti dei tuoi giocatori e migliore in campo. */
+  private pagella(d: MatchOutcome): Phaser.GameObjects.Container {
+    const W = this.scale.width;
+    const cfg = d.launch.config;
+    const side: 0 | 1 = cfg.humanTeam === 1 ? 1 : 0;
+    const team = side === 0 ? cfg.home : cfg.away;
+    const mine = teamRatings(team, side, d.tally, d.result);
+    const other = teamRatings(side === 0 ? cfg.away : cfg.home, side === 0 ? 1 : 0, d.tally, d.result);
+    const best = bestOnPitch(side === 0 ? mine : other, side === 0 ? other : mine, d.result);
+    const c = this.add.container(0, 0).setDepth(8);
+    const g = this.add.graphics();
+    c.add(g);
+    panel(g, W / 2 - 170, 62, 340, 210, 0x241a36, 0x4a3a6a, 0.98);
+    c.add(txt(this, W / 2, 76, `PAGELLA · ${team.name.toUpperCase()}`, 8, '#ffd23f'));
+    const role = { GK: 'POR', DEF: 'DIF', MID: 'CEN', FWD: 'ATT' } as const;
+    mine.forEach((r, i) => {
+      const y = 100 + i * 28;
+      g.fillStyle(i % 2 ? 0x2a2040 : 0x30254a).fillRect(W / 2 - 160, y - 12, 320, 25);
+      c.add(txt(this, W / 2 - 152, y - 4, `${role[r.role]} ${r.name}`, 6, '#ffffff').setOrigin(0, 0.5));
+      c.add(txt(this, W / 2 - 152, y + 6, r.note || '-', 6, '#8a8fb0').setOrigin(0, 0.5));
+      const col = r.vote >= 7.5 ? '#5be37d' : r.vote >= 6 ? '#ffffff' : '#ff9a9a';
+      c.add(txt(this, W / 2 + 150, y, r.vote.toFixed(1).replace('.0', ''), 12, col).setOrigin(1, 0.5));
+      if (best.team === side && best.idx === r.idx) c.add(txt(this, W / 2 + 84, y, 'MVP', 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 3, y: 2 } }));
+    });
+    if (best.team !== side) c.add(txt(this, W / 2, 252, `Migliore in campo: ${best.name} (${best.vote}), avversario`, 6, '#d8dcf0'));
+    c.setAlpha(0);
+    this.tweens.add({ targets: c, alpha: 1, duration: 150 });
+    return c;
   }
 
   private makeReport(d: MatchOutcome): ModeReport | undefined {
@@ -302,6 +374,20 @@ export class ResultScene extends Phaser.Scene {
       g.fillStyle(cfg.home.colors.shirt).fillRect(W / 2 - bw / 2, yy + 2, Math.round((bw * x) / tot), 4);
       g.fillStyle(cfg.away.colors.shirt).fillRect(W / 2 - bw / 2 + Math.round((bw * x) / tot), yy + 2, bw - Math.round((bw * x) / tot), 4);
     });
+
+    if (this.trophyWon) this.time.delayedCall(1400, () => sfx.fanfare());
+    // pagella: si apre sopra il riquadro
+    let sheet: Phaser.GameObjects.Container | undefined;
+    const pgb = button(this, 46, H - 34, 76, 26, 'PAGELLA', () => {
+      if (sheet) {
+        sheet.destroy();
+        sheet = undefined;
+        pgb.setSelected(false);
+        return;
+      }
+      sheet = this.pagella(this.data_);
+      pgb.setSelected(true);
+    }, { size: 6, color: 0x8a3fd0 });
 
     if (rep) {
       if (rep.retry) button(this, W / 2 - 80, H - 34, 140, 30, 'RIPROVA', () => startMatch(this, launch), { color: 0x3a3d55 });
