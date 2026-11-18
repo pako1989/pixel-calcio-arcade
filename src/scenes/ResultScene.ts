@@ -7,6 +7,8 @@ import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
 import { teamById } from '../data/teams';
+import { applyManagerResult, DIVISIONS } from '../modes/manager';
+import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
 
 interface ReportLine {
@@ -48,7 +50,7 @@ export class ResultScene extends Phaser.Scene {
 
   private makeReport(d: MatchOutcome): ModeReport | undefined {
     const [a, b] = d.result.score;
-    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number };
+    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number; season?: number; week?: number };
     if (d.launch.mode === 'torneo') {
       const st = load().tournament;
       if (!st || st.round !== md.round) return undefined;
@@ -70,6 +72,20 @@ export class ResultScene extends Phaser.Scene {
         if (st.champion) lines.push({ text: `La coppa va a: ${teamById(st.champion).name}`, color: '#d8dcf0' });
       }
       return { title, titleColor: '#ffd23f', lines, retry: false, next: { label: 'TABELLONE', go: (s) => backToScene(s, 'tournament') } };
+    }
+    if (d.launch.mode === 'manager') {
+      const m = load().manager;
+      if (!m || m.season !== md.season || m.week !== md.week) return undefined;
+      const week = m.week;
+      const div = DIVISIONS[m.division].name;
+      const mine = d.result.scorers.filter((s) => s.team === 0).map((s) => s.name);
+      const rep = applyManagerResult(m, a, b, mine);
+      save((s) => (s.manager = m));
+      return {
+        lines: [{ text: `GIORNATA ${week + 1} · ${div}`, color: '#8a8fb0' }, ...managerReportLines(m, rep)],
+        retry: false,
+        next: { label: 'CLUB', go: (s) => backToScene(s, 'manager') },
+      };
     }
     if (d.launch.mode === 'missioni') {
       const m = MISSIONS.find((x) => x.id === md.mission);

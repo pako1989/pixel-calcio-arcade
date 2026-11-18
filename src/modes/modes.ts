@@ -22,6 +22,7 @@ export const MODES: ModeInfo[] = [
   { id: 'missioni', title: 'MISSIONI', desc: 'Sfide con obiettivi speciali', available: true, scene: 'missions' },
   { id: 'mito', title: 'DIVENTA UN MITO', desc: 'Storia: dal campetto alla Serie A', available: true, scene: 'career' },
   { id: 'conquista', title: 'QUARTIERE VS CITTÀ', desc: 'Saga: conquista l\'Italia città per città', available: true, scene: 'conquista' },
+  { id: 'manager', title: 'MANAGER', desc: 'Guida il tuo club dal quartiere alla Serie Pixel', available: true, scene: 'manager' },
 ];
 
 /** Dati passati alla scena della partita. */
