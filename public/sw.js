@@ -1,5 +1,5 @@
 // Service worker: il gioco funziona anche offline dopo la prima apertura.
-const CACHE = 'pixel-calcio-v1';
+const CACHE = 'pixel-calcio-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest'])).then(() => self.skipWaiting()));
