@@ -31,9 +31,9 @@ export interface DiffParams {
 }
 
 export const DIFFICULTY: Record<Difficulty, DiffParams> = {
-  facile: { speed: 0.9, think: 0.3, tackle: 1.0, shotErr: 0.15, keeper: 0.85, steal: 0.7, decision: 0.6 },
-  normale: { speed: 1.0, think: 0.18, tackle: 2.0, shotErr: 0.08, keeper: 1.05, steal: 1.25, decision: 0.85 },
-  difficile: { speed: 1.08, think: 0.11, tackle: 2.8, shotErr: 0.04, keeper: 1.18, steal: 1.6, decision: 1 },
+  facile: { speed: 0.85, think: 0.34, tackle: 0.7, shotErr: 0.17, keeper: 0.78, steal: 0.5, decision: 0.5 },
+  normale: { speed: 0.94, think: 0.23, tackle: 1.3, shotErr: 0.11, keeper: 0.93, steal: 0.85, decision: 0.72 },
+  difficile: { speed: 1.01, think: 0.16, tackle: 2.0, shotErr: 0.07, keeper: 1.05, steal: 1.2, decision: 0.9 },
 };
 
 export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end';
