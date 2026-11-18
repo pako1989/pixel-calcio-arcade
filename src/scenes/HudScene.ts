@@ -252,9 +252,20 @@ export class HudScene extends Phaser.Scene {
       const col = full ? (Math.floor(this.time.now / 120) % 2 ? 0xffd23f : 0xff3fa4) : 0x3fd0ff;
       if (t === 0) g.fillStyle(col).fillRect(x + 1, y + 1, Math.round(50 * v), 5);
       else g.fillStyle(col).fillRect(x + 51 - Math.round(50 * v), y + 1, Math.round(50 * v), 5);
+      // barra dello spettacolo (giocate di stile) della squadra umana
+      const showStyle = t === sim.cfg.humanTeam;
+      if (showStyle) {
+        const sv = Math.min(1, sim.style[t]);
+        g.fillStyle(0x1a1222, 0.9).fillRect(x, y + 8, 52, 5);
+        const sw = Math.round(50 * sv);
+        g.fillStyle(0xff7ab8).fillRect(t === 0 ? x + 1 : x + 51 - sw, y + 9, sw, 3);
+        // tacche: ogni giocata vale un ottavo circa
+        g.fillStyle(0x1a1222, 0.6);
+        for (let k = 1; k < 5; k++) g.fillRect(x + 1 + k * 10, y + 9, 1, 3);
+      }
       // potenziamenti attivi
       let ix = t === 0 ? x : x + 52 - 10;
-      const iy = y + 10;
+      const iy = y + (showStyle ? 16 : 10);
       const drawChip = (c: number, label: number) => {
         g.fillStyle(0x1a1222).fillRect(ix - 1, iy - 1, 12, 8);
         g.fillStyle(c).fillRect(ix, iy, Math.max(1, Math.round(10 * label)), 6);
@@ -380,7 +391,7 @@ export class HudScene extends Phaser.Scene {
       c.add(bg);
       c.add(shadowTxt(this, W / 2, H / 2 - 80, 'PAUSA', 24, '#ffd23f').c);
       const b1 = button(this, W / 2, H / 2 - 30, 180, 26, 'RIPRENDI', () => this.togglePause(false), { color: 0x2f8be0 });
-      const b2 = button(this, W / 2, H / 2 + 6, 180, 26, 'AUDIO', () => {
+      const b2 = button(this, W / 2, H / 2 + 6, 180, 26, 'OPZIONI', () => {
         this.scene.launch('settings');
         this.scene.bringToTop('settings');
       });

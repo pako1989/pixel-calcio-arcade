@@ -36,6 +36,14 @@ export class Player {
   /** Riflessi del portiere: ritardo prima del tuffo. */
   reactT = 0;
   seenShot = false;
+  /** Cartellini gialli in questa partita. */
+  yellows = 0;
+  /** Secondi di espulsione rimasti (fuori dal campo, poi rientra). */
+  out = 0;
+  /** Infortunato: corre più piano fino alla fine. */
+  injured = false;
+  /** Avversario che sta per essere saltato (per il dribbling "di stile"). */
+  dribCand = -1;
 
   constructor(
     public readonly id: number,
@@ -51,7 +59,7 @@ export class Player {
     return this.def.role === 'GK';
   }
   get canAct(): boolean {
-    return this.state === 'run' || this.state === 'kick';
+    return this.out <= 0 && (this.state === 'run' || this.state === 'kick');
   }
   setState(s: PlayerState, t = 0) {
     this.state = s;
@@ -77,6 +85,9 @@ export class Ball {
   isShot = false;
   /** Rotazione accumulata per l'animazione. */
   roll = 0;
+  /** Da dove è partito l'ultimo tiro e se ha preso una sponda (per i gol "di stile"). */
+  shotFrom: { x: number; y: number } | null = null;
+  banked = false;
   /** Destinatario di un passaggio in corso. */
   passTarget: Player | null = null;
 
@@ -118,4 +129,10 @@ export type SimEvent =
   | { type: 'superReady'; team: 0 | 1 }
   | { type: 'switch'; id: number }
   | { type: 'call'; id: number; x: number; y: number }
-  | { type: 'wave'; dir: 1 | -1 };
+  | { type: 'wave'; dir: 1 | -1 }
+  | { type: 'trick'; kind: TrickKind; team: 0 | 1; x: number; y: number; name: string }
+  | { type: 'showtime'; team: 0 | 1 }
+  | { type: 'foul'; x: number; y: number; team: 0 | 1; by: string; victim: string; card: 'none' | 'yellow' | 'red'; injury: boolean };
+
+/** Giocate di stile: dribbling, tunnel, gol da lontano, gol di sponda. */
+export type TrickKind = 'dribbling' | 'tunnel' | 'lontano' | 'sponda';

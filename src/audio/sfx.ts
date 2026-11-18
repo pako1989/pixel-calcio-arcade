@@ -247,6 +247,15 @@ class Sfx {
   select() {
     this.tone('square', 660, 990, 0.08, 0.1);
   }
+  /** Giocata di stile: arpeggio che sale. */
+  trick() {
+    [784, 988, 1175, 1568].forEach((f, i) => this.tone('square', f, f, 0.06, 0.06, i * 0.05));
+  }
+  /** Monete (negozio, premi). */
+  coin() {
+    this.tone('square', 988, 988, 0.06, 0.08);
+    this.tone('square', 1319, 1319, 0.22, 0.08, 0.07);
+  }
   /** Tuono (temporale). */
   thunder() {
     this.noise(2.4, 0.5, 120, 0.7, 'lowpass', 0.15, 0.05, 'crowd');

@@ -21,6 +21,8 @@ export interface PlayerDef {
   number: number;
   role: Role;
   stats: PlayerStats;
+  /** Abilità sbloccate con la crescita (es. 'giro', 'motore'). */
+  skills?: string[];
   /** Aspetto: indici nelle palette di pelle e capelli, stile capelli. */
   look: { skin: number; hair: number; hairStyle: number };
 }
@@ -95,6 +97,8 @@ export interface MatchConfig {
    * niente cambi, i compagni sono della CPU e PASSA senza palla chiede il pallone.
    */
   lockHuman?: number;
+  /** Falli, cartellini e infortuni. */
+  fouls?: boolean;
   /** Meteo (predefinito: sereno). */
   weather?: Weather;
   /** Partita in notturna con i riflettori. */

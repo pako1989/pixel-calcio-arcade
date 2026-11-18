@@ -10,6 +10,11 @@ export interface MatchTally {
   saves: [number, number];
   /** Secondi di gioco del primo gol di ciascuna squadra (-1 = nessuno). */
   firstGoalAt: [number, number];
+  /** Giocate di stile (dribbling, tunnel, gol speciali). */
+  tricks: [number, number];
+  /** Cartellini presi. */
+  yellows: [number, number];
+  reds: [number, number];
 }
 
 export function newTally(): MatchTally {
@@ -21,6 +26,9 @@ export function newTally(): MatchTally {
     tacklesWon: [0, 0],
     saves: [0, 0],
     firstGoalAt: [-1, -1],
+    tricks: [0, 0],
+    yellows: [0, 0],
+    reds: [0, 0],
   };
 }
 
@@ -46,6 +54,14 @@ export class TallyTracker {
       case 'save':
         t.saves[e.team]++;
         this.lastShot = null;
+        break;
+      case 'trick':
+        t.tricks[e.team]++;
+        break;
+      case 'foul':
+        // e.team è la squadra che commette il fallo
+        if (e.card === 'yellow') t.yellows[e.team]++;
+        if (e.card === 'red') t.reds[e.team]++;
         break;
       case 'goal': {
         t.goals[e.team]++;

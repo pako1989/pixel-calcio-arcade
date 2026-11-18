@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { MatchOutcome } from '../modes/modes';
 import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
-import { load, save } from '../save/storage';
+import { load, progressOf, save } from '../save/storage';
+import { addMatchXp, coinsForMatch, GROWTH_MODES, recordVs } from '../modes/progress';
 import { backToMenu, backToScene, startMatch } from './demo';
 import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
@@ -32,6 +33,9 @@ interface ModeReport {
 export class ResultScene extends Phaser.Scene {
   private data_!: MatchOutcome;
   private packs = 0;
+  private coins = 0;
+  /** Righe extra sotto il riquadro: livelli, abilità, rivalità. */
+  private news: { text: string; color: string }[] = [];
   private report?: ModeReport;
   constructor() {
     super('result');
@@ -55,8 +59,39 @@ export class ResultScene extends Phaser.Scene {
         s.album = s.album ?? newAlbum();
         s.album.packs += this.packs;
       });
-    } else this.packs = 0;
+      this.rewards(d, won);
+    } else {
+      this.packs = 0;
+      this.coins = 0;
+      this.news = [];
+    }
     this.report = this.makeReport(d);
+  }
+
+  /** Monete, esperienza dei giocatori e rivalità. */
+  private rewards(d: MatchOutcome, won: boolean) {
+    const r = d.result;
+    const cfg = d.launch.config;
+    // ai rigori persi conta come pareggio
+    const res: 'w' | 'd' | 'l' = won ? 'w' : r.score[0] === r.score[1] ? 'd' : 'l';
+    this.news = [];
+    const p = progressOf();
+    let rival = false;
+    if (GROWTH_MODES.includes(d.launch.mode)) {
+      const vs = recordVs(p, cfg.away.id, res);
+      rival = vs.wasRival;
+      if (vs.wasRival && !vs.nowRival) this.news.push({ text: `Rivalità chiusa: ${cfg.away.name} non fa più paura!`, color: '#5be37d' });
+      else if (!vs.wasRival && vs.nowRival) this.news.push({ text: `${cfg.away.name} è ora una tua RIVALE: battila per monete doppie`, color: '#ff5a5a' });
+      const mine = r.scorers.filter((s) => s.team === 0).map((s) => s.name);
+      const ups = addMatchXp(p, cfg.home, mine, won);
+      for (const u of ups.slice(0, 2)) {
+        this.news.push({ text: `${u.name} sale al livello ${u.level}${u.skill ? ` · nuova abilità: ${u.skill}` : ''}`, color: '#3fd0ff' });
+      }
+      if (ups.length > 2) this.news.push({ text: `...e altri ${ups.length - 2} giocatori crescono`, color: '#3fd0ff' });
+    }
+    this.coins = coinsForMatch(r.score[0], res, d.style ?? 0, rival);
+    p.coins += this.coins;
+    save();
   }
 
   private makeReport(d: MatchOutcome): ModeReport | undefined {
@@ -191,9 +226,28 @@ export class ResultScene extends Phaser.Scene {
       else if (pa < pb) sfx.sadJingle();
     }
     this.time.delayedCall(2600, () => music.play('menu'));
-    if (this.packs > 0) {
-      const pk = txt(this, W / 2, 288, `+${this.packs} PACCHETT${this.packs > 1 ? 'I' : 'O'} DI FIGURINE (apri dall'ALBUM)`, 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 4, y: 3 } }).setDepth(5);
+    if (this.packs > 0 || this.coins > 0) {
+      const parts = [];
+      if (this.coins > 0) parts.push(`+${this.coins} MONETE${(this.data_.style ?? 0) > 0 ? ` (stile +${(this.data_.style ?? 0) * 5})` : ''}`);
+      if (this.packs > 0) parts.push(`+${this.packs} PACCHETT${this.packs > 1 ? 'I' : 'O'}`);
+      const pk = txt(this, W / 2, 285, parts.join('  ·  '), 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 4, y: 3 } }).setDepth(5);
       this.tweens.add({ targets: pk, scale: 1.06, duration: 500, yoyo: true, repeat: 3 });
+      if (this.coins > 0) this.time.delayedCall(700, () => sfx.coin());
+    }
+    // novità della crescita e delle rivalità: una alla volta, a rotazione
+    if (this.news.length) {
+      const nt = txt(this, W / 2, 300, this.news[0].text, 6, this.news[0].color, { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 2 } }).setDepth(5);
+      let i = 0;
+      if (this.news.length > 1) {
+        this.time.addEvent({
+          delay: 2200,
+          loop: true,
+          callback: () => {
+            i = (i + 1) % this.news.length;
+            nt.setText(this.news[i].text).setColor(this.news[i].color);
+          },
+        });
+      }
     }
     const t = shadowTxt(this, W / 2, 34, title, title.length > 12 ? 16 : 24, col, '#1a1222', 3);
     t.c.setScale(0.3);

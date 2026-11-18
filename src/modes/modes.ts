@@ -47,4 +47,6 @@ export interface MatchOutcome {
   launch: MatchLaunch;
   result: MatchResult;
   tally: MatchTally;
+  /** Punti stile della squadra umana (dribbling, tunnel, gol speciali). */
+  style?: number;
 }

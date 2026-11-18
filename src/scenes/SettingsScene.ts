@@ -33,11 +33,11 @@ export class SettingsScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x0a0816, 0.82).setOrigin(0).setInteractive();
     const g = this.add.graphics();
     const pw = 380;
-    const ph = 268;
+    const ph = 300;
     const px = W / 2 - pw / 2;
     const py = H / 2 - ph / 2 - 4;
     panel(g, px, py, pw, ph, 0x1b1d2e, 0x2e3250, 0.97);
-    shadowTxt(this, W / 2, py + 20, 'AUDIO', 16, '#ffd23f');
+    shadowTxt(this, W / 2, py + 20, 'OPZIONI', 16, '#ffd23f');
 
     const rows: [VolKey, string, () => void][] = [
       ['music', 'MUSICA', () => undefined],
@@ -82,6 +82,20 @@ export class SettingsScene extends Phaser.Scene {
       b.setSelected(i === 0 ? !s.muted : s.muted);
       mb.push(b);
     });
+    y += 32;
+
+    // regola di gioco: falli, cartellini e infortuni
+    txt(this, px + 24, y, 'FALLI E CARTELLINI', 6, '#d8dcf0').setOrigin(0, 0.5);
+    const fb: Button[] = [];
+    (['SÌ', 'NO'] as const).forEach((l, i) => {
+      const b = button(this, px + 196 + i * 62, y, 56, 20, l, () => {
+        save((d) => (d.settings.fouls = i === 0));
+        fb.forEach((x, j) => x.setSelected(j === i));
+      }, { size: 6 });
+      b.setSelected(i === 0 ? s.fouls : !s.fouls);
+      fb.push(b);
+    });
+    txt(this, W / 2, y + 15, 'Scivolate fallose: gialli, rossi (30 s fuori) e infortuni', 6, '#8a8fb0');
 
     button(this, W / 2, py + ph - 22, 140, 26, 'FATTO', () => this.scene.stop(), { color: 0x2f8be0 });
   }
