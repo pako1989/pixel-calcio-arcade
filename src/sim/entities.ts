@@ -130,6 +130,7 @@ export type SimEvent =
   | { type: 'switch'; id: number }
   | { type: 'call'; id: number; x: number; y: number }
   | { type: 'wave'; dir: 1 | -1 }
+  | { type: 'freekick'; team: 0 | 1; x: number; y: number; human: boolean }
   | { type: 'trick'; kind: TrickKind; team: 0 | 1; x: number; y: number; name: string; idx?: number }
   | { type: 'showtime'; team: 0 | 1 }
   | { type: 'foul'; x: number; y: number; team: 0 | 1; by: string; byIdx?: number; victim: string; card: 'none' | 'yellow' | 'red'; injury: boolean };

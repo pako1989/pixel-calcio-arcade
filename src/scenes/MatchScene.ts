@@ -926,6 +926,17 @@ export class MatchScene extends Phaser.Scene {
         }
         break;
       }
+      case 'freekick':
+        if (!quiet) commentary.say('freekick');
+        if (!demo) {
+          this.msg({
+            text: 'PUNIZIONE!',
+            sub: e.human ? 'Mira con la levetta · tieni TIRO e vai di lato per l\'effetto' : teamName(e.team),
+            color: '#ffd23f',
+            ms: e.human ? 3200 : 1400,
+          });
+        }
+        break;
       case 'call':
         if (!quiet) sfx.select();
         this.fx.stars.explode(6, e.x, e.y - 14);
@@ -956,6 +967,33 @@ export class MatchScene extends Phaser.Scene {
       if (p.injured) {
         g.fillStyle(0xffffff).fillRect(x - 11, y, 6, 6);
         g.fillStyle(0xe8443a).fillRect(x - 9, y + 1, 2, 4).fillRect(x - 10, y + 2, 4, 2);
+      }
+    }
+    // punizione: traiettoria prevista con l'effetto
+    const fk = this.sim.freeKick;
+    if (this.sim.phase === 'freekick' && fk && this.sim.isHuman(fk.taker)) {
+      const b = this.sim.ball;
+      let x = b.x;
+      let y = b.y;
+      const a = fk.aim - fk.curl * 0.2;
+      const sp = 420;
+      let vx = Math.cos(a) * sp;
+      let vy = Math.sin(a) * sp;
+      let spin = fk.curl * 360;
+      const dt = 1 / 30;
+      const blink = Math.floor(this.time.now / 160) % 2;
+      for (let i = 0; i < 26; i++) {
+        const s = Math.hypot(vx, vy);
+        const nvx = vx + (-vy / s) * spin * dt;
+        vy += (vx / s) * spin * dt;
+        vx = nvx;
+        spin *= Math.exp(-1.6 * dt);
+        x += vx * dt;
+        y += vy * dt;
+        if (i % 2 === blink) continue;
+        g.fillStyle(0x1a1222, 0.6).fillRect(Math.round(x) - 1, Math.round(y) - 1, 4, 4);
+        g.fillStyle(fk.curl === 0 ? 0xffffff : 0xffd23f).fillRect(Math.round(x), Math.round(y), 2, 2);
+        if (x < 0 || x > this.sim.W) break;
       }
     }
   }
@@ -1163,7 +1201,12 @@ export class MatchScene extends Phaser.Scene {
     let tx = b.x + b.vx * 0.22;
     let ty = b.y - b.z * Z_SCALE + b.vy * 0.15;
     const h = sim.human;
-    if (h && sim.phase === 'play') {
+    const fk = sim.freeKick;
+    if (sim.phase === 'freekick' && fk) {
+      // si vedono insieme il tiratore e la porta
+      tx = (fk.taker.x + sim.oppGoalX(fk.taker.team)) / 2;
+      ty = (fk.taker.y + sim.H / 2) / 2;
+    } else if (h && sim.phase === 'play') {
       // con un solo giocatore la telecamera segue di più lui
       const w = sim.locked ? 0.4 : 0.2;
       tx = tx * (1 - w) + h.x * w;

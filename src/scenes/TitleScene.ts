@@ -106,6 +106,12 @@ export class TitleScene extends Phaser.Scene {
     const prog = load().progress;
     const coins = prog?.coins ?? 100;
     const sfide = dailyState(prog?.daily).done.filter((x) => !x).length;
+    button(this, W - 82, H - 166, 140, 26, 'ALLENAMENTO', () => {
+      if (isTouch()) goFullscreen();
+      sfx.unlock();
+      this.scene.launch('training');
+      this.scene.stop();
+    }, { color: 0x2f6fd0, badge: 'NUOVO', size: 6 });
     button(this, W - 82, H - 132, 140, 26, 'CLUB E NEGOZIO', () => {
       sfx.unlock();
       this.scene.launch('club');
@@ -118,6 +124,6 @@ export class TitleScene extends Phaser.Scene {
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.6', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.7', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }

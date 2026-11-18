@@ -170,3 +170,46 @@ describe('falli e stile', () => {
     expect(fouls).toBe(0);
   });
 });
+
+describe('punizioni', () => {
+  /** Mette un attaccante della squadra 0 al limite e lo fa atterrare. */
+  function setup(human: boolean) {
+    const sim = new MatchSim(cfg({ seed: 5, fouls: true, humanTeam: human ? 0 : null }));
+    for (let t = 0; t < 2; t += 1 / 60) sim.update(1 / 60);
+    const victim = sim.teams[0][4];
+    const by = sim.teams[1][2];
+    victim.x = sim.W - 230;
+    victim.y = sim.H / 2 + 30;
+    by.x = victim.x - 8;
+    by.y = victim.y;
+    (sim as unknown as { foul(a: unknown, b: unknown): void }).foul(by, victim);
+    return { sim, victim };
+  }
+  it('fallo al limite: barriera e punizione, poi la CPU calcia', () => {
+    const { sim, victim } = setup(false);
+    expect(sim.phase).toBe('freekick');
+    expect(sim.events.some((e) => e.type === 'freekick')).toBe(true);
+    const fk = sim.freeKick!;
+    expect(fk.taker).toBe(victim);
+    expect(fk.wall.length).toBe(2);
+    for (const w of fk.wall) expect(Math.hypot(w.x - victim.x, w.y - victim.y)).toBeGreaterThan(45);
+    const tl = sim.timeLeft;
+    for (let t = 0; t < 3 && sim.phase === 'freekick'; t += 1 / 60) sim.update(1 / 60);
+    expect(sim.phase).toBe('play');
+    expect(sim.timeLeft).toBeCloseTo(tl - 0, 0);
+    expect(sim.ball.isShot || sim.ball.owner !== null || sim.score[0] > 0 || sim.ball.speed > 0).toBe(true);
+  });
+  it("l'umano mira, carica e mette l'effetto", () => {
+    const { sim } = setup(true);
+    expect(sim.phase).toBe('freekick');
+    const base = { mx: 0, my: 0, sprint: false, pass: false, shoot: false };
+    sim.update(1 / 60, base);
+    for (let t = 0; t < 0.4; t += 1 / 60) sim.update(1 / 60, { ...base, shoot: true, mx: 0, my: 1 });
+    const fk = sim.freeKick!;
+    expect(Math.abs(fk.curl)).toBeGreaterThan(0.5);
+    sim.update(1 / 60, base);
+    expect(sim.phase).toBe('play');
+    expect(sim.ball.owner).toBeNull();
+    expect(Math.abs(sim.ball.spin)).toBeGreaterThan(100);
+  });
+});

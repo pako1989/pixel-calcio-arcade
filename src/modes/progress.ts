@@ -1,6 +1,7 @@
 import type { PlayerDef, Role, TeamDef } from '../sim/types';
 import type { DailySave } from './daily';
 import type { Totals } from './trophies';
+import type { TrainingSave } from './training';
 
 /**
  * Progressi del giocatore fuori dalla partita: monete e negozio, crescita dei giocatori
@@ -53,6 +54,8 @@ export interface ProgressSave {
   totals?: Totals;
   /** Trofei conquistati (id). */
   trophies?: string[];
+  /** Allenamento: record e sessioni di oggi. */
+  training?: TrainingSave;
 }
 
 export function newProgress(): ProgressSave {
@@ -154,13 +157,15 @@ export interface LevelUp {
   skill?: string;
 }
 
-/** Esperienza dopo una partita: presenza, gol e vittoria. */
-export function addMatchXp(p: ProgressSave, team: TeamDef, scorers: string[], won: boolean): LevelUp[] {
+/** Aggiunge esperienza ai giocatori di una squadra (quanta per ciascuno lo dice `gain`). */
+export function addXp(p: ProgressSave, team: TeamDef, gain: (pd: PlayerDef, i: number) => number): LevelUp[] {
   const xp = (p.xp[team.id] = p.xp[team.id] ?? team.players.map(() => 0));
   const ups: LevelUp[] = [];
   team.players.forEach((pd, i) => {
+    const g = gain(pd, i);
+    if (g <= 0) return;
     const before = levelOf(xp[i] ?? 0);
-    xp[i] = (xp[i] ?? 0) + 12 + (won ? 15 : 0) + scorers.filter((n) => n === pd.name).length * 25;
+    xp[i] = (xp[i] ?? 0) + g;
     const after = levelOf(xp[i]);
     if (after > before) {
       const sk = skillsAt(pd.role, after).filter((s) => !skillsAt(pd.role, before).includes(s));
@@ -168,6 +173,11 @@ export function addMatchXp(p: ProgressSave, team: TeamDef, scorers: string[], wo
     }
   });
   return ups;
+}
+
+/** Esperienza dopo una partita: presenza, gol e vittoria. */
+export function addMatchXp(p: ProgressSave, team: TeamDef, scorers: string[], won: boolean): LevelUp[] {
+  return addXp(p, team, (pd) => 12 + (won ? 15 : 0) + scorers.filter((n) => n === pd.name).length * 25);
 }
 
 // ---------- rivalità ----------

@@ -37,7 +37,8 @@ export type CallKind =
   | 'yellow'
   | 'red'
   | 'injury'
-  | 'rival';
+  | 'rival'
+  | 'freekick';
 
 const LINES: Record<CallKind, string[]> = {
   start: ['Si parte!', "Fischio d'inizio!", 'Comincia la partita!', 'Palla al centro, si gioca!'],
@@ -71,6 +72,7 @@ const LINES: Record<CallKind, string[]> = {
   yellow: ['Cartellino giallo per {n}!', 'Ammonito {n}!'],
   red: ['Rosso! {n} va fuori!', 'Espulso {n}! Che ingenuità!'],
   injury: ['{n} resta a terra, si è fatto male.', 'Brutto colpo per {n}.'],
+  freekick: ['Punizione dal limite!', 'Calcio piazzato, occhio alla barriera!', 'Punizione pericolosa!'],
   rival: ['Si gioca la sfida più sentita!', 'È il derby! Quanta tensione!', 'Partita da vincere a ogni costo, c\'è la rivalità!'],
 };
 
