@@ -6,6 +6,10 @@ import { SetupScene } from './scenes/SetupScene';
 import { MatchScene } from './scenes/MatchScene';
 import { HudScene } from './scenes/HudScene';
 import { ResultScene } from './scenes/ResultScene';
+import { TournamentScene } from './scenes/TournamentScene';
+import { MissionsScene } from './scenes/MissionsScene';
+import { CareerScene } from './scenes/CareerScene';
+import { StoryScene } from './scenes/StoryScene';
 
 export const GAME_H = 360;
 
@@ -32,7 +36,7 @@ const game = new Phaser.Game({
   },
   input: { activePointers: 4 },
   fps: { target: 60, min: 30 },
-  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene],
+  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene, TournamentScene, MissionsScene, CareerScene, StoryScene],
 });
 
 let resizeT: number | undefined;

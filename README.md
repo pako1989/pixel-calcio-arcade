@@ -19,6 +19,15 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 - **Power-up** sul campo: 🔥 tiro di fuoco, ⚡ turbo per tutta la squadra, 🧱 muro davanti alla propria porta.
 - In caso di pareggio si va al **golden gol**.
 
+## Modalità
+
+- **Partita veloce**: scegli squadre, campo, difficoltà e durata.
+- **Torneo**: la Coppa Pixel a 8 squadre, quarti, semifinale e finale. Un campo diverso a ogni turno, la finale allo Stadio. Le coppe vinte restano in bacheca.
+- **Missioni**: 12 sfide con obiettivi speciali (rimonta da 0-2, gol col super tiro, porta inviolata, gol lampo...). Si sbloccano un po' alla volta.
+- **Diventa un mito** (storia): crei il tuo campione e lo porti dal campetto di quartiere alla finale di Coppa in Serie A. 9 partite in 6 capitoli, con dialoghi, un rivale, punti abilità da spendere e abilità speciali da sbloccare.
+
+Tutto il progresso è salvato sul telefono.
+
 ## Campi
 
 | Campo | Regola |
@@ -46,7 +55,7 @@ Tecnologie: [Phaser 3](https://phaser.io), TypeScript, Vite. Tutta la grafica e 
 - `src/data/` – squadre e campi.
 - `src/gfx/` – sprite pixel art e campi disegnati in codice.
 - `src/scenes/` – menu, scelta squadre, partita, HUD con comandi touch, risultato.
-- `src/modes/` – modalità di gioco. Oggi: partita veloce. Pronte nel menu per i prossimi passi: torneo, missioni, "Diventa un mito" (carriera) e, più avanti, il manageriale collegato.
+- `src/modes/` – logica delle modalità senza grafica: torneo, missioni, storia "Diventa un mito" (testi dei dialoghi in `career.ts`). Più avanti: il manageriale collegato.
 
 L'IA della CPU riprende le idee di *SimpleSoccer* (Mat Buckland, "Programming Game AI by Example"): squadra in attacco o in difesa, un giocatore che pressa, gli altri che si smarcano nei punti di supporto o marcano, controllo che la linea di passaggio sia libera, portiere tra palla e porta.
 

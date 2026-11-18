@@ -1,4 +1,8 @@
-/** Salvataggi locali (preferenze, statistiche). In futuro: carriera e manageriale. */
+/** Salvataggi locali: preferenze, statistiche, torneo, missioni e storia. */
+import type { CareerState } from '../modes/career';
+import type { MissionsSave } from '../modes/missions';
+import type { TournamentState } from '../modes/tournament';
+
 const KEY = 'pixel-calcio-arcade:v1';
 
 export interface SaveData {
@@ -13,10 +17,13 @@ export interface SaveData {
     tutorialSeen: boolean;
   };
   record: { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number };
-  /** Spazio riservato alle modalità future (torneo, missioni, Diventa un mito, manageriale). */
-  career?: unknown;
-  tournament?: unknown;
-  missions?: unknown;
+  /** Diventa un mito (storia). */
+  career?: CareerState;
+  /** Coppa in corso. */
+  tournament?: TournamentState;
+  /** Coppe vinte nella modalità torneo. */
+  trophies?: number;
+  missions?: MissionsSave;
 }
 
 const DEFAULTS: SaveData = {

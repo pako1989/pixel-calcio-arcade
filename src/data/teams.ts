@@ -37,7 +37,7 @@ function makeStats(rng: Rng, role: Role, level: number): PlayerStats {
 
 const NUMBERS = [1, 3, 6, 8, 9];
 
-function makePlayers(seed: number, level: number): PlayerDef[] {
+export function makePlayers(seed: number, level: number): PlayerDef[] {
   const rng = new Rng(seed);
   const used = new Set<string>();
   return ROLES.map((role, i) => {
@@ -54,7 +54,7 @@ function makePlayers(seed: number, level: number): PlayerDef[] {
   });
 }
 
-interface TeamSeed {
+export interface TeamSeed {
   id: string;
   name: string;
   short: string;
@@ -97,4 +97,9 @@ export function awayKit(t: TeamDef): TeamDef {
     ...t,
     colors: { ...t.colors, shirt: t.colors.shirt2, shirt2: t.colors.shirt, shorts: t.colors.shirt, socks: t.colors.shirt2 },
   };
+}
+
+/** Crea una squadra (usata da storia e missioni) a partire da colori e forza. */
+export function makeTeam(s: TeamSeed, seed: number): TeamDef {
+  return { ...s, players: makePlayers(seed, s.stars) };
 }
