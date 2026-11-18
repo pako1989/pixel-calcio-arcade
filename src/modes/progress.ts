@@ -1,4 +1,6 @@
 import type { PlayerDef, Role, TeamDef } from '../sim/types';
+import type { DailySave } from './daily';
+import type { Totals } from './trophies';
 
 /**
  * Progressi del giocatore fuori dalla partita: monete e negozio, crescita dei giocatori
@@ -45,6 +47,12 @@ export interface ProgressSave {
   xp: Record<string, number[]>;
   /** Bilancio contro ogni squadra. */
   vs: Record<string, { w: number; d: number; l: number }>;
+  /** Sfide del giorno. */
+  daily?: DailySave;
+  /** Totali di tutte le partite, per i trofei. */
+  totals?: Totals;
+  /** Trofei conquistati (id). */
+  trophies?: string[];
 }
 
 export function newProgress(): ProgressSave {

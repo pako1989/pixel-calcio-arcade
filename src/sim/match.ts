@@ -84,7 +84,7 @@ export class MatchSim {
   /** Barra dello spettacolo (0..1) e punti stile totali per squadra. */
   style: [number, number] = [0, 0];
   stylePoints: [number, number] = [0, 0];
-  private tunnelCand: { team: 0 | 1; opp: number; by: string } | null = null;
+  private tunnelCand: { team: 0 | 1; opp: number; by: Player } | null = null;
   scorers: MatchResult['scorers'] = [];
   readonly diff: [DiffParams, DiffParams];
 
@@ -204,12 +204,12 @@ export class MatchSim {
     this.score[team]++;
     const name = scorerP ? scorerP.def.name + (own ? ' (aut.)' : '') : '?';
     this.scorers.push({ team, name, time: this.elapsed });
-    this.events.push({ type: 'goal', team, scorer: name, x: b.x, y: b.y, own });
+    this.events.push({ type: 'goal', team, scorer: name, x: b.x, y: b.y, own, idx: scorerP ? scorerP.idx : -1 });
     this.tunnelCand = null;
     if (!own && scorerP && b.shotFrom) {
       const gx = team === 0 ? this.W : 0;
-      if (Math.abs(gx - b.shotFrom.x) > 330) this.trick('lontano', team, b.x, b.y, scorerP.def.name);
-      else if (b.banked) this.trick('sponda', team, b.x, b.y, scorerP.def.name);
+      if (Math.abs(gx - b.shotFrom.x) > 330) this.trick('lontano', scorerP, b.x, b.y);
+      else if (b.banked) this.trick('sponda', scorerP, b.x, b.y);
     }
     this.phase = 'goal';
     this.phaseT = 3.2;
@@ -426,7 +426,7 @@ export class MatchSim {
         } else {
           // nessun compagno: lancio in avanti
           this.kickBall(h, dir, 300, 40, 0);
-          this.events.push({ type: 'pass', x: h.x, y: h.y, team: h.team });
+          this.events.push({ type: 'pass', x: h.x, y: h.y, team: h.team, idx: h.idx });
         }
       }
     } else {
@@ -603,7 +603,7 @@ export class MatchSim {
     b.superShot = superShot;
     b.isShot = true;
     this.stats.shots[team]++;
-    this.events.push({ type: 'shot', x: p.x, y: p.y, power, team, superShot, fire });
+    this.events.push({ type: 'shot', x: p.x, y: p.y, power, team, superShot, fire, idx: p.idx });
   }
 
   pass(p: Player, target: Player) {
@@ -619,7 +619,7 @@ export class MatchSim {
     this.kickBall(p, dir, lob ? speed * 0.85 : speed, lob, 0);
     b.passTarget = target;
     this.stats.passes[p.team]++;
-    this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team });
+    this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team, idx: p.idx });
   }
 
   addSuper(team: 0 | 1, amount: number) {
@@ -769,7 +769,7 @@ export class MatchSim {
       if (dist(p, b) < 11 || dist(p, owner) < 12) {
         const ratio = p.def.stats.tackle / (owner.def.stats.control + 0.2);
         const won = this.rng.chance(clamp(0.55 + ratio * 0.3, 0.4, 0.95));
-        this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team });
+        this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team, idx: p.idx });
         if (!won && this.cfg.fouls && dist(p, owner) < 12) {
           this.foul(p, owner);
           return;
@@ -819,7 +819,7 @@ export class MatchSim {
         p.holdT = 0;
         owner.pickupCd = 0.7;
         owner.setState('stun', 0.15);
-        this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team });
+        this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team, idx: p.idx });
         this.stats.tackles[p.team]++;
         this.addSuper(p.team, 0.1);
         return;
@@ -929,7 +929,7 @@ export class MatchSim {
       for (const o of this.teams[lt.team === 0 ? 1 : 0]) {
         if (o.isGK || o.out > 0) continue;
         if (Math.abs(b.x - o.x) < 3 && Math.abs(b.y - o.y) < 3) {
-          this.tunnelCand = { team: lt.team, opp: o.id, by: lt.def.name };
+          this.tunnelCand = { team: lt.team, opp: o.id, by: lt };
           o.pickupCd = Math.max(o.pickupCd, 0.25);
           break;
         }
@@ -1149,7 +1149,7 @@ export class MatchSim {
     // tunnel riuscito: la palla è passata tra le gambe e la riprende la stessa squadra
     const tc = this.tunnelCand;
     this.tunnelCand = null;
-    if (tc && tc.team === p.team) this.trick('tunnel', p.team, b.x, b.y, tc.by);
+    if (tc && tc.team === p.team) this.trick('tunnel', tc.by, b.x, b.y);
     p.dribCand = -1;
     b.owner = p;
     b.lastTouch = p;
@@ -1192,7 +1192,7 @@ export class MatchSim {
       const canCatch = !b.fire && !b.superShot && s < 330 * kp;
       if (canCatch) {
         this.keeperCatch(gk);
-        this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team });
+        this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team, idx: gk.idx });
       } else {
         // respinta
         const out = this.dirOf(gk.team);
@@ -1208,7 +1208,7 @@ export class MatchSim {
         b.spin = 0;
         b.passTarget = null;
         gk.kickCd = 0.4;
-        this.events.push({ type: 'save', x: b.x, y: b.y, catch: false, team: gk.team });
+        this.events.push({ type: 'save', x: b.x, y: b.y, catch: false, team: gk.team, idx: gk.idx });
       }
       return;
     }
@@ -1240,11 +1240,13 @@ export class MatchSim {
   }
 
   // ---------- stile ----------
-  private trick(kind: 'dribbling' | 'tunnel' | 'lontano' | 'sponda', team: 0 | 1, x: number, y: number, name: string) {
+  private trick(kind: 'dribbling' | 'tunnel' | 'lontano' | 'sponda', by: Player, x: number, y: number) {
+    const team = by.team;
+    const name = by.def.name;
     const pts = kind === 'dribbling' ? 1 : 2;
     this.stylePoints[team] += pts;
     this.style[team] += pts * 0.12;
-    this.events.push({ type: 'trick', kind, team, x, y, name });
+    this.events.push({ type: 'trick', kind, team, x, y, name, idx: by.idx });
     if (this.style[team] >= 1) {
       this.style[team] = 0;
       this.addSuper(team, 0.5);
@@ -1263,7 +1265,7 @@ export class MatchSim {
       const d = dist(o, p);
       if (ahead < -6 && d > 16 && d < 40) {
         p.dribCand = -2; // uno per possesso
-        this.trick('dribbling', p.team, p.x, p.y, p.def.name);
+        this.trick('dribbling', p, p.x, p.y);
       } else if (d > 60) p.dribCand = -1;
       return;
     }
@@ -1294,7 +1296,7 @@ export class MatchSim {
     if (card === 'yellow') by.yellows++;
     const injury = this.rng.chance(behind ? 0.3 : 0.12);
     if (injury) victim.injured = true;
-    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, victim: victim.def.name, card, injury });
+    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, byIdx: by.idx, victim: victim.def.name, card, injury });
     this.events.push({ type: 'whistle', kind: 'kickoff' });
     if (card === 'red') {
       by.out = 30;
