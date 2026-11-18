@@ -7,6 +7,7 @@ import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
 import { teamById } from '../data/teams';
+import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
 
 interface ReportLine {
   text: string;
@@ -108,6 +109,32 @@ export class ResultScene extends Phaser.Scene {
         next: {
           label: 'CONTINUA',
           go: (s) => backToScene(s, 'story', { lines: rep.success ? step.win : step.lose, step: md.step, then: 'career' }),
+        },
+      };
+    }
+    if (d.launch.mode === 'conquista') {
+      const q = load().conquista;
+      if (!q || q.step !== md.step || q.finished) return undefined;
+      const idx = q.step;
+      const rep = applyConquistaResult(q, d);
+      save((s) => (s.conquista = q));
+      const city = rep.city;
+      const lines: ReportLine[] = [
+        { text: `TAPPA ${idx + 1} · ${city.name}`, color: '#8a8fb0' },
+        { text: CQ_GOAL_TEXT[city.goal], ok: rep.success },
+        { text: `Gol del capitano: ${rep.captainGoals}`, color: '#ffffff' },
+      ];
+      if (rep.success && idx < CITIES.length - 1) lines.push({ text: `Ricordo: ${city.souvenir.name}`, color: '#ff7ab8' });
+      return {
+        title: rep.finished ? 'COPPA VINTA!' : rep.success ? `${city.name} CONQUISTATA!` : 'NON ANCORA...',
+        titleColor: rep.success ? '#5be37d' : '#ff5a5a',
+        lines,
+        retry: false,
+        next: {
+          label: 'CONTINUA',
+          go: (s) => backToScene(s, 'story', {
+            lines: rep.success ? city.win : city.lose, step: idx, then: 'conquista', saga: 'conquista', celebrate: rep.success ? idx : undefined,
+          }),
         },
       };
     }

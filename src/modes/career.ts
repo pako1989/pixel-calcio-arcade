@@ -414,11 +414,11 @@ export interface CastMember {
   def: PlayerDef;
 }
 
-function npcTeam(name: string, shirt: number, shirt2: number, pattern: TeamDef['pattern'] = 'plain'): TeamDef {
+export function npcTeam(name: string, shirt: number, shirt2: number, pattern: TeamDef['pattern'] = 'plain'): TeamDef {
   return { id: 'npc', name, short: 'NPC', colors: { shirt, shirt2, shorts: 0x2b2b3b, socks: 0x2b2b3b, gk: shirt }, pattern, players: [], stars: 1 };
 }
 
-function npc(name: string, number: number, look: PlayerDef['look']): PlayerDef {
+export function npc(name: string, number: number, look: PlayerDef['look']): PlayerDef {
   return { name, number, role: 'MID', look, stats: { speed: 1, shot: 1, pass: 1, tackle: 1, control: 1, keeping: 1 } };
 }
 
