@@ -1,0 +1,678 @@
+import Phaser from 'phaser';
+import { MatchSim } from '../sim/match';
+import type { Player } from '../sim/entities';
+import type { SimEvent } from '../sim/entities';
+import { chooseHumanPassTarget } from '../sim/ai';
+import { drawCrowd, drawGoals, drawPitch, MARGIN, THEMES, Z_SCALE, BAR_H } from '../gfx/pitchArt';
+import { GOAL_DEPTH } from '../sim/match';
+import { FRAME, frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
+import { sfx } from '../audio/sfx';
+import { Controls } from '../input/controls';
+import type { MatchLaunch } from '../modes/modes';
+import { demoLaunch } from './demo';
+
+interface PSprite {
+  p: Player;
+  spr: Phaser.GameObjects.Sprite;
+  shadow: Phaser.GameObjects.Image;
+}
+
+export interface HudMessage {
+  text: string;
+  sub?: string;
+  color?: string;
+  big?: boolean;
+  ms?: number;
+}
+
+const STEP = 1 / 60;
+
+export class MatchScene extends Phaser.Scene {
+  sim!: MatchSim;
+  launch!: MatchLaunch;
+  ctrl = new Controls();
+  private ps: PSprite[] = [];
+  private ball!: Phaser.GameObjects.Sprite;
+  private ballShadow!: Phaser.GameObjects.Image;
+  private marker!: Phaser.GameObjects.Image;
+  private ring!: Phaser.GameObjects.Image;
+  private passRing!: Phaser.GameObjects.Image;
+  private chargeG!: Phaser.GameObjects.Graphics;
+  private wallG!: Phaser.GameObjects.Graphics;
+  private crowdA?: Phaser.GameObjects.Image;
+  private crowdB?: Phaser.GameObjects.Image;
+  private crowdT = 0;
+  private excite = 0;
+  private puSprites = new Map<number, { icon: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image }>();
+  private acc = 0;
+  private timeScale = 1;
+  private hitStop = 0;
+  private slowT = 0;
+  private endT = 0;
+  private camPt = { x: 0, y: 0 };
+  private fx!: {
+    dust: Phaser.GameObjects.Particles.ParticleEmitter;
+    spark: Phaser.GameObjects.Particles.ParticleEmitter;
+    fire: Phaser.GameObjects.Particles.ParticleEmitter;
+    confetti: Phaser.GameObjects.Particles.ParticleEmitter;
+    stars: Phaser.GameObjects.Particles.ParticleEmitter;
+    weather?: Phaser.GameObjects.Particles.ParticleEmitter;
+  };
+  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private nightOverlay?: Phaser.GameObjects.Rectangle;
+  private vignette?: Phaser.GameObjects.Image;
+  private demoT = 0;
+  finished = false;
+  private baseZoom = 1;
+
+  constructor() {
+    super('match');
+  }
+
+  init(data: MatchLaunch) {
+    this.launch = data;
+    this.ps = [];
+    this.puSprites = new Map();
+    this.acc = 0;
+    this.timeScale = 1;
+    this.hitStop = 0;
+    this.slowT = 0;
+    this.endT = 0;
+    this.excite = 0;
+    this.demoT = 0;
+    this.finished = false;
+    this.vignette = undefined;
+    this.nightOverlay = undefined;
+    this.crowdA = this.crowdB = undefined;
+    this.ctrl.reset();
+  }
+
+  create() {
+    const cfg = this.launch.config;
+    this.sim = new MatchSim(cfg);
+    const sim = this.sim;
+    const pitch = cfg.pitch;
+    const th = THEMES[pitch.id];
+    const W = sim.W;
+    const H = sim.H;
+
+    // --- grafica del campo ---
+    const pitchKey = `pitch_${pitch.id}`;
+    if (!this.textures.exists(pitchKey)) drawPitch(this, pitch, pitchKey);
+    this.add.image(-MARGIN, -MARGIN, pitchKey).setOrigin(0).setDepth(0);
+    drawCrowd(this, pitch, cfg.home.colors.shirt, cfg.away.colors.shirt, 'crowdA', 'crowdB');
+    this.crowdA = this.add.image(-MARGIN, -MARGIN, 'crowdA').setOrigin(0).setDepth(1);
+    this.crowdB = this.add.image(-MARGIN, -MARGIN, 'crowdB').setOrigin(0).setDepth(1).setVisible(false);
+    const gk = `goal_${pitch.id}`;
+    if (!this.textures.exists(gk + '_b')) drawGoals(this, pitch, gk + '_b', gk + '_f');
+    const gy = sim.goalTop - BAR_H - 2;
+    this.add.image(-GOAL_DEPTH - 2, gy, gk + '_b').setOrigin(0).setDepth(2);
+    this.add.image(W - 2, gy, gk + '_b').setOrigin(0).setDepth(2).setFlipX(true);
+    this.add.image(-GOAL_DEPTH - 2, gy, gk + '_f').setOrigin(0).setDepth(20);
+    this.add.image(W - 2, gy, gk + '_f').setOrigin(0).setDepth(20).setFlipX(true);
+    this.wallG = this.add.graphics().setDepth(19);
+
+    // --- giocatori ---
+    for (const p of sim.players) {
+      const team = p.team === 0 ? cfg.home : cfg.away;
+      const key = `pl_${p.team}_${p.idx}`;
+      makePlayerSheet(this, key, team, p.def);
+      const shadow = this.add.image(p.x, p.y, 'shadow').setAlpha(0.28).setDepth(3);
+      const spr = this.add.sprite(p.x, p.y, key, 0).setOrigin(0.5, 22 / FRAME);
+      this.ps.push({ p, spr, shadow });
+    }
+    this.ballShadow = this.add.image(0, 0, 'ballShadow').setAlpha(0.35).setDepth(3);
+    this.ball = this.add.sprite(0, 0, 'ball', 0).setOrigin(0.5, 0.75);
+
+    this.ring = this.add.image(0, 0, 'ring').setTint(0xffd23f).setAlpha(0.9).setDepth(3.5);
+    this.passRing = this.add.image(0, 0, 'ring').setTint(0xffffff).setAlpha(0.45).setDepth(3.5);
+    this.marker = this.add.image(0, 0, 'marker').setTint(0xffd23f).setDepth(26);
+    this.chargeG = this.add.graphics().setDepth(27);
+    const hasHuman = cfg.humanTeam !== null;
+    this.ring.setVisible(hasHuman);
+    this.marker.setVisible(hasHuman);
+    this.passRing.setVisible(false);
+
+    // --- particelle ---
+    const groundTint = pitch.id === 'spiaggia' ? 0xd9bd7c : pitch.id === 'neve' ? 0xffffff : pitch.id === 'quartiere' ? 0x9a9ca2 : 0x6fbf5a;
+    this.fx = {
+      dust: this.add.particles(0, 0, 'px2', {
+        lifespan: { min: 250, max: 520 },
+        speed: { min: 15, max: 55 },
+        scale: { start: 1, end: 0.2 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [groundTint, Phaser.Display.Color.ValueToColor(groundTint).darken(15).color],
+        gravityY: -10,
+        emitting: false,
+      }).setDepth(16),
+      spark: this.add.particles(0, 0, 'px2', {
+        lifespan: { min: 150, max: 380 },
+        speed: { min: 60, max: 180 },
+        scale: { start: 1, end: 0 },
+        tint: [0xffffff, 0xfff3a0],
+        blendMode: 'ADD',
+        emitting: false,
+      }).setDepth(25),
+      fire: this.add.particles(0, 0, 'soft', {
+        lifespan: { min: 180, max: 360 },
+        speed: { min: 5, max: 30 },
+        scale: { start: 0.55, end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [0xfff1a0, 0xffb21e, 0xff5a1e, 0xe8381e],
+        blendMode: 'ADD',
+        emitting: false,
+      }).setDepth(24),
+      confetti: this.add.particles(0, 0, 'confetti', {
+        lifespan: 2600,
+        speedX: { min: -60, max: 60 },
+        speedY: { min: 20, max: 90 },
+        rotate: { min: 0, max: 360 },
+        gravityY: 25,
+        tint: [0xffd23f, 0xff5a5a, 0x3fd0ff, 0x5be37d, 0xffffff, 0xff7ab8],
+        emitting: false,
+      }).setDepth(28),
+      stars: this.add.particles(0, 0, 'px2', {
+        lifespan: 500,
+        speed: { min: 40, max: 120 },
+        scale: { start: 1.5, end: 0 },
+        tint: [0xffd23f, 0xffffff],
+        blendMode: 'ADD',
+        emitting: false,
+      }).setDepth(25),
+    };
+    if (pitch.id === 'neve') {
+      this.fx.weather = this.add.particles(0, 0, 'px2', {
+        x: { min: 0, max: 900 },
+        y: -10,
+        lifespan: 5000,
+        speedY: { min: 18, max: 40 },
+        speedX: { min: -12, max: 6 },
+        scale: { min: 0.5, max: 1 },
+        alpha: { min: 0.6, max: 1 },
+        frequency: 40,
+      }).setDepth(28).setScrollFactor(0);
+    } else if (pitch.id === 'tetto') {
+      this.fx.weather = this.add.particles(0, 0, 'px2', {
+        x: { min: -100, max: 900 },
+        y: { min: -10, max: 380 },
+        lifespan: 2200,
+        scale: 0.5,
+        alpha: { start: 0, end: 0.6, ease: 'Sine.easeInOut' },
+        tint: [0xbfd8ff, 0x8fa8d8],
+        frequency: 70,
+      }).setDepth(28).setScrollFactor(0);
+    }
+
+    // --- luci ---
+    if (th.night) {
+      this.nightOverlay = this.add.rectangle(0, 0, 10, 10, 0x0a0d26, 0.32).setOrigin(0).setScrollFactor(0).setDepth(23);
+      for (const [x, y] of [
+        [W * 0.25, -20],
+        [W * 0.75, -20],
+        [W * 0.25, H + 20],
+        [W * 0.75, H + 20],
+      ]) {
+        this.add.image(x, y, 'glow').setScale(9, 6).setAlpha(0.22).setBlendMode('ADD').setDepth(23.5).setTint(0xbfe6ff);
+      }
+    } else if (pitch.id === 'stadio') {
+      for (const [x, y] of [
+        [-40, -40],
+        [W + 40, -40],
+        [-40, H + 40],
+        [W + 40, H + 40],
+      ]) {
+        this.add.image(x, y, 'glow').setScale(7).setAlpha(0.16).setBlendMode('ADD').setDepth(23.5);
+      }
+    }
+    this.makeVignette();
+
+    // --- camera ---
+    const cam = this.cameras.main;
+    cam.setBounds(-MARGIN + 20, -MARGIN + 10, W + MARGIN * 2 - 40, H + MARGIN * 2 - 20);
+    cam.setRoundPixels(true);
+    cam.setZoom(this.launch.demo ? 1 : 1.3);
+    this.baseZoom = cam.zoom;
+    this.camPt = { x: W / 2, y: H / 2 };
+    cam.centerOn(W / 2, H / 2);
+    if (!this.launch.demo) cam.fadeIn(300, 10, 8, 20);
+
+    // --- tastiera ---
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    this.keys = this.input.keyboard!.addKeys({
+      up: K.UP, down: K.DOWN, left: K.LEFT, right: K.RIGHT,
+      w: K.W, a: K.A, s: K.S, d: K.D,
+      shoot: K.J, shoot2: K.X, shoot3: K.SPACE,
+      pass: K.K, pass2: K.Z,
+      sprint: K.L, sprint2: K.SHIFT, sprint3: K.C,
+    }) as Record<string, Phaser.Input.Keyboard.Key>;
+
+    this.scale.on('resize', this.onResize, this);
+    this.events.once('shutdown', () => {
+      this.scale.off('resize', this.onResize, this);
+      sfx.stopCrowd();
+    });
+
+    if (!this.launch.demo) {
+      this.scene.launch('hud');
+      sfx.startCrowd(th.crowd);
+    }
+    this.syncSprites(0);
+  }
+
+  private onResize() {
+    this.makeVignette();
+  }
+
+  private makeVignette() {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const key = `vig_${w}x${h}`;
+    if (!this.textures.exists(key)) {
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext('2d')!;
+      const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, w * 0.62);
+      g.addColorStop(0, 'rgba(10,6,24,0)');
+      g.addColorStop(1, 'rgba(10,6,24,0.55)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      this.textures.addCanvas(key, cv);
+    }
+    if (this.vignette) this.vignette.setTexture(key);
+    else this.vignette = this.add.image(0, 0, key).setOrigin(0).setScrollFactor(0).setDepth(29);
+    this.nightOverlay?.setSize(w, h);
+  }
+
+  msg(m: HudMessage) {
+    this.events.emit('msg', m);
+  }
+
+  private readKeyboard() {
+    const k = this.keys;
+    const c = this.ctrl;
+    let kx = 0;
+    let ky = 0;
+    if (k.left.isDown || k.a.isDown) kx -= 1;
+    if (k.right.isDown || k.d.isDown) kx += 1;
+    if (k.up.isDown || k.w.isDown) ky -= 1;
+    if (k.down.isDown || k.s.isDown) ky += 1;
+    const kl = Math.hypot(kx, ky) || 1;
+    if (kx || ky) {
+      c.mx = kx / kl;
+      c.my = ky / kl;
+    } else {
+      c.mx = c.tMx;
+      c.my = c.tMy;
+    }
+    c.shoot = c.tShoot || k.shoot.isDown || k.shoot2.isDown || k.shoot3.isDown;
+    c.pass = c.tPass || k.pass.isDown || k.pass2.isDown;
+    c.sprint = c.tSprint || k.sprint.isDown || k.sprint2.isDown || k.sprint3.isDown;
+  }
+
+  update(_t: number, deltaMs: number) {
+    const dt = Math.min(deltaMs / 1000, 0.1);
+    this.readKeyboard();
+    // rallentatore e "hit stop"
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+    } else {
+      if (this.slowT > 0) {
+        this.slowT -= dt;
+        this.timeScale = this.slowT > 0 ? 0.35 : 1;
+      }
+      this.acc += dt * this.timeScale;
+      let n = 0;
+      while (this.acc >= STEP && n < 5) {
+        this.sim.update(STEP, this.launch.demo ? undefined : this.ctrl);
+        this.acc -= STEP;
+        n++;
+        this.handleEvents();
+      }
+    }
+    this.syncSprites(dt);
+    this.updateCamera(dt);
+    this.updateCrowd(dt);
+
+    if (this.sim.phase === 'end') {
+      this.endT += dt;
+      if (this.endT > 2.6 && !this.finished) {
+        this.finished = true;
+        if (this.launch.demo) this.scene.restart(demoLaunch());
+        else {
+          this.scene.stop('hud');
+          this.scene.launch('result', { launch: this.launch, result: this.sim.result });
+        }
+      }
+    }
+    if (this.launch.demo) {
+      this.demoT += dt;
+      if (this.demoT > 75 && this.sim.phase === 'kickoff') this.scene.restart(demoLaunch());
+    }
+  }
+
+  private handleEvents() {
+    const sim = this.sim;
+    const demo = !!this.launch.demo;
+    const human = sim.humanTeam;
+    for (const e of sim.events) this.onEvent(e, demo, human);
+    sim.events.length = 0;
+  }
+
+  private onEvent(e: SimEvent, demo: boolean, human: 0 | 1 | null) {
+    const cam = this.cameras.main;
+    const quiet = demo; // nella demo niente suoni
+    const teamName = (t: 0 | 1) => (t === 0 ? this.launch.config.home.name : this.launch.config.away.name);
+    switch (e.type) {
+      case 'kick':
+        if (!quiet) sfx.kick(e.power);
+        this.fx.dust.explode(5, e.x, e.y);
+        break;
+      case 'pass':
+        if (!quiet) sfx.pass();
+        this.fx.dust.explode(3, e.x, e.y);
+        break;
+      case 'shot': {
+        if (!quiet) e.superShot ? sfx.superShot() : sfx.kick(e.power);
+        this.fx.dust.explode(8, e.x, e.y);
+        this.fx.spark.explode(e.superShot ? 24 : Math.round(4 + e.power * 8), this.sim.ball.x, this.sim.ball.y - 2);
+        if (e.power > 0.8 || e.superShot || e.fire) {
+          cam.shake(e.superShot ? 260 : 110, e.superShot ? 0.012 : 0.004);
+          this.hitStop = e.superShot ? 0.12 : 0.045;
+        }
+        if (e.superShot) {
+          cam.flash(120, 255, 240, 200);
+          if (!demo) this.msg({ text: 'SUPER TIRO!', color: '#ffd23f' });
+        }
+        this.excite = Math.max(this.excite, 0.6);
+        break;
+      }
+      case 'goal': {
+        if (!quiet) sfx.goal();
+        this.excite = 1;
+        this.slowT = 0.9;
+        cam.shake(380, 0.012);
+        cam.flash(160, 255, 255, 255);
+        const b = this.sim.ball;
+        this.fx.spark.explode(30, b.x, b.y - 6);
+        this.fx.stars.explode(20, b.x, b.y - 10);
+        const w = cam.worldView;
+        for (let i = 0; i < 8; i++) this.fx.confetti.explode(14, w.x + Math.random() * w.width, w.y - 4);
+        this.tweens.add({ targets: cam, zoom: this.baseZoom * 1.18, duration: 380, yoyo: true, hold: 600, ease: 'Sine.easeInOut' });
+        if (!demo) {
+          const mine = human === e.team;
+          this.msg({
+            text: 'GOL!',
+            sub: e.scorer,
+            color: human === null || mine ? '#ffd23f' : '#ff5a5a',
+            big: true,
+            ms: 2600,
+          });
+          if (navigator.vibrate) navigator.vibrate(mine ? [60, 40, 120] : 80);
+        }
+        break;
+      }
+      case 'save':
+        if (!quiet) sfx.save();
+        this.fx.stars.explode(12, e.x, e.y - 6);
+        cam.shake(120, 0.005);
+        this.excite = Math.max(this.excite, 0.7);
+        if (!demo) this.msg({ text: e.catch ? 'PRESA!' : 'PARATA!', color: '#3fd0ff' });
+        break;
+      case 'post':
+        if (!quiet) sfx.post();
+        cam.shake(140, 0.006);
+        this.fx.spark.explode(10, e.x, e.y - BAR_H / 2);
+        this.excite = Math.max(this.excite, 0.8);
+        if (!demo) this.msg({ text: 'PALO!', color: '#ffffff' });
+        break;
+      case 'wall':
+        if (!quiet) sfx.wall(Math.min(1, e.power / 400));
+        if (e.power > 250) cam.shake(70, 0.003);
+        this.fx.dust.explode(4, e.x, e.y);
+        break;
+      case 'bounce':
+        if (!quiet) sfx.bounce(Math.min(0.4, e.power / 300));
+        break;
+      case 'tackle':
+        if (!quiet) sfx.tackle();
+        this.fx.dust.explode(10, e.x, e.y);
+        break;
+      case 'slide':
+        this.fx.dust.explode(6, e.x, e.y);
+        break;
+      case 'steal':
+        if (!quiet) sfx.pass();
+        break;
+      case 'whistle':
+        if (!quiet) {
+          if (e.kind === 'end') sfx.whistle(3, true);
+          else if (e.kind === 'kickoff') sfx.whistle(1);
+          else if (e.kind === 'golden') sfx.whistle(2);
+        }
+        if (!demo) {
+          if (e.kind === 'golden') this.msg({ text: 'GOLDEN GOL!', sub: 'Chi segna vince', color: '#ffd23f', big: true, ms: 2200 });
+          if (e.kind === 'end') this.msg({ text: 'FINE!', color: '#ffffff', big: true, ms: 2400 });
+        }
+        break;
+      case 'powerup': {
+        if (!quiet) sfx.powerup();
+        this.fx.stars.explode(16, e.x, e.y);
+        const names = { fuoco: 'TIRO DI FUOCO', turbo: 'TURBO', muro: 'MURO IN PORTA' };
+        if (!demo) this.msg({ text: names[e.kind] + '!', sub: teamName(e.team), color: human === null || human === e.team ? '#5be37d' : '#ff9a5a' });
+        break;
+      }
+      case 'powerupSpawn':
+        this.fx.spark.explode(8, e.x, e.y);
+        break;
+      case 'superReady':
+        if (!quiet && e.team === human) sfx.superReady();
+        if (!demo && e.team === human) this.msg({ text: 'SUPER PRONTO!', sub: 'Tiro caricato al massimo', color: '#ffd23f' });
+        break;
+      case 'switch':
+        break;
+    }
+  }
+
+  private dirOf(p: Player): { dir: Dir; flip: boolean } {
+    const c = Math.cos(p.facing);
+    const s = Math.sin(p.facing);
+    if (Math.abs(c) > 0.55) return { dir: 'side', flip: c < 0 };
+    return { dir: s > 0 ? 'down' : 'up', flip: false };
+  }
+
+  private syncSprites(dt: number) {
+    const sim = this.sim;
+    const t = this.time.now / 1000;
+    for (const { p, spr, shadow } of this.ps) {
+      const { dir, flip } = this.dirOf(p);
+      let pose: Pose = 'idle';
+      let d: Dir = dir;
+      let f = flip;
+      let rot = 0;
+      let yOff = 0;
+      const speed = Math.hypot(p.vx, p.vy);
+      switch (p.state) {
+        case 'slide':
+        case 'stun':
+          if (p.state === 'slide' || p.stateT < 0.25) {
+            pose = 'slide';
+            d = 'side';
+            f = Math.cos(p.facing) < 0;
+          } else pose = 'idle';
+          break;
+        case 'dive':
+          pose = 'dive';
+          d = 'side';
+          f = false;
+          rot = p.vy < 0 || p.facing < 0 ? -Math.PI / 2 : Math.PI / 2;
+          break;
+        case 'kick':
+          pose = 'kick';
+          break;
+        case 'celebrate':
+          pose = 'celebrate';
+          d = 'down';
+          f = false;
+          yOff = -Math.abs(Math.sin(t * 9 + p.id)) * 5;
+          if (speed > 30) {
+            pose = (`run${Math.floor(p.runPhase) % 4}` as Pose);
+            d = dir;
+            f = flip;
+            yOff = 0;
+          }
+          break;
+        case 'sad':
+          pose = 'sad';
+          d = 'down';
+          f = false;
+          break;
+        default:
+          if (speed > 14) pose = `run${Math.floor(p.runPhase) % 4}` as Pose;
+      }
+      spr.setFrame(frameIndex(d, pose));
+      spr.setFlipX(f);
+      spr.setRotation(rot);
+      if (rot !== 0) spr.setOrigin(0.5, 0.5);
+      else spr.setOrigin(0.5, 22 / FRAME);
+      spr.setPosition(Math.round(p.x), Math.round(p.y + yOff + (rot !== 0 ? -6 : 0)));
+      spr.setDepth(10 + p.y * 0.01);
+      shadow.setPosition(Math.round(p.x + 1), Math.round(p.y + 1));
+      shadow.setScale(pose === 'slide' || pose === 'dive' ? 1.5 : 1, 1);
+      // scia con turbo o scatto
+      if (p.sprinting && speed > 120 && Math.random() < dt * 14) this.fx.dust.explode(1, p.x - p.vx * 0.04, p.y);
+      if (sim.turbo[p.team] > 0 && speed > 80 && Math.random() < dt * 20) this.fx.spark.explode(1, p.x, p.y - 8);
+    }
+
+    // palla
+    const b = sim.ball;
+    const by = b.y - b.z * Z_SCALE;
+    this.ball.setPosition(Math.round(b.x), Math.round(by));
+    this.ball.setFrame(Math.floor(b.roll / 3) % 4);
+    this.ball.setScale(1 + Math.min(0.5, b.z / 90));
+    this.ball.setDepth(10 + b.y * 0.01 + 0.005);
+    this.ballShadow.setPosition(Math.round(b.x + b.z * 0.12), Math.round(b.y + 1));
+    this.ballShadow.setAlpha(Math.max(0.1, 0.35 - b.z / 200));
+    if ((b.fire || b.superShot) && !b.owner) {
+      this.fx.fire.emitParticleAt(b.x, by, 2);
+      this.ball.setTint(b.superShot ? 0xfff0a0 : 0xffb070);
+    } else if (b.owner && sim.fireShot[b.owner.team]) {
+      if (Math.random() < 0.5) this.fx.fire.emitParticleAt(b.x, by - 2, 1);
+      this.ball.clearTint();
+    } else if (b.owner && sim.superBar[b.owner.team] >= 1 && Math.random() < 0.3) {
+      this.fx.spark.emitParticleAt(b.x, by - 2, 1);
+      this.ball.clearTint();
+    } else this.ball.clearTint();
+
+    // giocatore controllato
+    const h = sim.human;
+    if (h) {
+      const bob = Math.sin(t * 6) * 1.5;
+      this.marker.setPosition(Math.round(h.x), Math.round(h.y - 30 + bob));
+      this.ring.setPosition(Math.round(h.x), Math.round(h.y + 1));
+      const hasBall = b.owner === h;
+      // destinatario del passaggio
+      if (hasBall && !sim.charging) {
+        const mag = Math.hypot(this.ctrl.mx, this.ctrl.my);
+        const dir = mag > 0.15 ? Math.atan2(this.ctrl.my, this.ctrl.mx) : h.facing;
+        const tgt = chooseHumanPassTarget(sim, h, dir);
+        this.passRing.setVisible(!!tgt);
+        if (tgt) this.passRing.setPosition(Math.round(tgt.x), Math.round(tgt.y + 1));
+      } else this.passRing.setVisible(false);
+      // barra di carica
+      this.chargeG.clear();
+      if (sim.charging) {
+        const w = 22;
+        const x = Math.round(h.x - w / 2);
+        const y = Math.round(h.y - 40);
+        const c = sim.charge;
+        const col = c < 0.5 ? 0x5be37d : c < 0.85 ? 0xffd23f : sim.superBar[h.team] >= 1 ? 0xff3fa4 : 0xff5a3a;
+        this.chargeG.fillStyle(0x1a1222).fillRect(x - 1, y - 1, w + 2, 5);
+        this.chargeG.fillStyle(0x3a3d55).fillRect(x, y, w, 3);
+        this.chargeG.fillStyle(col).fillRect(x, y, Math.round(w * c), 3);
+      }
+    }
+
+    // power-up
+    const alive = new Set<number>();
+    for (const pu of sim.powerUps) {
+      alive.add(pu.id);
+      let s = this.puSprites.get(pu.id);
+      if (!s) {
+        const glow = this.add.image(pu.x, pu.y - 10, 'glow').setBlendMode('ADD').setScale(0.8).setDepth(9);
+        glow.setTint(pu.kind === 'fuoco' ? 0xff7a1a : pu.kind === 'turbo' ? 0xffe03a : 0xff9a7a);
+        const shadow = this.add.image(pu.x, pu.y + 1, 'shadow').setAlpha(0.25).setScale(0.8).setDepth(3);
+        const icon = this.add.image(pu.x, pu.y - 10, `pu_${pu.kind}`).setDepth(10 + pu.y * 0.01);
+        s = { icon, glow, shadow };
+        this.puSprites.set(pu.id, s);
+        icon.setScale(0);
+        this.tweens.add({ targets: icon, scale: 1, duration: 300, ease: 'Back.easeOut' });
+      }
+      const fl = Math.sin(t * 4 + pu.id) * 2;
+      s.icon.setY(Math.round(pu.y - 10 + fl));
+      s.glow.setY(pu.y - 10 + fl).setAlpha(0.35 + Math.sin(t * 6) * 0.1);
+      const blink = pu.life < 3 && Math.floor(t * 8) % 2 === 0;
+      s.icon.setVisible(!blink);
+    }
+    for (const [id, s] of this.puSprites) {
+      if (!alive.has(id)) {
+        s.icon.destroy();
+        s.glow.destroy();
+        s.shadow.destroy();
+        this.puSprites.delete(id);
+      }
+    }
+
+    // muro in porta
+    this.wallG.clear();
+    for (const team of [0, 1] as const) {
+      if (sim.wall[team] <= 0) continue;
+      const x = team === 0 ? 6 : sim.W - 14;
+      const y0 = sim.goalTop - 14;
+      const hgt = sim.pitch.goalWidth + 28;
+      const zh = 22;
+      const blink = sim.wall[team] < 2 && Math.floor(t * 10) % 2 === 0;
+      if (blink) continue;
+      this.wallG.fillStyle(0x000000, 0.25).fillRect(x + 2, y0 + 2, 8, hgt);
+      for (let yy = 0; yy < hgt + zh; yy += 4) {
+        const row = Math.floor(yy / 4);
+        this.wallG.fillStyle(row % 2 ? 0xc4552e : 0xb04a28).fillRect(x, y0 - zh + yy, 8, 3);
+        this.wallG.fillStyle(0xe9d8b5).fillRect(x, y0 - zh + yy + 3, 8, 1);
+      }
+      this.wallG.fillStyle(0xffffff, 0.3).fillRect(x, y0 - zh, 2, hgt + zh);
+    }
+  }
+
+  private updateCamera(dt: number) {
+    const sim = this.sim;
+    const b = sim.ball;
+    const cam = this.cameras.main;
+    let tx = b.x + b.vx * 0.22;
+    let ty = b.y - b.z * Z_SCALE + b.vy * 0.15;
+    const h = sim.human;
+    if (h && sim.phase === 'play') {
+      tx = tx * 0.8 + h.x * 0.2;
+      ty = ty * 0.8 + h.y * 0.2;
+    }
+    const k = Math.min(1, dt * (sim.phase === 'goal' ? 2 : 4.5));
+    this.camPt.x += (tx - this.camPt.x) * k;
+    this.camPt.y += (ty - this.camPt.y) * k;
+    cam.centerOn(this.camPt.x, this.camPt.y);
+  }
+
+  private updateCrowd(dt: number) {
+    if (!this.crowdA || !this.crowdB) return;
+    const b = this.sim.ball;
+    // tensione: palla vicino a una porta
+    const nearGoal = Math.min(b.x, this.sim.W - b.x) < 140 ? 0.35 : 0;
+    this.excite = Math.max(nearGoal, this.excite - dt * 0.25);
+    this.crowdT -= dt;
+    if (this.crowdT <= 0) {
+      this.crowdT = 0.55 - this.excite * 0.45;
+      const v = !this.crowdB.visible;
+      this.crowdB.setVisible(v);
+      this.crowdA.setVisible(!v);
+    }
+    sfx.crowdLevel(this.excite);
+  }
+}

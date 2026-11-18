@@ -1,14 +1,23 @@
 {
   "name": "pixel-calcio-arcade",
-  "version": "1.0.0",
-  "description": "Calcetto arcade mobile 100% offline con super tiri e collezione carte.",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Calcio arcade 2D in pixel art per telefono: 5 contro 5 contro la CPU.",
   "type": "module",
   "scripts": {
-    "dev": "node ../server.js",
-    "test": "node tests/tappa1.cjs && node tests/tappa2_match.cjs && node tests/tappa3_roster.cjs",
-    "lint": "node --check js/*.js"
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": ["soccer", "arcade", "pixel-art", "mobile-game", "pwa", "capacitor"],
-  "author": "Pasquale (pako1989)",
-  "license": "MIT"
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.3.0",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  }
 }
