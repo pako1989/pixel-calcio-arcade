@@ -117,4 +117,5 @@ export type SimEvent =
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }
   | { type: 'superReady'; team: 0 | 1 }
   | { type: 'switch'; id: number }
-  | { type: 'call'; id: number; x: number; y: number };
+  | { type: 'call'; id: number; x: number; y: number }
+  | { type: 'wave'; dir: 1 | -1 };

@@ -63,7 +63,7 @@ export class HudScene extends Phaser.Scene {
       this.goalT = txt(this, 0, 0, 'OBIETTIVO: ' + goal, 6, '#5be37d', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } });
     }
     if (cfg.pitch.wind) this.windT = txt(this, 0, 0, 'VENTO', 6, '#bfe6ff');
-    const cond = [cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '', cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '']
+    const cond = [cfg.pitch.slope ? 'PENDENZA' : '', cfg.pitch.waves ? 'ONDE' : '', cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '', cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '']
       .filter(Boolean)
       .join(' · ');
     if (cond) this.condT = txt(this, 0, 0, cond, 6, '#bfe6ff', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } }).setOrigin(0, 0.5);
@@ -141,6 +141,10 @@ export class HudScene extends Phaser.Scene {
 
   private onDown(p: Phaser.Input.Pointer) {
     sfx.unlock();
+    if (this.match.replaying) {
+      this.match.endReplay();
+      return;
+    }
     if (this.pauseLayer || !this.touch) return;
     const W = this.scale.width;
     // pulsanti

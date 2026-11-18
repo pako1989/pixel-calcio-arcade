@@ -3,7 +3,7 @@ import { MatchSim } from '../sim/match';
 import type { Player } from '../sim/entities';
 import type { SimEvent } from '../sim/entities';
 import { chooseHumanPassTarget } from '../sim/ai';
-import { drawCrowd, drawGoals, drawPitch, MARGIN, THEMES, Z_SCALE, BAR_H } from '../gfx/pitchArt';
+import { drawCrowd, drawGoals, drawObstacle, drawPitch, MARGIN, THEMES, Z_SCALE, BAR_H } from '../gfx/pitchArt';
 import { GOAL_DEPTH } from '../sim/match';
 import { FRAME, frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
 import { sfx } from '../audio/sfx';
@@ -29,6 +29,15 @@ export interface HudMessage {
 }
 
 const STEP = 1 / 60;
+
+/** Un fotogramma registrato per il replay: 9 valori per giocatore + la palla. */
+interface Snap {
+  p: Float32Array;
+  st: string[];
+  b: [number, number, number, number, number, number, number];
+}
+const REC_MAX = 330;
+const P_FIELDS = 9;
 
 export class MatchScene extends Phaser.Scene {
   sim!: MatchSim;
@@ -65,6 +74,12 @@ export class MatchScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private nightOverlay?: Phaser.GameObjects.Rectangle;
   private fog?: Phaser.GameObjects.Image;
+  private waveSheet?: Phaser.GameObjects.Image;
+  /** Registrazione degli ultimi secondi per il replay del gol. */
+  private rec: Snap[] = [];
+  private goalFrame = -1;
+  private replayIn = 0;
+  private replay?: { frames: Snap[]; head: number; live: Snap; layer: Phaser.GameObjects.Container };
   private fogWisps: Phaser.GameObjects.Image[] = [];
   private rainOn = false;
   private thunderT = 0;
@@ -96,6 +111,11 @@ export class MatchScene extends Phaser.Scene {
     this.vignette = undefined;
     this.nightOverlay = undefined;
     this.fog = undefined;
+    this.waveSheet = undefined;
+    this.rec = [];
+    this.goalFrame = -1;
+    this.replayIn = 0;
+    this.replay = undefined;
     this.fogWisps = [];
     this.rainOn = false;
     this.thunderT = 14 + Math.random() * 10;
@@ -131,6 +151,31 @@ export class MatchScene extends Phaser.Scene {
     this.add.image(-GOAL_DEPTH - 2, gy, gk + '_f').setOrigin(0).setDepth(20);
     this.add.image(W - 2, gy, gk + '_f').setOrigin(0).setDepth(20).setFlipX(true);
     this.wallG = this.add.graphics().setDepth(19);
+    // ostacoli (fontana, statua): ordinati in profondità come i giocatori
+    for (const [i, o] of (pitch.obstacles ?? []).entries()) {
+      const key = `obs_${o.kind}_${o.r}`;
+      drawObstacle(this, o.kind, o.r, key);
+      this.add.image(o.x, o.y + o.r * 0.55, key).setOrigin(0.5, 1).setDepth(10 + o.y * 0.01);
+      this.add.image(o.x + 3, o.y + 3, 'shadow').setScale((o.r * 2.2) / 14, 1.6).setAlpha(0.2).setDepth(3);
+      void i;
+    }
+    if (pitch.waves) {
+      if (!this.textures.exists('wavesheet')) {
+        const cv = document.createElement('canvas');
+        cv.width = 8;
+        cv.height = 64;
+        const c = cv.getContext('2d')!;
+        const gr = c.createLinearGradient(0, 0, 0, 64);
+        gr.addColorStop(0, 'rgba(120,190,240,0)');
+        gr.addColorStop(0.7, 'rgba(90,170,235,0.7)');
+        gr.addColorStop(0.92, 'rgba(255,255,255,0.9)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = gr;
+        c.fillRect(0, 0, 8, 64);
+        this.textures.addCanvas('wavesheet', cv);
+      }
+      this.waveSheet = this.add.image(W / 2, -100, 'wavesheet').setScale((W + 40) / 8, 3).setDepth(9).setVisible(false);
+    }
 
     // --- giocatori ---
     for (const p of sim.players) {
@@ -154,7 +199,7 @@ export class MatchScene extends Phaser.Scene {
     this.passRing.setVisible(false);
 
     // --- particelle ---
-    const groundTint = pitch.id === 'spiaggia' ? 0xd9bd7c : pitch.id === 'neve' ? 0xffffff : pitch.id === 'quartiere' ? 0x9a9ca2 : 0x6fbf5a;
+    const groundTint = pitch.id === 'spiaggia' ? 0xd9bd7c : pitch.id === 'neve' ? 0xffffff : pitch.id === 'quartiere' || pitch.id === 'piazza' ? 0x9a9ca2 : pitch.id === 'molo' ? 0xc89a6a : 0x6fbf5a;
     this.fx = {
       dust: this.add.particles(0, 0, 'px2', {
         lifespan: { min: 250, max: 520 },
@@ -376,6 +421,20 @@ export class MatchScene extends Phaser.Scene {
 
   private updateWeather(dt: number) {
     const b = this.sim.ball;
+    if (this.waveSheet) {
+      const w = this.sim.wave;
+      this.waveSheet.setVisible(w > 0);
+      if (w > 0) {
+        const H = this.sim.H;
+        const k = Math.min(1, w);
+        const dir = this.sim.waveDir;
+        // l'onda attraversa il campo e poi svanisce
+        this.waveSheet.setFlipY(dir < 0);
+        this.waveSheet.y = dir > 0 ? -90 + (H + 180) * k : H + 90 - (H + 180) * k;
+        this.waveSheet.setAlpha(Math.min(1, Math.sin(k * Math.PI) * 1.3));
+        if (this.fx.dust && Math.random() < dt * 30) this.fx.spark.explode(2, Math.random() * this.sim.W, this.waveSheet.y + (dir > 0 ? 50 : -50));
+      }
+    }
     if (this.fog) {
       // la "finestra" segue la palla con un po' di ritardo
       const tx = b.x;
@@ -454,8 +513,108 @@ export class MatchScene extends Phaser.Scene {
     c.sprint = c.tSprint || k.sprint.isDown || k.sprint2.isDown || k.sprint3.isDown;
   }
 
+  // ---------- replay ----------
+
+  private snap(): Snap {
+    const ps = this.sim.players;
+    const p = new Float32Array(ps.length * P_FIELDS);
+    const st: string[] = [];
+    ps.forEach((q, i) => {
+      p.set([q.x, q.y, q.vx, q.vy, q.facing, q.stateT, q.runPhase, q.sprinting ? 1 : 0, 0], i * P_FIELDS);
+      st.push(q.state);
+    });
+    const b = this.sim.ball;
+    return { p, st, b: [b.x, b.y, b.z, b.roll, b.fire ? 1 : 0, b.superShot ? 1 : 0, b.owner ? b.owner.id : -1] };
+  }
+
+  private applySnap(s: Snap) {
+    this.sim.players.forEach((q, i) => {
+      const o = i * P_FIELDS;
+      q.x = s.p[o];
+      q.y = s.p[o + 1];
+      q.vx = s.p[o + 2];
+      q.vy = s.p[o + 3];
+      q.facing = s.p[o + 4];
+      q.stateT = s.p[o + 5];
+      q.runPhase = s.p[o + 6];
+      q.sprinting = s.p[o + 7] > 0;
+      q.state = s.st[i] as typeof q.state;
+    });
+    const b = this.sim.ball;
+    [b.x, b.y, b.z, b.roll] = s.b;
+    b.fire = s.b[4] > 0;
+    b.superShot = s.b[5] > 0;
+    b.owner = s.b[6] >= 0 ? this.sim.players.find((q) => q.id === s.b[6]) ?? null : null;
+  }
+
+  get replaying() {
+    return !!this.replay;
+  }
+
+  private startReplay() {
+    if (this.goalFrame < 0) return;
+    // dai 3 secondi prima del gol a poco dopo
+    const from = Math.max(0, this.goalFrame - 150);
+    const to = Math.min(this.rec.length, this.goalFrame + 40);
+    const frames = this.rec.slice(from, to);
+    this.goalFrame = -1;
+    if (frames.length < 30) return;
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(40);
+    const bars = this.add.graphics();
+    bars.fillStyle(0x000000, 0.85).fillRect(-W, -H, W * 3, H + 34).fillRect(-W, H - 30, W * 3, H);
+    const label = this.add.text(18, 44, '● REPLAY', { fontFamily: '"Press Start 2P", monospace', fontSize: '10px', color: '#ff4a4a', backgroundColor: '#000000aa', padding: { x: 4, y: 3 } });
+    const hint = this.add.text(W - 18, H - 16, 'tocca per saltare', { fontFamily: '"Press Start 2P", monospace', fontSize: '6px', color: '#8a8fb0' }).setOrigin(1, 0.5);
+    this.tweens.add({ targets: label, alpha: 0.3, duration: 450, yoyo: true, repeat: -1 });
+    layer.add([bars, label, hint]);
+    // la telecamera ignora lo zoom per il velo: scala inversa
+    layer.setScale(1 / this.cameras.main.zoom).setPosition(W / 2 - W / 2 / this.cameras.main.zoom, H / 2 - H / 2 / this.cameras.main.zoom);
+    this.replay = { frames, head: 0, live: this.snap(), layer };
+    for (const o of [this.marker, this.ring, this.passRing]) o.setVisible(false);
+    this.chargeG.clear();
+    this.events.emit('replay', true);
+  }
+
+  endReplay() {
+    const r = this.replay;
+    if (!r) return;
+    this.applySnap(r.live);
+    r.layer.destroy();
+    this.replay = undefined;
+    const hasHuman = this.launch.config.humanTeam !== null;
+    this.marker.setVisible(hasHuman);
+    this.ring.setVisible(hasHuman);
+    this.syncSprites(0);
+    this.events.emit('replay', false);
+  }
+
+  private updateReplay(dt: number) {
+    const r = this.replay!;
+    // al rallentatore: metà velocità, ancora più lento vicino al gol
+    const near = r.head > r.frames.length - 55;
+    r.head += dt * 60 * (near ? 0.4 : 0.7);
+    const i = Math.floor(r.head);
+    if (i >= r.frames.length) return this.endReplay();
+    this.applySnap(r.frames[i]);
+    this.syncSprites(dt);
+    this.marker.setVisible(false);
+    this.ring.setVisible(false);
+    this.passRing.setVisible(false);
+    this.updateCamera(dt);
+  }
+
   update(_t: number, deltaMs: number) {
     const dt = Math.min(deltaMs / 1000, 0.1);
+    if (this.replay) {
+      this.updateReplay(dt);
+      this.updateCrowd(dt);
+      return;
+    }
+    if (this.replayIn > 0) {
+      this.replayIn -= dt;
+      if (this.replayIn <= 0 && this.sim.phase === 'goal') this.startReplay();
+    }
     this.readKeyboard();
     // rallentatore e "hit stop"
     if (this.hitStop > 0) {
@@ -478,6 +637,13 @@ export class MatchScene extends Phaser.Scene {
     this.updateCamera(dt);
     this.updateCrowd(dt);
     this.updateWeather(dt);
+    if (!this.launch.demo && (this.sim.phase === 'play' || this.sim.phase === 'goal')) {
+      this.rec.push(this.snap());
+      if (this.rec.length > REC_MAX) {
+        this.rec.shift();
+        if (this.goalFrame > 0) this.goalFrame--;
+      }
+    }
 
     if (this.sim.phase === 'end') {
       this.endT += dt;
@@ -548,6 +714,10 @@ export class MatchScene extends Phaser.Scene {
         break;
       }
       case 'goal': {
+        if (!demo) {
+          this.goalFrame = this.rec.length - 1;
+          this.replayIn = 1.5;
+        }
         if (!quiet) {
           sfx.goal();
           sfx.net();
@@ -658,6 +828,14 @@ export class MatchScene extends Phaser.Scene {
         if (!demo && e.team === human) this.msg({ text: 'SUPER PRONTO!', sub: 'Tiro caricato al massimo', color: '#ffd23f' });
         break;
       case 'switch':
+        break;
+      case 'wave':
+        if (!quiet) {
+          sfx.wave();
+          commentary.say('wave');
+        }
+        if (!demo) this.msg({ text: 'ONDA!', color: '#8fd8ff', ms: 1200 });
+        this.cameras.main.shake(400, 0.003);
         break;
       case 'call':
         if (!quiet) sfx.select();
