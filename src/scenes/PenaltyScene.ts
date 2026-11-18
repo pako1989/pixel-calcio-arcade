@@ -8,6 +8,8 @@ import { music } from '../audio/music';
 import { commentary } from '../audio/commentary';
 import { Rng } from '../sim/math';
 import { backToMenu } from './demo';
+import { save } from '../save/storage';
+import { newAlbum } from '../modes/album';
 import {
   cpuDive,
   cpuReach,
@@ -591,6 +593,12 @@ export class PenaltyScene extends Phaser.Scene {
       }, { color: COLORS.good, textColor: '#1a1222' });
       c.add(b.c);
     } else {
+      // sfida ai rigori: un pacchetto di figurine (due se vinci)
+      save((d) => {
+        d.album = d.album ?? newAlbum();
+        d.album.packs += w === 0 ? 2 : 1;
+      });
+      c.add(txt(this, W / 2, H / 2 + 6, `+${w === 0 ? 2 : 1} pacchetti di figurine`, 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 4, y: 3 } }));
       const again = button(this, W / 2 + 90, H / 2 + 40, 160, 32, 'RIVINCITA', () => this.scene.restart(this.d), { color: COLORS.good, textColor: '#1a1222' });
       const menu = button(this, W / 2 - 90, H / 2 + 40, 160, 32, 'MENU', () => backToMenu(this), { color: 0x3a3d55 });
       c.add([again.c, menu.c]);

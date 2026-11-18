@@ -54,6 +54,37 @@ export const PITCHES: Record<PitchId, PitchDef> = {
     wallBounce: 0.95,
     ballFriction: 0.85,
   },
+  piazza: {
+    ...base,
+    id: 'piazza',
+    name: 'Piazza del Paese',
+    rule: 'Sui sampietrini, con la fontana e la statua in mezzo: la palla ci rimbalza contro!',
+    width: 780,
+    height: 450,
+    ballFriction: 1.1,
+    ballBounce: 0.7,
+    obstacles: [
+      { kind: 'fontana', x: 390, y: 118, r: 24, h: 18 },
+      { kind: 'statua', x: 390, y: 334, r: 12, h: 30 },
+    ],
+  },
+  montagna: {
+    ...base,
+    id: 'montagna',
+    name: 'Prato in Montagna',
+    rule: 'Il campo è in pendenza: la palla scivola sempre verso valle (in basso).',
+    ballFriction: 0.9,
+    slope: 70,
+  },
+  molo: {
+    ...base,
+    id: 'molo',
+    name: 'Molo del Porto',
+    rule: 'Sulle assi del molo: ogni tanto arriva un\'onda che spinge via la palla.',
+    ballFriction: 1.05,
+    wallBounce: 0.6,
+    waves: true,
+  },
 };
 
-export const PITCH_ORDER: PitchId[] = ['stadio', 'spiaggia', 'neve', 'tetto', 'quartiere'];
+export const PITCH_ORDER: PitchId[] = ['stadio', 'spiaggia', 'neve', 'tetto', 'quartiere', 'piazza', 'montagna', 'molo'];

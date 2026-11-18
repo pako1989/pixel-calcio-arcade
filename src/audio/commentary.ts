@@ -27,7 +27,8 @@ export type CallKind =
   | 'penSave'
   | 'penMiss'
   | 'penPost'
-  | 'penWin';
+  | 'penWin'
+  | 'wave';
 
 const LINES: Record<CallKind, string[]> = {
   start: ['Si parte!', "Fischio d'inizio!", 'Comincia la partita!', 'Palla al centro, si gioca!'],
@@ -52,6 +53,7 @@ const LINES: Record<CallKind, string[]> = {
   penMiss: ['Fuori!', "Sbagliato! Alto sopra la traversa!", 'Fuori di poco!'],
   penPost: ['Palo!', 'Sul legno!'],
   penWin: ['Vince {n} ai rigori!', 'È finita! Passa {n}!'],
+  wave: ['Attenzione, arriva l\'onda!', 'Che ondata sul molo!'],
 };
 
 /** Priorità: le frasi importanti interrompono quelle in corso. */

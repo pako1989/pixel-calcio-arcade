@@ -252,6 +252,11 @@ class Sfx {
     this.noise(2.4, 0.5, 120, 0.7, 'lowpass', 0.15, 0.05, 'crowd');
     this.noise(1.2, 0.3, 380, 0.8, 'lowpass', 0.05, 0.01, 'crowd');
   }
+  /** Onda che si infrange sul molo. */
+  wave() {
+    this.noise(2.2, 0.35, 500, 0.5, 'lowpass', 0, 0.6, 'crowd');
+    this.noise(1.6, 0.25, 2200, 0.6, 'bandpass', 0.5, 0.2, 'crowd');
+  }
   /** Battito del cuore (tensione ai rigori). */
   heartbeat() {
     this.tone('sine', 70, 40, 0.12, 0.35);

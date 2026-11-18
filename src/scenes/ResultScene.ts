@@ -8,6 +8,7 @@ import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
 import { teamById } from '../data/teams';
 import { applyManagerResult, DIVISIONS } from '../modes/manager';
+import { newAlbum, packsForMatch } from '../modes/album';
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
 import { sfx } from '../audio/sfx';
@@ -30,6 +31,7 @@ interface ModeReport {
 
 export class ResultScene extends Phaser.Scene {
   private data_!: MatchOutcome;
+  private packs = 0;
   private report?: ModeReport;
   constructor() {
     super('result');
@@ -46,7 +48,14 @@ export class ResultScene extends Phaser.Scene {
         else if (r.score[0] < r.score[1]) s.record.lost++;
         else s.record.drawn++;
       });
-    }
+      // pacchetti di figurine: uno per partita, uno in più se vinci
+      const won = r.penalties ? r.penalties[0] > r.penalties[1] : r.score[0] > r.score[1];
+      this.packs = packsForMatch(won);
+      save((s) => {
+        s.album = s.album ?? newAlbum();
+        s.album.packs += this.packs;
+      });
+    } else this.packs = 0;
     this.report = this.makeReport(d);
   }
 
@@ -60,7 +69,13 @@ export class ResultScene extends Phaser.Scene {
       const res = applyUserResult(st, a, b, d.result.goldenGoal, d.result.penalties);
       save((s) => {
         s.tournament = st;
-        if (res === 'campione') s.trophies = (s.trophies ?? 0) + 1;
+        if (res === 'campione') {
+          s.trophies = (s.trophies ?? 0) + 1;
+          // coppa vinta: tre pacchetti in regalo
+          s.album = s.album ?? newAlbum();
+          s.album.packs += 3;
+          this.packs += 3;
+        }
       });
       const lines: ReportLine[] = [{ text: ROUND_NAMES[round], color: '#8a8fb0' }];
       let title: string | undefined;
@@ -176,6 +191,10 @@ export class ResultScene extends Phaser.Scene {
       else if (pa < pb) sfx.sadJingle();
     }
     this.time.delayedCall(2600, () => music.play('menu'));
+    if (this.packs > 0) {
+      const pk = txt(this, W / 2, 288, `+${this.packs} PACCHETT${this.packs > 1 ? 'I' : 'O'} DI FIGURINE (apri dall'ALBUM)`, 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 4, y: 3 } }).setDepth(5);
+      this.tweens.add({ targets: pk, scale: 1.06, duration: 500, yoyo: true, repeat: 3 });
+    }
     const t = shadowTxt(this, W / 2, 34, title, title.length > 12 ? 16 : 24, col, '#1a1222', 3);
     t.c.setScale(0.3);
     this.tweens.add({ targets: t.c, scale: 1, duration: 450, ease: 'Back.easeOut' });

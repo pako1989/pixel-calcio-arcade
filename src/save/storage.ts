@@ -2,6 +2,7 @@
 import type { CareerState } from '../modes/career';
 import type { ConquistaState } from '../modes/conquista';
 import type { ManagerState } from '../modes/manager';
+import type { AlbumSave } from '../modes/album';
 import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 
@@ -39,6 +40,8 @@ export interface SaveData {
   conquista?: ConquistaState;
   /** Modalità manager (club, rosa, campionato). */
   manager?: ManagerState;
+  /** Album delle figurine. */
+  album?: AlbumSave;
 }
 
 const DEFAULTS: SaveData = {

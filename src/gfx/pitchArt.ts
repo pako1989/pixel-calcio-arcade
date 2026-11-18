@@ -30,6 +30,9 @@ export const THEMES: Record<PitchId, Theme> = {
   neve: { a: 0xe6eff9, b: 0xd9e6f4, line: 0xd8423c, apron: 0xc9d9ec, board: 0xf4f8ff, boardHi: 0xffffff, around: 0xdde8f4, post: 0xd8423c, net: 'rgba(60,70,90,0.45)', crowd: 0.2, night: false },
   tetto: { a: 0x2b6a4f, b: 0x317657, line: 0xd9f3ff, apron: 0x2a3343, board: 0x283245, boardHi: 0x3b4a66, around: 0x323744, post: 0xe8f4ff, net: 'rgba(200,240,255,0.5)', crowd: 0.15, night: true },
   quartiere: { a: 0x5a5d66, b: 0x565962, line: 0xf2d24a, apron: 0x6b6e76, board: 0x9aa0a8, boardHi: 0xc2c7cc, around: 0x7d7f84, post: 0xb8bec6, net: 'rgba(230,230,230,0.5)', crowd: 0.35, night: false },
+  piazza: { a: 0x9a8e7c, b: 0x948873, line: 0xf4efe2, apron: 0x857a68, board: 0xb59a74, boardHi: 0xd2b88f, around: 0xa49276, post: 0xf4f4f4, net: 'rgba(255,255,255,0.55)', crowd: 0.45, night: false },
+  montagna: { a: 0x4f9a3c, b: 0x58a644, line: 0xf4f4ea, apron: 0x3f8a32, board: 0x7a5232, boardHi: 0x9a6a42, around: 0x5f8f48, post: 0xf4f4f4, net: 'rgba(255,255,255,0.55)', crowd: 0.3, night: false },
+  molo: { a: 0xa8784a, b: 0x9c6e42, line: 0xf4f0e0, apron: 0x7a5434, board: 0x5a3c24, boardHi: 0x7a5434, around: 0x1f6aa8, post: 0xf4f4f4, net: 'rgba(255,255,255,0.6)', crowd: 0.3, night: false },
 };
 
 function ctx2d(w: number, h: number) {
@@ -140,7 +143,35 @@ export function drawPitch(scene: Phaser.Scene, p: PitchDef, key: string) {
   noise(ctx, rng, ox - 12, oy - 18, W + 24, H + 32, [shade(th.apron, 0.92), shade(th.apron, 1.07)], 0.06);
 
   // superficie
-  if (p.id === 'quartiere') {
+  if (p.id === 'piazza') {
+    // sampietrini a file sfalsate
+    fill(ctx, shade(th.a, 0.7), ox, oy, W, H);
+    for (let y = 0; y < H; y += 6) {
+      const off = (y / 6) % 2 ? 3 : 0;
+      for (let x = -off; x < W; x += 6) {
+        const c = rng.pick([th.a, th.b, shade(th.a, 1.08), shade(th.a, 0.93)]);
+        fill(ctx, c, ox + Math.max(0, x), oy + y, Math.min(5, W - Math.max(0, x)), 5);
+        fill(ctx, shade(c, 1.15), ox + Math.max(0, x), oy + y, Math.min(5, W - Math.max(0, x)), 1);
+      }
+    }
+  } else if (p.id === 'molo') {
+    // assi di legno con chiodi e fessure
+    for (let y = 0; y < H; y += 10) {
+      const c = (y / 10) % 2 ? th.a : th.b;
+      fill(ctx, c, ox, oy + y, W, 9);
+      fill(ctx, shade(c, 0.6), ox, oy + y + 9, W, 1);
+      let x = rng.range(0, 60);
+      while (x < W) {
+        fill(ctx, shade(c, 0.6), ox + x, oy + y, 1, 9);
+        fill(ctx, 0x4a4a52, ox + x + 3, oy + y + 2, 1, 1);
+        fill(ctx, 0x4a4a52, ox + x + 3, oy + y + 6, 1, 1);
+        x += rng.range(70, 140);
+      }
+    }
+    noise(ctx, rng, ox, oy, W, H, [shade(th.a, 0.85), shade(th.a, 1.1)], 0.06);
+    // pozzanghere di acqua salata
+    for (let i = 0; i < 7; i++) { const px = ox + rng.range(20, W - 60); const py = oy + rng.range(20, H - 30); const pw = rng.range(16, 34); fill(ctx, 0x3a80c0, px, py, pw, 6, 0.45); fill(ctx, 0xbfe4ff, px + 3, py + 1, pw / 3, 1, 0.7); }
+  } else if (p.id === 'quartiere') {
     fill(ctx, th.a, ox, oy, W, H);
     noise(ctx, rng, ox, oy, W, H, [shade(th.a, 0.85), shade(th.a, 1.12), shade(th.a, 0.95)], 0.18);
     // crepe e macchie
@@ -166,6 +197,19 @@ export function drawPitch(scene: Phaser.Scene, p: PitchDef, key: string) {
         const y = oy + rng.range(10, H - 10);
         fill(ctx, shade(th.a, 0.86), x, y, 2, 3);
         fill(ctx, shade(th.a, 0.86), x + 4, y + 2, 2, 3);
+      }
+    }
+    if (p.id === 'montagna') {
+      // ombreggiatura della pendenza: più chiaro a valle, frecce e fiorellini
+      for (let y = 0; y < H; y += 4) fill(ctx, 0x000000, ox, oy + y, W, 4, 0.12 * (1 - y / H));
+      for (let i = 0; i < 70; i++) fill(ctx, rng.pick([0xffffff, 0xf2d24a, 0xd86ad8]), ox + rng.range(4, W - 4), oy + rng.range(4, H - 4), 1, 1);
+      for (const fx of [0.2, 0.8]) {
+        for (const fy of [0.3, 0.7]) {
+          const ax = ox + W * fx;
+          const ay = oy + H * fy;
+          fill(ctx, 0xffffff, ax - 1, ay - 8, 3, 12, 0.35);
+          for (let k = 0; k < 5; k++) fill(ctx, 0xffffff, ax - k, ay + 4 - k, 3 + k * 2 - 2, 1, 0.35);
+        }
       }
     }
     if (p.id === 'neve') {
@@ -239,6 +283,57 @@ function drawBoards(ctx: CanvasRenderingContext2D, p: PitchDef, th: Theme, rng: 
     bank(ox - 8, oy + gB, 8, H - gB);
     bank(ox + W, oy, 8, gT);
     bank(ox + W, oy + gB, 8, H - gB);
+    return;
+  }
+  if (p.id === 'piazza') {
+    // marciapiede di pietra con paletti
+    fill(ctx, 0xc9bfae, ox - 8, oy - 10, W + 16, 10);
+    fill(ctx, 0xe4dccc, ox - 8, oy - 10, W + 16, 2);
+    fill(ctx, 0xc9bfae, ox - 8, oy + H, W + 16, 8);
+    for (let x = 0; x <= W; x += 40) {
+      fill(ctx, 0x30343f, ox + x - 2, oy - 18, 4, 10);
+      fill(ctx, 0x30343f, ox + x - 2, oy + H + 8, 4, 8);
+    }
+    for (const [x, w] of [[ox - 8, 8], [ox + W, 8]] as const) {
+      fill(ctx, 0xc9bfae, x, oy, w, gT);
+      fill(ctx, 0xc9bfae, x, oy + gB, w, H - gB);
+    }
+    return;
+  }
+  if (p.id === 'montagna') {
+    // staccionata di legno
+    const fenceH = (x: number, y: number, w: number) => {
+      fill(ctx, 0x5a3a22, x, y + 3, w, 2);
+      fill(ctx, 0x5a3a22, x, y + 8, w, 2);
+      for (let i = 0; i < w; i += 16) fill(ctx, 0x7a5232, x + i, y, 3, 13);
+    };
+    fenceH(ox - 8, oy - 14, W + 16);
+    fenceH(ox - 8, oy + H + 2, W + 16);
+    for (const x of [ox - 8, ox + W + 4]) {
+      fill(ctx, 0x7a5232, x, oy, 4, gT);
+      fill(ctx, 0x7a5232, x, oy + gB, 4, H - gB);
+    }
+    return;
+  }
+  if (p.id === 'molo') {
+    // bordo del molo: travi, bitte e corde
+    fill(ctx, th.board, ox - 8, oy - 8, W + 16, 8);
+    fill(ctx, th.board, ox - 8, oy + H, W + 16, 8);
+    for (let x = 0; x <= W; x += 70) {
+      for (const y of [oy - 14, oy + H + 2]) {
+        fill(ctx, 0x30343f, ox + x - 4, y, 8, 10);
+        fill(ctx, 0x4a505e, ox + x - 4, y, 8, 2);
+      }
+    }
+    for (let x = 0; x < W; x += 2) {
+      const sag = Math.sin(((x % 70) / 70) * Math.PI) * 3;
+      fill(ctx, 0xe2d2a8, ox + x, oy - 10 + sag, 2, 1);
+      fill(ctx, 0xe2d2a8, ox + x, oy + H + 6 + sag, 2, 1);
+    }
+    for (const x of [ox - 8, ox + W]) {
+      fill(ctx, th.board, x, oy, 8, gT);
+      fill(ctx, th.board, x, oy + gB, 8, H - gB);
+    }
     return;
   }
   // sponde con pubblicità
@@ -388,6 +483,100 @@ function drawSurroundings(ctx: CanvasRenderingContext2D, p: PitchDef, _th: Theme
       pixelText(ctx, 'NOTTE ARCADE', W / 2, 18, 0xff3fa4, 16);
       break;
     }
+    case 'piazza': {
+      // case colorate del paese con finestre e balconi, campanile
+      const facades = [0xe2a65a, 0xd8745a, 0xf0d8a0, 0xc9a07a, 0xe8c070, 0xb86a50];
+      let x = 0;
+      while (x < W) {
+        const bw = rng.range(50, 90);
+        const c = rng.pick(facades);
+        fill(ctx, c, x, 0, bw, M - 26);
+        fill(ctx, shade(c, 0.8), x, 0, 2, M - 26);
+        for (let wy = 10; wy < M - 40; wy += 22) {
+          for (let wx = x + 8; wx < x + bw - 14; wx += 18) {
+            fill(ctx, 0x3a2a24, wx, wy, 8, 12);
+            fill(ctx, 0x2f7a4a, wx - 2, wy, 2, 12);
+            fill(ctx, 0x2f7a4a, wx + 8, wy, 2, 12);
+            if (rng.chance(0.4)) fill(ctx, rng.pick([0xe0383e, 0xff7ab8, 0xf2d24a]), wx, wy + 12, 8, 2);
+          }
+        }
+        fill(ctx, 0x6a5444, x, M - 30, bw, 4);
+        x += bw;
+      }
+      // campanile
+      const cx = Math.round(W * 0.15);
+      fill(ctx, 0xd2b48a, cx, 0, 30, M - 26);
+      fill(ctx, 0x3a2a24, cx + 9, 10, 12, 16);
+      fill(ctx, 0xf2d24a, cx + 12, 16, 6, 6);
+      // in basso: tavolini del bar e alberelli
+      noise(ctx, rng, 0, M + p.height + 8, W, M, [0xb5a68e, 0xa49276], 0.12);
+      for (let i = 0; i < 12; i++) {
+        const tx = 24 + i * (W / 12);
+        const ty = M + p.height + 46;
+        fill(ctx, 0xe0383e, tx - 10, ty - 14, 22, 4);
+        fill(ctx, 0xffffff, tx - 6, ty - 14, 4, 4);
+        fill(ctx, 0xffffff, tx + 4, ty - 14, 4, 4);
+        fill(ctx, 0x6a5444, tx, ty - 10, 2, 14);
+        fill(ctx, 0xf4f4f4, tx - 6, ty + 2, 14, 3);
+      }
+      break;
+    }
+    case 'montagna': {
+      // cielo e montagne innevate
+      for (let y = 0; y < M - 10; y++) fill(ctx, mix(0x6ab4f0, 0xbfe4ff, y / (M - 10)), 0, y, W, 1);
+      const peak = (px: number, ph: number, pw: number, c: number) => {
+        for (let k = 0; k < ph; k++) {
+          const ww = (pw * k) / ph;
+          fill(ctx, k < ph * 0.25 ? 0xffffff : c, px - ww, M - 20 - ph + k, ww * 2, 1);
+        }
+      };
+      for (let i = 0; i < 7; i++) peak(rng.range(0, W), rng.range(50, 85), rng.range(50, 90), rng.pick([0x6a7a9a, 0x5a6a8a, 0x7a8aa8]));
+      fill(ctx, 0x4f8a3c, 0, M - 24, W, H);
+      noise(ctx, rng, 0, M - 24, W, H, [0x5f9a48, 0x3f7a30, 0xffffff], 0.05);
+      // abeti e mucche
+      for (let i = 0; i < 18; i++) {
+        const tx = rng.range(8, W - 8);
+        const ty = M + p.height + rng.range(16, M - 30);
+        for (let r = 0; r < 18; r++) fill(ctx, 0x1d5a3a, tx - r * 0.4, ty + r, r * 0.8 + 1, 1);
+        fill(ctx, 0x5a3a24, tx - 1, ty + 18, 3, 4);
+      }
+      for (let i = 0; i < 4; i++) {
+        const cx = rng.range(30, W - 40);
+        const cy = M + p.height + rng.range(30, 70);
+        fill(ctx, 0xffffff, cx, cy, 16, 9);
+        fill(ctx, 0x1a1a1a, cx + 3, cy + 2, 5, 4);
+        fill(ctx, 0xffffff, cx + 14, cy - 3, 6, 6);
+        fill(ctx, 0x1a1a1a, cx + 1, cy + 9, 2, 4);
+        fill(ctx, 0x1a1a1a, cx + 12, cy + 9, 2, 4);
+      }
+      break;
+    }
+    case 'molo': {
+      // mare tutto intorno, barche e faro
+      noise(ctx, rng, 0, 0, W, H, [0x2a7ab8, 0x185a98], 0.12);
+      for (let i = 0; i < 160; i++) fill(ctx, 0xd8f4ff, rng.range(0, W), rng.range(0, H), rng.range(3, 8), 1, 0.6);
+      // piloni del molo
+      for (let x = M - 10; x < M + p.width + 10; x += 30) {
+        fill(ctx, 0x4a3422, x, M - 22, 6, 8);
+        fill(ctx, 0x4a3422, x, M + p.height + 12, 6, 10);
+      }
+      const boat = (bx: number, by: number, c: number) => {
+        fill(ctx, c, bx, by, 40, 8);
+        fill(ctx, shade(c, 0.7), bx + 4, by + 8, 32, 3);
+        fill(ctx, 0xffffff, bx + 10, by - 10, 14, 10);
+        fill(ctx, 0x2a3a5a, bx + 13, by - 7, 3, 3);
+        fill(ctx, 0x2a3a5a, bx + 18, by - 7, 3, 3);
+      };
+      boat(W * 0.2, 30, 0xe0383e);
+      boat(W * 0.62, 50, 0xf2d24a);
+      boat(W * 0.4, H - 50, 0x2bb673);
+      // faro
+      const fx = W - 50;
+      fill(ctx, 0xffffff, fx, 6, 14, 60);
+      for (let y = 6; y < 66; y += 16) fill(ctx, 0xe0383e, fx, y, 14, 8);
+      fill(ctx, 0xfff3a0, fx + 2, 0, 10, 6);
+      break;
+    }
     case 'quartiere': {
       // palazzi e muri con graffiti
       fill(ctx, 0x9c6b52, 0, 0, W, M - 50);
@@ -502,6 +691,13 @@ export function drawCrowd(scene: Phaser.Scene, p: PitchDef, homeColor: number, a
     areas.push([40, M + p.height + 16, W - 80, 14]);
   } else if (p.id === 'tetto') {
     areas.push([60, M + p.height + 16, W - 120, 14]);
+  } else if (p.id === 'piazza') {
+    areas.push([20, M - 26, W - 40, 8]);
+    areas.push([20, M + p.height + 14, W - 40, 16]);
+  } else if (p.id === 'montagna') {
+    areas.push([40, M - 34, W - 80, 10]);
+  } else if (p.id === 'molo') {
+    areas.push([60, M + p.height + 22, W - 120, 8]);
   } else {
     areas.push([20, M - 48, W - 40, 6]);
     areas.push([30, M + p.height + 14, W - 60, 12]);
@@ -542,4 +738,54 @@ export function drawCrowd(scene: Phaser.Scene, p: PitchDef, homeColor: number, a
   for (const k of [keyA, keyB]) if (scene.textures.exists(k)) scene.textures.remove(k);
   scene.textures.addCanvas(keyA, A.cv);
   scene.textures.addCanvas(keyB, B.cv);
+}
+
+/** Fontana e statua della piazza, disegnate in piedi (origine ai piedi). */
+export function drawObstacle(scene: Phaser.Scene, kind: 'fontana' | 'statua', r: number, key: string) {
+  if (scene.textures.exists(key)) return;
+  if (kind === 'fontana') {
+    const w = r * 2 + 4;
+    const h = r + 40;
+    const { cv, ctx } = ctx2d(w, h);
+    const cx = w / 2;
+    const by = h - r * 0.55 - 2;
+    // vasca ellittica
+    for (let y = -r * 0.55; y <= r * 0.55; y++) {
+      const ww = Math.sqrt(1 - (y / (r * 0.55)) ** 2) * r;
+      fill(ctx, 0xb8ab94, cx - ww, by + y, ww * 2, 1);
+    }
+    for (let y = -r * 0.4; y <= r * 0.4; y++) {
+      const ww = Math.sqrt(1 - (y / (r * 0.4)) ** 2) * (r - 5);
+      fill(ctx, y < 0 ? 0x5ab0e0 : 0x3a90c8, cx - ww, by + y - 2, ww * 2, 1);
+    }
+    fill(ctx, 0x8a7e68, cx - r, by + r * 0.3, r * 2, 3, 0.6);
+    // colonna e zampillo
+    fill(ctx, 0x9a8e7c, cx - 3, by - 26, 6, 26);
+    fill(ctx, 0xc9bfae, cx - 6, by - 28, 12, 4);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI;
+      for (let k = 0; k < 10; k++) fill(ctx, 0xbfe8ff, cx + Math.cos(a) * k * 1.3, by - 30 - Math.sin(a) * 6 + k * k * 0.12, 1, 1, 0.8);
+    }
+    fill(ctx, 0xffffff, cx - 1, by - 36, 2, 7, 0.9);
+    scene.textures.addCanvas(key, cv);
+  } else {
+    const w = r * 2 + 4;
+    const h = 56;
+    const { cv, ctx } = ctx2d(w, h);
+    const cx = w / 2;
+    // piedistallo e calciatore di bronzo
+    fill(ctx, 0xc9bfae, cx - r, h - 18, r * 2, 18);
+    fill(ctx, 0xe4dccc, cx - r, h - 18, r * 2, 2);
+    fill(ctx, 0x8a7e68, cx - r, h - 3, r * 2, 3);
+    const bz = 0x6a8a6a;
+    fill(ctx, bz, cx - 3, h - 46, 6, 6); // testa
+    fill(ctx, bz, cx - 5, h - 40, 10, 12); // busto
+    fill(ctx, bz, cx - 8, h - 40, 3, 9);
+    fill(ctx, bz, cx + 5, h - 44, 3, 8); // braccio alzato
+    fill(ctx, bz, cx - 4, h - 28, 3, 10);
+    fill(ctx, bz, cx + 2, h - 28, 7, 3); // gamba che calcia
+    fill(ctx, 0xf4f4f4, cx + 8, h - 30, 4, 4); // pallone
+    fill(ctx, 0x8aaa8a, cx - 3, h - 46, 2, 18, 0.6);
+    scene.textures.addCanvas(key, cv);
+  }
 }

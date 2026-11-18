@@ -115,3 +115,25 @@ describe('giocatore umano', () => {
     expect(goals).toBeGreaterThan(2);
   });
 });
+
+describe('campi speciali', () => {
+  for (const id of ['piazza', 'montagna', 'molo'] as const) {
+    it(`${id}: la partita finisce, la palla resta in campo e fuori dagli ostacoli`, () => {
+      const sim = new MatchSim(cfg({ pitch: PITCHES[id], seed: 9 }));
+      const dt = 1 / 60;
+      let waves = 0;
+      for (let t = 0; t < 400 && sim.phase !== 'end'; t += dt) {
+        sim.update(dt);
+        for (const e of sim.events) if (e.type === 'wave') waves++;
+        sim.events.length = 0;
+        const b = sim.ball;
+        expect(Number.isFinite(b.x) && Number.isFinite(b.y)).toBe(true);
+        for (const o of sim.pitch.obstacles ?? []) {
+          if (b.z < o.h) expect(Math.hypot(b.x - o.x, b.y - o.y)).toBeGreaterThan(o.r);
+        }
+      }
+      expect(sim.phase).toBe('end');
+      if (id === 'molo') expect(waves).toBeGreaterThan(2);
+    });
+  }
+});

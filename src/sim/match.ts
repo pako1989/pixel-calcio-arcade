@@ -76,6 +76,10 @@ export class MatchSim {
   private nextPowerUpId = 1;
   wind: Vec = { x: 0, y: 0 };
   private windT = 0;
+  /** Onda in corso (0 = calma, 1 = massima) e suo verso: 1 dall'alto, -1 dal basso. */
+  wave = 0;
+  waveDir: 1 | -1 = 1;
+  private waveT = 9;
   stats: MatchStats = { shots: [0, 0], passes: [0, 0], tackles: [0, 0], possession: [0, 0] };
   scorers: MatchResult['scorers'] = [];
   readonly diff: [DiffParams, DiffParams];
@@ -326,6 +330,7 @@ export class MatchSim {
       if (this.wall[t] > 0) this.wall[t] -= dt;
     }
     this.updateWind(dt);
+    this.updateWaves(dt);
     this.updatePowerUps(dt);
     if (this.callT > 0) this.callT -= dt;
 
@@ -667,6 +672,24 @@ export class MatchSim {
       p.y = this.H - m;
       p.vy = Math.min(0, p.vy);
     }
+    // gira intorno agli ostacoli
+    for (const o of this.pitch.obstacles ?? []) {
+      const dx = p.x - o.x;
+      const dy = p.y - o.y;
+      const d = Math.hypot(dx, dy);
+      const min = o.r + PLAYER_R - 1;
+      if (d < min && d > 1e-4) {
+        const nx = dx / d;
+        const ny = dy / d;
+        p.x = o.x + nx * min;
+        p.y = o.y + ny * min;
+        const vn = p.vx * nx + p.vy * ny;
+        if (vn < 0) {
+          p.vx -= vn * nx;
+          p.vy -= vn * ny;
+        }
+      }
+    }
     if (p === this.ball.owner) p.holdT += dt;
   }
 
@@ -769,6 +792,17 @@ export class MatchSim {
     b.vy = o.vy;
     b.vz = 0;
     b.roll += len(o.vx, o.vy) * 0.016;
+    // la palla al piede non entra nella fontana: scivola sul bordo
+    for (const ob of this.pitch.obstacles ?? []) {
+      const dx = b.x - ob.x;
+      const dy = b.y - ob.y;
+      const d = Math.hypot(dx, dy);
+      const min = ob.r + BALL_R + 0.5;
+      if (d < min && d > 1e-4) {
+        b.x = ob.x + (dx / d) * min;
+        b.y = ob.y + (dy / d) * min;
+      }
+    }
   }
 
   // ---------- palla ----------
@@ -805,6 +839,11 @@ export class MatchSim {
     if (this.pitch.wind && b.z > 1) {
       b.vx += this.wind.x * dt;
       b.vy += this.wind.y * dt;
+    }
+    // pendenza e onde: solo con la palla a terra e libera
+    if (b.z <= 0.5 && !b.owner) {
+      if (this.pitch.slope) b.vy += this.pitch.slope * dt;
+      if (this.wave > 0) b.vy += this.waveDir * 260 * this.wavePush * dt;
     }
     b.x += b.vx * dt;
     b.y += b.vy * dt;
@@ -853,6 +892,29 @@ export class MatchSim {
     const H = this.H;
     const r = BALL_R;
     const wb = this.pitch.wallBounce;
+    // fontane e statue
+    for (const o of this.pitch.obstacles ?? []) {
+      if (b.z >= o.h) continue;
+      const dx = b.x - o.x;
+      const dy = b.y - o.y;
+      const d = Math.hypot(dx, dy);
+      const min = o.r + r;
+      if (d < min && d > 1e-4) {
+        const nx = dx / d;
+        const ny = dy / d;
+        b.x = o.x + nx * min;
+        b.y = o.y + ny * min;
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) {
+          b.vx -= (1 + 0.75) * vn * nx;
+          b.vy -= (1 + 0.75) * vn * ny;
+          if (-vn > 60) this.events.push({ type: 'wall', x: b.x, y: b.y, power: -vn });
+          b.isShot = false;
+          b.passTarget = null;
+        }
+        if (b.owner) b.owner.holdT = 0;
+      }
+    }
     const inMouth = b.y > this.goalTop + r && b.y < this.goalBottom - r;
     const underBar = b.z < CROSSBAR;
     // muro (power-up) davanti alla porta
@@ -1109,6 +1171,27 @@ export class MatchSim {
       const m = this.rng.range(40, 110);
       this.wind = { x: Math.cos(a) * m, y: Math.sin(a) * m };
     }
+  }
+
+  private updateWaves(dt: number) {
+    if (!this.pitch.waves) return;
+    this.waveT -= dt;
+    if (this.waveT <= 0 && this.wave === 0) {
+      this.waveT = this.rng.range(12, 20);
+      this.waveDir = this.rng.chance(0.5) ? 1 : -1;
+      this.wave = 0.001;
+      this.events.push({ type: 'wave', dir: this.waveDir });
+    }
+    if (this.wave > 0) {
+      // l'onda sale, spinge per un attimo e si ritira (circa 2 secondi)
+      const t = (this.wave += dt / 2);
+      if (t >= 1) this.wave = 0;
+    }
+  }
+
+  /** Intensità della spinta dell'onda in corso (0..1). */
+  get wavePush(): number {
+    return this.wave > 0 ? Math.sin(Math.min(1, this.wave) * Math.PI) : 0;
   }
 
   private updatePowerUps(dt: number) {

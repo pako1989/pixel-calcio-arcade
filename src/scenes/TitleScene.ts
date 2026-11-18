@@ -96,6 +96,12 @@ export class TitleScene extends Phaser.Scene {
       this.scene.stop();
     }, { color: 0xc0306a, badge: 'MINI', size: 6 });
     void pen;
+    const packs = load().album?.packs ?? 3;
+    button(this, W - 82, H - 98, 140, 26, 'ALBUM', () => {
+      sfx.unlock();
+      this.scene.launch('album');
+      this.scene.stop();
+    }, { color: 0xc08a1a, badge: packs > 0 ? `${packs} PACCH.` : undefined, size: 6 });
     button(this, W - 30, H - 24, 36, 24, '♪', () => {
       this.scene.launch('settings');
       this.scene.bringToTop('settings');
@@ -103,6 +109,6 @@ export class TitleScene extends Phaser.Scene {
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.3', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.4', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }

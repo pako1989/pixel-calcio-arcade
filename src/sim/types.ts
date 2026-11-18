@@ -40,7 +40,17 @@ export interface TeamDef {
 
 export type Difficulty = 'facile' | 'normale' | 'difficile';
 
-export type PitchId = 'stadio' | 'spiaggia' | 'neve' | 'tetto' | 'quartiere';
+export type PitchId = 'stadio' | 'spiaggia' | 'neve' | 'tetto' | 'quartiere' | 'piazza' | 'montagna' | 'molo';
+
+/** Ostacolo rotondo in campo (fontana, statua): la palla rimbalza, i giocatori ci girano intorno. */
+export interface Obstacle {
+  kind: 'fontana' | 'statua';
+  x: number;
+  y: number;
+  r: number;
+  /** Altezza: la palla più alta ci passa sopra. */
+  h: number;
+}
 
 /** Meteo della partita: cambia la fisica (pioggia) o la visuale (nebbia). */
 export type Weather = 'sereno' | 'pioggia' | 'nebbia';
@@ -60,6 +70,12 @@ export interface PitchDef {
   /** 1 = aderenza normale, valori bassi = si scivola. */
   playerGrip: number;
   wind: boolean;
+  /** Ostacoli in campo. */
+  obstacles?: Obstacle[];
+  /** Pendenza: accelerazione della palla a terra (px/s²) verso il basso del campo. */
+  slope?: number;
+  /** Onde che ogni tanto spazzano il campo e spingono la palla. */
+  waves?: boolean;
 }
 
 export interface MatchConfig {
