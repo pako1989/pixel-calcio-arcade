@@ -69,10 +69,14 @@ export class TitleScene extends Phaser.Scene {
           if (!m.available) return;
           if (isTouch()) goFullscreen();
           sfx.unlock();
-          this.scene.launch('setup', { mode: m.id });
+          this.scene.launch(m.scene, { mode: m.id });
           this.scene.stop();
         },
-        { color: m.available ? 0xe8443a : 0x3a3d55, badge: m.available ? undefined : 'PRESTO', size: 8 },
+        {
+          color: !m.available ? 0x3a3d55 : m.id === 'mito' ? 0x8a3fd0 : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
+          badge: !m.available ? 'PRESTO' : m.id === 'mito' ? 'STORIA' : undefined,
+          size: 8,
+        },
       );
       if (!m.available) b.setEnabled(false);
       y += 38;
@@ -90,6 +94,6 @@ export class TitleScene extends Phaser.Scene {
     if (isTouch()) {
       button(this, W - 74, H - 24, 36, 24, '[ ]', () => goFullscreen());
     }
-    txt(this, W - 8, 10, 'v0.1', 6, '#8a8fb0').setOrigin(1, 0.5);
+    txt(this, W - 8, 10, 'v0.2', 6, '#8a8fb0').setOrigin(1, 0.5);
   }
 }

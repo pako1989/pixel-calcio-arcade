@@ -152,6 +152,14 @@ class Sfx {
   click() {
     this.tone('square', 880, 880, 0.04, 0.08);
   }
+  /** Voce "a bip" dei dialoghi. */
+  blip() {
+    this.tone('square', 420 + Math.random() * 120, 380, 0.035, 0.04);
+  }
+  /** Fanfara per titoli e trofei. */
+  fanfare() {
+    [523, 659, 784, 1047].forEach((f, i) => this.tone('square', f, f, i === 3 ? 0.35 : 0.12, 0.09, i * 0.12));
+  }
   select() {
     this.tone('square', 660, 990, 0.08, 0.1);
   }

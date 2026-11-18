@@ -1,9 +1,9 @@
 import type { MatchConfig, MatchResult } from '../sim/types';
+import type { MatchTally } from './tally';
 
 /**
  * Modalità di gioco. Ogni modalità prepara le partite (MatchConfig) e decide
- * cosa succede dopo il fischio finale. Per ora è attiva la partita veloce;
- * le altre sono pronte nel menu e verranno costruite sopra la stessa simulazione.
+ * cosa succede dopo il fischio finale, sempre sopra la stessa simulazione.
  */
 export type ModeId = 'quick' | 'torneo' | 'missioni' | 'mito' | 'manager';
 
@@ -12,13 +12,15 @@ export interface ModeInfo {
   title: string;
   desc: string;
   available: boolean;
+  /** Scena da aprire quando si sceglie la modalità dal menu. */
+  scene: string;
 }
 
 export const MODES: ModeInfo[] = [
-  { id: 'quick', title: 'PARTITA VELOCE', desc: '5 contro 5 contro la CPU', available: true },
-  { id: 'torneo', title: 'TORNEO', desc: 'Coppa a eliminazione diretta', available: false },
-  { id: 'missioni', title: 'MISSIONI', desc: 'Sfide con obiettivi speciali', available: false },
-  { id: 'mito', title: 'DIVENTA UN MITO', desc: 'Dal campetto alla Serie A', available: false },
+  { id: 'quick', title: 'PARTITA VELOCE', desc: '5 contro 5 contro la CPU', available: true, scene: 'setup' },
+  { id: 'torneo', title: 'TORNEO', desc: 'Coppa a eliminazione diretta', available: true, scene: 'tournament' },
+  { id: 'missioni', title: 'MISSIONI', desc: 'Sfide con obiettivi speciali', available: true, scene: 'missions' },
+  { id: 'mito', title: 'DIVENTA UN MITO', desc: 'Storia: dal campetto alla Serie A', available: true, scene: 'career' },
 ];
 
 /** Dati passati alla scena della partita. */
@@ -27,11 +29,18 @@ export interface MatchLaunch {
   mode: ModeId;
   /** Partita dimostrativa sullo sfondo del menu. */
   demo?: boolean;
-  /** Dati extra della modalità (es. turno del torneo, obiettivo della missione). */
+  /** Punteggio di partenza (es. missione "rimonta"). */
+  startScore?: [number, number];
+  /** Barra del super tiro già carica all'inizio (0..1) per la squadra umana. */
+  superStart?: number;
+  /** Obiettivo mostrato nell'HUD durante la partita. */
+  hudGoal?: string;
+  /** Dati extra della modalità (es. turno del torneo, id della missione). */
   modeData?: unknown;
 }
 
 export interface MatchOutcome {
   launch: MatchLaunch;
   result: MatchResult;
+  tally: MatchTally;
 }

@@ -10,6 +10,7 @@ import { sfx } from '../audio/sfx';
 import { Controls } from '../input/controls';
 import type { MatchLaunch } from '../modes/modes';
 import { demoLaunch } from './demo';
+import { TallyTracker } from '../modes/tally';
 
 interface PSprite {
   p: Player;
@@ -63,6 +64,7 @@ export class MatchScene extends Phaser.Scene {
   private vignette?: Phaser.GameObjects.Image;
   private demoT = 0;
   finished = false;
+  private tally = new TallyTracker();
   private baseZoom = 1;
 
   constructor() {
@@ -81,6 +83,7 @@ export class MatchScene extends Phaser.Scene {
     this.excite = 0;
     this.demoT = 0;
     this.finished = false;
+    this.tally = new TallyTracker();
     this.vignette = undefined;
     this.nightOverlay = undefined;
     this.crowdA = this.crowdB = undefined;
@@ -91,6 +94,8 @@ export class MatchScene extends Phaser.Scene {
     const cfg = this.launch.config;
     this.sim = new MatchSim(cfg);
     const sim = this.sim;
+    if (this.launch.startScore) sim.score = [...this.launch.startScore];
+    if (this.launch.superStart && cfg.humanTeam !== null) sim.superBar[cfg.humanTeam] = this.launch.superStart;
     const pitch = cfg.pitch;
     const th = THEMES[pitch.id];
     const W = sim.W;
@@ -341,7 +346,7 @@ export class MatchScene extends Phaser.Scene {
         if (this.launch.demo) this.scene.restart(demoLaunch());
         else {
           this.scene.stop('hud');
-          this.scene.launch('result', { launch: this.launch, result: this.sim.result });
+          this.scene.launch('result', { launch: this.launch, result: this.sim.result, tally: this.tally.t });
         }
       }
     }
@@ -355,7 +360,10 @@ export class MatchScene extends Phaser.Scene {
     const sim = this.sim;
     const demo = !!this.launch.demo;
     const human = sim.humanTeam;
-    for (const e of sim.events) this.onEvent(e, demo, human);
+    for (const e of sim.events) {
+      if (!demo) this.tally.feed(e, sim.elapsed);
+      this.onEvent(e, demo, human);
+    }
     sim.events.length = 0;
   }
 
