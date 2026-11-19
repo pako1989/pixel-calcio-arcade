@@ -34,7 +34,7 @@ function layer(scene: Phaser.Scene) {
   const c = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH);
   const W = scene.scale.width;
   const H = scene.scale.height;
-  const z = scene.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
+  const z = scene.add.zone(0, 0, W, H).setOrigin(0).setScrollFactor(0).setInteractive();
   z.on('pointerdown', () => (fxSpeed.v = 2.5));
   c.add(z);
   return c;

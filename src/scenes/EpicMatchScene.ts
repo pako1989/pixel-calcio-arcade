@@ -479,7 +479,7 @@ export class EpicMatchScene extends Phaser.Scene {
     c.add(this.radar);
     c.add(txt(this, 10, 10, `EP.${this.epi + 1}`, 6, '#8a8fb0').setOrigin(0, 0.5));
     this.exitBtn = txt(this, W - 8, 10, 'ESCI', 6, '#8a8fb0', { backgroundColor: '#22253a', padding: { x: 4, y: 3 } }).setOrigin(1, 0.5);
-    this.exitBtn.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+    this.exitBtn.setScrollFactor(0).setInteractive({ useHandCursor: true }).on('pointerup', () => {
       if (!this.exitArmed) {
         this.exitArmed = true;
         this.exitBtn.setText('SICURO? ESCI').setColor('#ff5a5a');
@@ -606,7 +606,7 @@ export class EpicMatchScene extends Phaser.Scene {
         const lbl = txt(this, x, o.sub ? y - 5 : y - 1, o.label, o.label.length > 14 ? 6 : 7, tc);
         c.add([bg, lbl]);
         if (o.sub) c.add(txt(this, x, y + 6, o.sub, 6, !en ? '#6a6d80' : dark ? '#3a2a10' : '#c8cce8'));
-        const z = this.add.zone(x, y, bw + 6, 30).setInteractive({ useHandCursor: true });
+        const z = this.add.zone(x, y, bw + 6, 30).setScrollFactor(0).setInteractive({ useHandCursor: true });
         c.add(z);
         z.on('pointerdown', () => {
           if (!en) return;
@@ -1150,7 +1150,7 @@ export class EpicMatchScene extends Phaser.Scene {
       c.setAlpha(0);
       this.tweens.add({ targets: c, alpha: 1, duration: 250 });
       this.time.delayedCall(700, () => {
-        const z = this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
+        const z = this.add.zone(0, 0, W, H).setOrigin(0).setScrollFactor(0).setInteractive();
         c.add(z);
         z.once('pointerup', () => {
           c.destroy();
