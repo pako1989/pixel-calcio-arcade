@@ -28,7 +28,16 @@ jobs:
       - run: npm run build
       - name: Copia la build nella radice
         run: |
-          rm -rf assets icons
+          # i file della build precedente restano: chi ha ancora la pagina vecchia in
+          # cache (fino a 10 minuti su Pages) li trova e il gioco parte lo stesso
+          keep=$(grep -oE 'assets/[^"]+' index.html 2>/dev/null | sed 's#assets/##' || true)
+          mkdir -p assets
+          for f in assets/*; do
+            [ -e "$f" ] || continue
+            n=$(basename "$f")
+            if [ ! -e "dist/assets/$n" ] && ! printf '%s\n' $keep | grep -qxF "$n"; then rm -f "$f"; fi
+          done
+          rm -rf icons
           cp -r dist/assets dist/icons .
           cp dist/game.html index.html
           cp dist/sw.js dist/manifest.webmanifest .
