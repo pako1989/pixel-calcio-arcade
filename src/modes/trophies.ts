@@ -16,7 +16,7 @@ export interface Totals {
   sfide: number;
 }
 
-export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5';
+export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5' | 'leggenda';
 
 export interface TrophyDef {
   id: string;
@@ -56,6 +56,9 @@ export const TROPHIES: TrophyDef[] = [
   T('figurine', 31, 'Mezzo album', 'Metà delle figurine', 80),
   T('figurine', 62, 'Album completo', 'Tutte le figurine', 300),
   T('livello5', 1, 'Cresciuto in casa', 'Un giocatore al livello 5', 80),
+  T('leggenda', 1, 'Ragazzo prodigio', 'Leggenda: 1° episodio', 40),
+  T('leggenda', 5, 'Campione regionale', 'Leggenda: 5° episodio', 120),
+  T('leggenda', 10, 'Leggenda del Pallone', 'Vinci i Mondiali giovanili', 400),
 ];
 
 export function newTotals(): Totals {
@@ -81,12 +84,15 @@ export interface TrophyCtx {
   cups: number;
   stickers: number;
   maxLevelPlayers: number;
+  /** Episodi superati nella Leggenda del Pallone. */
+  legend?: number;
 }
 
 export function trophyValue(d: TrophyDef, c: TrophyCtx): number {
   if (d.stat === 'coppe') return c.cups;
   if (d.stat === 'figurine') return c.stickers;
   if (d.stat === 'livello5') return c.maxLevelPlayers;
+  if (d.stat === 'leggenda') return c.legend ?? 0;
   return c.totals[d.stat];
 }
 

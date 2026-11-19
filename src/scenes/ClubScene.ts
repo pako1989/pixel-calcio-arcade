@@ -357,6 +357,7 @@ export class ClubScene extends Phaser.Scene {
       cups: sv.trophies ?? 0,
       stickers: sv.album ? ownedStickers(sv.album) : 0,
       maxLevelPlayers: Object.values(p.xp).flat().filter((x) => levelOf(x) >= MAX_LEVEL).length,
+      legend: sv.leggenda?.cleared ?? 0,
     };
     const g = this.add.graphics();
     const pw = Math.min(W - 20, 640);
