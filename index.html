@@ -75,11 +75,77 @@
         font: 12px monospace;
       }
     </style>
-    <script type="module" crossorigin src="./assets/game-BM9DlOsu.js"></script>
+    <script type="module" crossorigin src="./assets/game-yUWYDQNk.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/game-CWliTIKB.css">
   </head>
   <body>
     <div id="loading">Caricamento…</div>
+    <script>
+      // Paracadute: se il gioco non parte (file mancante dopo un aggiornamento, cache
+      // vecchia, errore all'avvio) si svuota la cache e si ricarica una volta da sola;
+      // se ancora non va, si mostra il motivo e un bottone per riprovare.
+      (function () {
+        var KEY = 'pixel-calcio:ricarica';
+        var why = '';
+        var t0 = Date.now();
+        function flag(v) {
+          try {
+            if (v === undefined) return sessionStorage.getItem(KEY);
+            if (v) sessionStorage.setItem(KEY, '1');
+            else sessionStorage.removeItem(KEY);
+          } catch (e) {}
+          return null;
+        }
+        function clean() {
+          var jobs = [];
+          try {
+            if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+            if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+          } catch (e) {}
+          return Promise.all(jobs).catch(function () {});
+        }
+        function reload() {
+          clean().then(function () {
+            location.replace(location.pathname + '?v=' + Date.now());
+          });
+        }
+        function fail() {
+          var el = document.getElementById('loading');
+          if (!el || el.dataset.fail) return;
+          if (!flag()) {
+            flag(true);
+            el.textContent = 'Aggiorno il gioco…';
+            reload();
+            return;
+          }
+          el.dataset.fail = '1';
+          el.style.flexDirection = 'column';
+          el.style.gap = '14px';
+          el.style.textAlign = 'center';
+          el.style.padding = '20px';
+          el.innerHTML = '<div>Il gioco non è partito.</div><div style="font-size:10px;opacity:.7"></div><button style="font:12px monospace;padding:10px 18px;background:#e8443a;color:#fff;border:0;border-radius:4px">RIPROVA</button>';
+          el.children[1].textContent = why || 'caricamento troppo lento';
+          el.children[2].onclick = function () { flag(false); flag(true); el.textContent = 'Aggiorno il gioco…'; reload(); };
+        }
+        window.addEventListener('error', function (e) {
+          if (!document.getElementById('loading')) return;
+          var t = e.target;
+          why = t && t.tagName === 'SCRIPT' ? 'file del gioco non trovato' : String(e.message || 'errore');
+          setTimeout(fail, 300);
+        }, true);
+        var iv = setInterval(function () {
+          if (!document.getElementById('loading')) {
+            // partito: si toglie il segno della ricarica e anche ?v= dall'indirizzo
+            clearInterval(iv);
+            flag(false);
+            if (location.search.indexOf('v=') >= 0) try { history.replaceState(null, '', location.pathname); } catch (e) {}
+          } else if (Date.now() - t0 > 25000) {
+            clearInterval(iv);
+            fail();
+          }
+        }, 500);
+      })();
+    </script>
     <div id="game"></div>
     <div id="rotate">
       <div class="phone"></div>

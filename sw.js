@@ -1,8 +1,8 @@
 // Service worker: il gioco funziona anche offline dopo la prima apertura.
-const CACHE = 'pixel-calcio-v2';
+const CACHE = 'pixel-calcio-v3';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest'])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest'].map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -15,10 +15,12 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   if (req.mode === 'navigate') {
-    // pagina: prima la rete (aggiornamenti), poi la cache
+    // pagina: prima la rete (aggiornamenti), poi la cache. 'no-cache' evita che il
+    // browser dia una pagina vecchia che punta a file del gioco già cancellati.
     e.respondWith(
-      fetch(req)
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then((res) => {
+          if (!res.ok) return caches.match('./index.html').then((hit) => hit || res);
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put('./index.html', copy));
           return res;
