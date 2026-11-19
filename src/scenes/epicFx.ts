@@ -92,7 +92,8 @@ function face(scene: Phaser.Scene, w: Who, expr: Expr) {
 // ---------- duelli ----------
 
 export interface DuelFxOpts {
-  kind: 'dribbling' | 'passaggio';
+  /** 'blocco': `a` si butta davanti al tiro di `d`. */
+  kind: 'dribbling' | 'passaggio' | 'blocco';
   attTech?: { name: string; color: number };
   defTech?: { name: string; color: number };
   defKind: 'contrasto' | 'intercetto' | 'blocco';
@@ -128,8 +129,9 @@ export async function duelFx(scene: Phaser.Scene, a: Who, d: Who, o: DuelFxOpts)
   c.add([ia, id]);
   scene.tweens.add({ targets: ia, x: W * 0.2, duration: 200 / fxSpeed.v, ease: 'Quad.easeOut' });
   scene.tweens.add({ targets: id, x: W * 0.8, duration: 200 / fxSpeed.v, ease: 'Quad.easeOut' });
-  const la = txt(scene, W * 0.06, top + 12, `${a.name.toUpperCase()}  ${o.kind === 'dribbling' ? 'DRIBBLING' : 'PASSAGGIO'}`, 7, '#ffffff').setOrigin(0, 0.5);
-  const ld = txt(scene, W * 0.94, bot - 12, `${DEF_LABEL[o.defKind]}  ${d.name.toUpperCase()}`, 7, '#ffffff').setOrigin(1, 0.5);
+  const aLabel = o.kind === 'dribbling' ? 'DRIBBLING' : o.kind === 'passaggio' ? 'PASSAGGIO' : 'BLOCCO';
+  const la = txt(scene, W * 0.06, top + 12, `${a.name.toUpperCase()}  ${aLabel}`, 7, '#ffffff').setOrigin(0, 0.5);
+  const ld = txt(scene, W * 0.94, bot - 12, `${o.kind === 'blocco' ? 'TIRO' : DEF_LABEL[o.defKind]}  ${d.name.toUpperCase()}`, 7, '#ffffff').setOrigin(1, 0.5);
   c.add([la, ld]);
   const vs = shadowTxt(scene, W / 2, H / 2, 'VS', 16, '#ffd23f', '#a0381e', 2);
   c.add(vs.c);
@@ -156,9 +158,12 @@ export async function duelFx(scene: Phaser.Scene, a: Who, d: Who, o: DuelFxOpts)
   if (o.kind === 'dribbling') sfx.trick();
   else sfx.pass();
   if (!o.win) sfx.tackle();
-  const res = o.win
-    ? o.kind === 'dribbling' ? 'SUPERATO!' : 'PASSAGGIO RIUSCITO!'
-    : o.kind === 'dribbling' ? 'PALLA RUBATA!' : 'INTERCETTATO!';
+  const RES = {
+    dribbling: ['SUPERATO!', 'PALLA RUBATA!'],
+    passaggio: ['PASSAGGIO RIUSCITO!', 'INTERCETTATO!'],
+    blocco: ['RESPINTO!', 'LO TRAVOLGE!'],
+  };
+  const res = RES[o.kind][o.win ? 0 : 1];
   const winner = o.win ? ia : id;
   const loser = o.win ? id : ia;
   scene.tweens.add({ targets: loser, alpha: 0.35, y: loser.y + 10, duration: 200 / fxSpeed.v });

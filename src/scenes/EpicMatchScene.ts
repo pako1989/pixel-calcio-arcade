@@ -571,7 +571,8 @@ export class EpicMatchScene extends Phaser.Scene {
       const H = this.scale.height;
       const c = (this.choice = this.add.container(0, 0).setScrollFactor(0).setDepth(3500));
       const rows = Math.ceil(opts.length / 4);
-      const ph = 22 + rows * 34;
+      // margine in basso: sui telefoni il bordo dello schermo è curvo
+      const ph = 30 + rows * 34;
       const g = this.add.graphics();
       g.fillStyle(0x0d0a1a, 0.9).fillRect(0, H - ph, W, ph);
       g.fillStyle(COLORS.accent).fillRect(0, H - ph, W, 2);
@@ -653,7 +654,7 @@ export class EpicMatchScene extends Phaser.Scene {
       if (enc) main.push({ label: 'DRIBBLING', sub: '4 EN', value: 'dribbling', color: 0x2f6fd0 });
       if (targets.length) main.push({ label: 'PASSAGGIO', sub: '3 EN', value: 'passaggio', color: 0x2f9a8a });
       main.push({ label: 'TIRO', sub: `8 EN · ${d} m`, value: 'tiro', color: 0xc0306a });
-      if (allSpecials.length) main.push({ label: `★ SPECIALI`, sub: `${specials.length} pronte`, value: 'spec', color: 0xffd23f, enabled: specials.length > 0 });
+      if (allSpecials.length) main.push({ label: 'SPECIALI!', sub: `${specials.length} pronte`, value: 'spec', color: 0xffd23f, enabled: specials.length > 0 });
       const k = await this.choose(info, hint, main);
       if (k === 'avanza') return { kind: 'avanza' };
       if (k === 'dribbling') return { kind: 'dribbling' };
@@ -683,7 +684,7 @@ export class EpicMatchScene extends Phaser.Scene {
     const opts: Opt<string>[] = m.passTargets().slice(0, 3).map((t) => {
       const p = m.player(t.id);
       const gain = Math.round(Math.abs(t.x - m.x));
-      return { label: p.name.toUpperCase(), sub: `+${gain} m · ${p.techs.some((q) => TECHS[q].kind === 'tiro' && m.opts.known.includes(q)) ? '★' : p.role}`, value: t.id, color: 0x2f9a8a };
+      return { label: p.name.toUpperCase(), sub: `+${gain} m · ${p.techs.some((q) => TECHS[q].kind === 'tiro' && m.opts.known.includes(q)) ? 'BOMBER' : p.role === 'FWD' ? 'ATT' : p.role === 'MID' ? 'CEN' : 'DIF'}`, value: t.id, color: 0x2f9a8a };
     });
     opts.push({ label: 'INDIETRO', value: '', color: 0x3a3d55 });
     return this.choose(info, hint, opts);
@@ -950,9 +951,8 @@ export class EpicMatchScene extends Phaser.Scene {
       const blocker = this.actors.get(s.by)!;
       this.tweens.add({ targets: blocker.spr, y: blocker.spr.y - 14, duration: 140, yoyo: true });
       if (s.tech) {
-        await duelFx(this, this.who(s.by), this.who(shooter), { kind: 'dribbling', attTech: this.techFx(s.tech), defKind: 'blocco', win: s.ok });
-      }
-      if (s.ok) {
+        await duelFx(this, this.who(s.by), this.who(shooter), { kind: 'blocco', attTech: this.techFx(s.tech), defKind: 'blocco', win: s.ok });
+      } else if (s.ok) {
         sfx.tackle();
         await pop(this, 'RESPINTO!', m.sideOf(s.by) === 0 ? '#5be37d' : '#ff8a8a', 600);
       } else {
@@ -1124,25 +1124,27 @@ export class EpicMatchScene extends Phaser.Scene {
       const H = this.scale.height;
       const c = this.add.container(0, 0).setScrollFactor(0).setDepth(4500);
       c.add(this.add.rectangle(0, 0, W, H, 0x0d0a1a, 0.85).setOrigin(0));
-      const g = this.add.graphics();
-      const pw = Math.min(W - 40, 420);
-      panel(g, W / 2 - pw / 2, 56, pw, 240, 0x1b1d2e, ok ? COLORS.accent : 0xff5a5a, 0.97);
-      c.add(g);
       const [a, b] = this.m.teams;
-      c.add(shadowTxt(this, W / 2, 84, ok ? 'OBIETTIVO RAGGIUNTO!' : 'OBIETTIVO MANCATO', 12, ok ? '#5be37d' : '#ff5a5a', '#1a1222', 2).c);
-      c.add(txt(this, W / 2, 112, `${a.name}  ${this.m.score[0]} - ${this.m.score[1]}  ${b.name}`, 7, '#ffffff'));
-      const scorers = this.m.scorers.map((s) => `${this.m.player(s.by).name} ${Math.min(90, Math.floor((s.time / this.m.duration) * 90))}'${s.tech ? ' ★' : ''}`).join('   ');
-      if (scorers) c.add(txt(this, W / 2, 128, scorers, 6, '#8a8fb0', { wordWrap: { width: pw - 30 }, align: 'center' }));
-      c.add(txt(this, W / 2, 152, objectiveText(this.ep.objective), 7, '#ffd23f'));
       const rows = [
         `Duelli vinti: ${this.m.duelsWon}`,
         `Punti Leggenda: +${r.pts}`,
         `Monete: +${r.coins + bonus}`,
-        ...(r.first ? ['NUOVO EPISODIO SBLOCCATO!'] : []),
+        ...(r.first ? [this.epi >= EPISODES.length - 1 ? 'STORIA COMPLETATA!' : 'NUOVO EPISODIO SBLOCCATO!'] : []),
         ...trophies.map((t) => `TROFEO: ${t}`),
       ];
-      rows.forEach((s, i) => c.add(txt(this, W / 2, 176 + i * 16, s, 7, s.startsWith('TROFEO') ? '#ff7ab8' : s.startsWith('NUOVO') ? '#5be37d' : '#ffffff')));
-      const t = txt(this, W / 2, 282, 'TOCCA PER CONTINUARE', 6, '#8a8fb0');
+      const ph = 150 + rows.length * 15;
+      const y0 = Math.max(44, (H - ph) / 2);
+      const g = this.add.graphics();
+      const pw = Math.min(W - 40, 440);
+      panel(g, W / 2 - pw / 2, y0, pw, ph, 0x1b1d2e, ok ? COLORS.accent : 0xff5a5a, 0.97);
+      c.add(g);
+      c.add(shadowTxt(this, W / 2, y0 + 24, ok ? 'OBIETTIVO RAGGIUNTO!' : 'OBIETTIVO MANCATO', 12, ok ? '#5be37d' : '#ff5a5a', '#1a1222', 2).c);
+      c.add(txt(this, W / 2, y0 + 50, `${a.name}  ${this.m.score[0]} - ${this.m.score[1]}  ${b.name}`, 7, '#ffffff'));
+      const scorers = this.m.scorers.map((s) => `${this.m.player(s.by).name} ${Math.min(90, Math.floor((s.time / this.m.duration) * 90))}'`).join('   ');
+      if (scorers) c.add(txt(this, W / 2, y0 + 66, scorers, 6, '#8a8fb0', { wordWrap: { width: pw - 30 }, align: 'center' }));
+      c.add(txt(this, W / 2, y0 + 88, objectiveText(this.ep.objective), 7, '#ffd23f'));
+      rows.forEach((s, i) => c.add(txt(this, W / 2, y0 + 110 + i * 15, s, 7, s.startsWith('TROFEO') ? '#ff7ab8' : /!$/.test(s) ? '#5be37d' : '#ffffff')));
+      const t = txt(this, W / 2, y0 + ph - 12, 'TOCCA PER CONTINUARE', 6, '#8a8fb0');
       c.add(t);
       this.tweens.add({ targets: t, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
       c.setAlpha(0);

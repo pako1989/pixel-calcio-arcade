@@ -156,7 +156,10 @@ export class LeggendaScene extends Phaser.Scene {
       g.fillStyle(done ? 0x5be37d : open ? COLORS.accent : 0x3a3d55).fillCircle(28, y, 9);
       txt(this, 28, y, open ? String(i + 1) : '?', 6, open ? '#1a1222' : '#8a8fb0');
       txt(this, 44, y, open ? e.title : '???', 6, open ? (sel ? '#ffd23f' : '#ffffff') : '#5a5f80').setOrigin(0, 0.5);
-      if (done) txt(this, lw, y, '✓', 7, '#5be37d').setOrigin(1, 0.5);
+      if (done) {
+        // segno di spunta disegnato a pixel
+        g.fillStyle(0x5be37d).fillRect(lw - 8, y, 2, 2).fillRect(lw - 6, y + 2, 2, 2).fillRect(lw - 4, y, 2, 2).fillRect(lw - 2, y - 2, 2, 2).fillRect(lw, y - 4, 2, 2);
+      }
       const z = this.add.zone(10 + lw / 2, y, lw, 24).setInteractive({ useHandCursor: true });
       z.on('pointerup', () => {
         sfx.click();
