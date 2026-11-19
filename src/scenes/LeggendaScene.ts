@@ -195,7 +195,7 @@ export class LeggendaScene extends Phaser.Scene {
     const done = i < this.sv.cleared;
     button(this, cx, fy + 70, Math.min(200, pw - 40), 26, done ? 'RIGIOCA' : 'GIOCA', () => this.play(i), { color: done ? 0x2f6fd0 : 0xe85a1a, size: 8 });
     if (i === 0 && this.sv.cleared === 0) {
-      txt(this, cx, fy + 104, 'Quando incontri un avversario scegli:\ndribbling, passaggio, tiro o una tecnica.', 6, '#ffe9a0', { align: 'center', lineSpacing: 6 });
+      txt(this, cx, fy + 104, 'Corri sul campo col joystick. Se ti scontri\ncon un avversario scegli: dribbling, passaggio,\ntiro o una tecnica.', 6, '#ffe9a0', { align: 'center', lineSpacing: 6 });
     }
   }
 
