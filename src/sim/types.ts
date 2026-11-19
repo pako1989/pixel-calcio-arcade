@@ -103,6 +103,26 @@ export interface MatchConfig {
   weather?: Weather;
   /** Partita in notturna con i riflettori. */
   night?: boolean;
+  /** Modificatori arcade di regola per Sopravvivenza e Missioni speciali. */
+  mods?: MatchMods;
+}
+
+/** Modificatori arcade applicati dalla simulazione della partita. */
+export interface MatchMods {
+  /** Moltiplicatore velocità di tutti i giocatori (es. 1.2 = ritmo folle). */
+  speedMult?: number;
+  /** Moltiplicatore carica della barra SUPER (es. 2 = doppia carica). */
+  superMult?: number;
+  /** Moltiplicatore consumo fiato (0 = scatto infinito). */
+  staminaMult?: number;
+  /** Ogni tiro parte infuocato. */
+  alwaysFire?: boolean;
+  /** I power-up compaiono con frequenza doppia. */
+  fastPowerUps?: boolean;
+  /** Secondi iniziali di Muro davanti alla porta della squadra umana. */
+  startWall?: number;
+  /** Secondi iniziali di Turbo per la squadra umana. */
+  startTurbo?: number;
 }
 
 export interface MatchStats {

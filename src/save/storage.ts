@@ -7,6 +7,7 @@ import { newProgress, type ProgressSave } from '../modes/progress';
 import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 import type { LeggendaSave } from '../modes/leggenda';
+import type { SurvivalRecord, SurvivalState } from '../modes/survival';
 
 const KEY = 'pixel-calcio-arcade:v1';
 
@@ -50,6 +51,9 @@ export interface SaveData {
   progress?: ProgressSave;
   /** Leggenda del Pallone (storia in stile anime). */
   leggenda?: LeggendaSave;
+  /** Sopravvivenza roguelite: corsa in corso e record personale. */
+  survival?: SurvivalState;
+  survivalBest?: SurvivalRecord;
 }
 
 const DEFAULTS: SaveData = {

@@ -16,7 +16,7 @@ export interface Totals {
   sfide: number;
 }
 
-export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5' | 'leggenda';
+export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5' | 'leggenda' | 'sopravvivenza' | 'missioni';
 
 export interface TrophyDef {
   id: string;
@@ -59,6 +59,10 @@ export const TROPHIES: TrophyDef[] = [
   T('leggenda', 1, 'Ragazzo prodigio', 'Leggenda: 1° episodio', 40),
   T('leggenda', 5, 'Campione regionale', 'Leggenda: 5° episodio', 120),
   T('leggenda', 10, 'Leggenda del Pallone', 'Vinci i Mondiali giovanili', 400),
+  T('sopravvivenza', 3, 'Sopravvissuto', 'Sopravvivenza: supera 3 round', 60),
+  T('sopravvivenza', 5, 'Cacciatore di Boss', 'Sopravvivenza: batti un Boss', 150),
+  T('sopravvivenza', 10, 'Re della Scala', 'Sopravvivenza: supera 10 round', 350),
+  T('missioni', 18, 'Tuttofare', 'Completa tutte le 18 missioni', 250),
 ];
 
 export function newTotals(): Totals {
@@ -86,6 +90,10 @@ export interface TrophyCtx {
   maxLevelPlayers: number;
   /** Episodi superati nella Leggenda del Pallone. */
   legend?: number;
+  /** Miglior round superato in Sopravvivenza. */
+  survival?: number;
+  /** Numero di missioni completate. */
+  missions?: number;
 }
 
 export function trophyValue(d: TrophyDef, c: TrophyCtx): number {
@@ -93,6 +101,8 @@ export function trophyValue(d: TrophyDef, c: TrophyCtx): number {
   if (d.stat === 'figurine') return c.stickers;
   if (d.stat === 'livello5') return c.maxLevelPlayers;
   if (d.stat === 'leggenda') return c.legend ?? 0;
+  if (d.stat === 'sopravvivenza') return c.survival ?? 0;
+  if (d.stat === 'missioni') return c.missions ?? 0;
   return c.totals[d.stat];
 }
 

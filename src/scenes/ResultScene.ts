@@ -16,6 +16,7 @@ import { applyMatch, cupDue, DIVISIONS, ensureManager, nextMatch } from '../mode
 import { newAlbum, owned as ownedStickers, packsForMatch } from '../modes/album';
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
+import { applySurvivalMatch, SURVIVAL_RULES } from '../modes/survival';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
 
@@ -127,6 +128,8 @@ export class ResultScene extends Phaser.Scene {
       stickers: sv.album ? ownedStickers(sv.album) : 0,
       maxLevelPlayers: Object.values(p.xp).flat().filter((x) => levelOf(x) >= MAX_LEVEL).length,
       legend: sv.leggenda?.cleared ?? 0,
+      survival: sv.survivalBest?.bestRound ?? 0,
+      missions: Object.values(sv.missions?.done ?? {}).filter(Boolean).length,
     });
     for (const t of newT) {
       this.coins += t.reward;
@@ -313,6 +316,58 @@ export class ResultScene extends Phaser.Scene {
             lines: rep.success ? city.win : city.lose, step: idx, then: 'conquista', saga: 'conquista', celebrate: rep.success ? idx : undefined,
           }),
         },
+      };
+    }
+    if (d.launch.mode === 'sopravvivenza') {
+      const sv = load();
+      const s = sv.survival;
+      if (!s || !s.active || s.round !== md.round) return undefined;
+      const best = sv.survivalBest ?? { bestRound: 0, runs: 0, totalWins: 0 };
+      const ruleName = SURVIVAL_RULES[s.next.rule].name;
+      const rep = applySurvivalMatch(s, d, best);
+      save((st) => {
+        st.survival = s;
+        const sb = (st.survivalBest = st.survivalBest ?? { bestRound: 0, runs: 0, totalWins: 0 });
+        if (rep.won) {
+          sb.totalWins++;
+          if (rep.roundCleared > sb.bestRound) sb.bestRound = rep.roundCleared;
+          progressOf().coins += rep.coins;
+          if (rep.packs > 0) {
+            st.album = st.album ?? newAlbum();
+            st.album.packs += rep.packs;
+            this.packs += rep.packs;
+          }
+        } else {
+          sb.runs++;
+          if (rep.roundCleared > sb.bestRound) sb.bestRound = rep.roundCleared;
+          progressOf().coins += rep.coins;
+        }
+      });
+      if (rep.won) {
+        const lines: ReportLine[] = [
+          { text: `ROUND ${md.round}${rep.isBoss ? ' (BOSS)' : ''} · ${ruleName}`, color: '#8a8fb0' },
+          { text: 'Avversario battuto! Scegli giocatore o bonus.', ok: true },
+          { text: `Premio round: +${rep.coins} monete${rep.packs ? ` · +${rep.packs} pacchetto` : ''}`, color: '#ffd23f' },
+        ];
+        return {
+          title: rep.isBoss ? 'BOSS BATTUTO!' : 'ROUND SUPERATO!',
+          titleColor: '#5be37d',
+          lines,
+          retry: false,
+          next: { label: 'BOTTINO!', go: (sc) => backToScene(sc, 'survival') },
+        };
+      }
+      const lines: ReportLine[] = [
+        { text: `ELIMINATO AL ROUND ${md.round} · ${ruleName}`, color: '#8a8fb0' },
+        { text: `Round superati: ${rep.roundCleared}   ·   Record: ${load().survivalBest?.bestRound ?? rep.roundCleared}`, color: '#3fd0ff' },
+        { text: `Giocatori rubati: ${s.stolen}   ·   Bonus finale: +${rep.coins} monete`, color: '#ffd23f' },
+      ];
+      return {
+        title: 'CORSA TERMINATA',
+        titleColor: '#ff5a5a',
+        lines,
+        retry: false,
+        next: { label: 'RIEPILOGO', go: (sc) => backToScene(sc, 'survival') },
       };
     }
     return undefined;

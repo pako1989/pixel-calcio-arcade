@@ -16,6 +16,10 @@ export interface MatchTally {
   yellows: [number, number];
   reds: [number, number];
   tunnels: [number, number];
+  /** Gol di sponda / rimbalzo su muro o ostacolo. */
+  bankGoals?: [number, number];
+  /** Gol da lontano (> 330 px). */
+  longGoals?: [number, number];
   /** Numeri di ogni giocatore (per indice nella squadra), per la pagella. */
   players: [PlayerTally[], PlayerTally[]];
 }
@@ -47,6 +51,8 @@ export function newTally(): MatchTally {
     yellows: [0, 0],
     reds: [0, 0],
     tunnels: [0, 0],
+    bankGoals: [0, 0],
+    longGoals: [0, 0],
     players: [[], []],
   };
 }
@@ -98,6 +104,8 @@ export class TallyTracker {
       case 'trick':
         t.tricks[e.team]++;
         if (e.kind === 'tunnel') t.tunnels[e.team]++;
+        if (e.kind === 'sponda' && t.bankGoals) t.bankGoals[e.team]++;
+        if (e.kind === 'lontano' && t.longGoals) t.longGoals[e.team]++;
         this.pl(e.team, e.idx).tricks++;
         break;
       case 'foul': {

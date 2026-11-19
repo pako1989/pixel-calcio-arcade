@@ -65,7 +65,15 @@ export class HudScene extends Phaser.Scene {
       this.goalT = txt(this, 0, 0, 'OBIETTIVO: ' + goal, 6, '#5be37d', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } });
     }
     if (cfg.pitch.wind) this.windT = txt(this, 0, 0, 'VENTO', 6, '#bfe6ff');
-    const cond = [cfg.pitch.slope ? 'PENDENZA' : '', cfg.pitch.waves ? 'ONDE' : '', cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '', cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '']
+    const cond = [
+      cfg.pitch.slope ? 'PENDENZA' : '',
+      cfg.pitch.waves ? 'ONDE' : '',
+      cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '',
+      cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '',
+      cfg.mods?.alwaysFire ? 'FUOCO' : '',
+      cfg.mods?.superMult && cfg.mods.superMult > 1 ? `SUPER ${cfg.mods.superMult}X` : '',
+      cfg.mods?.speedMult && cfg.mods.speedMult > 1 ? 'VELOCE' : '',
+    ]
       .filter(Boolean)
       .join(' · ');
     if (cond) this.condT = txt(this, 0, 0, cond, 6, '#bfe6ff', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } }).setOrigin(0, 0.5);

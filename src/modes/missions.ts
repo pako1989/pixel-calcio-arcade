@@ -1,4 +1,4 @@
-import type { Difficulty, PitchId } from '../sim/types';
+import type { Difficulty, MatchMods, PitchId, Weather } from '../sim/types';
 import type { MatchOutcome } from './modes';
 
 /** Obiettivi delle missioni: tutti devono essere raggiunti. */
@@ -11,7 +11,10 @@ export type Objective =
   | { kind: 'superGoal'; n: number }
   | { kind: 'fireGoal' }
   | { kind: 'tackles'; n: number }
-  | { kind: 'scoreWithin'; sec: number };
+  | { kind: 'scoreWithin'; sec: number }
+  | { kind: 'bankGoal' }
+  | { kind: 'longGoal' }
+  | { kind: 'tricks'; n: number };
 
 export interface MissionDef {
   id: string;
@@ -25,6 +28,10 @@ export interface MissionDef {
   powerUps: boolean;
   goldenGoal: boolean;
   startScore?: [number, number];
+  weather?: Weather;
+  night?: boolean;
+  mods?: MatchMods;
+  superStart?: number;
   goals: Objective[];
 }
 
@@ -89,6 +96,40 @@ export const MISSIONS: MissionDef[] = [
     team: 'aquile', opp: 'draghi', pitch: 'stadio', difficulty: 'difficile', duration: 180, powerUps: true, goldenGoal: false,
     goals: [{ kind: 'win' }, { kind: 'clean' }],
   },
+  {
+    id: 'piazza_sponda', title: 'RIMBALZI IN PIAZZA', brief: 'Sui sampietrini tra fontana e statua: sfrutta gli ostacoli per un gol di sponda e vinci.',
+    team: 'gabbiani', opp: 'pirati', pitch: 'piazza', difficulty: 'normale', duration: 150, powerUps: true, goldenGoal: false,
+    goals: [{ kind: 'bankGoal' }, { kind: 'win' }],
+  },
+  {
+    id: 'piazza_notte', title: 'NOTTE SUI SAMPIETRINI', brief: 'Pioggia e riflettori in piazza: palla veloce tra i monumenti. Vinci con 2 gol di scarto!',
+    team: 'rondini', opp: 'tigri', pitch: 'piazza', difficulty: 'normale', duration: 150, powerUps: true, goldenGoal: false,
+    weather: 'pioggia', night: true,
+    goals: [{ kind: 'winBy', n: 2 }],
+  },
+  {
+    id: 'montagna_valanga', title: 'VALANGA IN DISCESA', brief: 'Campo in pendenza verso il basso e carica SUPER doppia: travolgili con almeno 3 gol!',
+    team: 'vulcani', opp: 'lupi', pitch: 'montagna', difficulty: 'normale', duration: 150, powerUps: true, goldenGoal: false,
+    mods: { speedMult: 1.15, superMult: 2 },
+    goals: [{ kind: 'score', n: 3 }, { kind: 'win' }],
+  },
+  {
+    id: 'montagna_nebbia', title: 'SCALATA NELLA NEBBIA', brief: 'Sotto 0-1 in alta quota avvolti dalla nebbia. Ribalta la partita prima del fischio!',
+    team: 'tigri', opp: 'biscioni', pitch: 'montagna', difficulty: 'normale', duration: 180, powerUps: true, goldenGoal: true,
+    weather: 'nebbia', startScore: [0, 1],
+    goals: [{ kind: 'win' }],
+  },
+  {
+    id: 'molo_onde', title: 'ONDE SUL MOLO', brief: 'Le onde spazzano il campo! Trova lo spazio per un gol da lontano e non perdere.',
+    team: 'pirati', opp: 'gabbiani', pitch: 'molo', difficulty: 'normale', duration: 150, powerUps: true, goldenGoal: false,
+    goals: [{ kind: 'longGoal' }, { kind: 'notLose' }],
+  },
+  {
+    id: 'tempesta_porto', title: 'TEMPESTA PERFETTA', brief: 'Notte di tempesta sul molo: tiri infuocati per tutti! Batti i Draghi Verdi.',
+    team: 'lupi', opp: 'draghi', pitch: 'molo', difficulty: 'difficile', duration: 180, powerUps: true, goldenGoal: true,
+    weather: 'pioggia', night: true, mods: { alwaysFire: true, fastPowerUps: true },
+    goals: [{ kind: 'win' }],
+  },
 ];
 
 export function objectiveText(o: Objective): string {
@@ -102,6 +143,9 @@ export function objectiveText(o: Objective): string {
     case 'fireGoal': return 'Segna con un tiro di fuoco';
     case 'tackles': return `Vinci almeno ${o.n} contrasti`;
     case 'scoreWithin': return `Segna entro ${o.sec} secondi`;
+    case 'bankGoal': return 'Segna un gol di sponda o rimbalzo';
+    case 'longGoal': return 'Segna un gol da lontano';
+    case 'tricks': return `Fai almeno ${o.n} giocate di stile`;
   }
 }
 
@@ -119,6 +163,9 @@ export function checkObjective(o: Objective, out: MatchOutcome): boolean {
     case 'fireGoal': return t.fireGoals[0] >= 1;
     case 'tackles': return t.tacklesWon[0] >= o.n;
     case 'scoreWithin': return t.firstGoalAt[0] >= 0 && t.firstGoalAt[0] <= o.sec;
+    case 'bankGoal': return (t.bankGoals?.[0] ?? 0) >= 1;
+    case 'longGoal': return (t.longGoals?.[0] ?? 0) >= 1;
+    case 'tricks': return t.tricks[0] >= o.n;
   }
 }
 

@@ -125,6 +125,10 @@ export class MatchSim {
       });
     });
     this.kickoffTeam = this.rng.chance(0.5) ? 0 : 1;
+    if (cfg.mods?.startWall) this.wall[0] = cfg.mods.startWall;
+    if (cfg.mods?.startTurbo) this.turbo[0] = cfg.mods.startTurbo;
+    if (cfg.mods?.alwaysFire) this.fireShot = [true, true];
+    if (cfg.mods?.fastPowerUps) this.powerUpT = 5;
     this.setupKickoff();
     this.events.push({ type: 'whistle', kind: 'start' });
   }
@@ -577,8 +581,8 @@ export class MatchSim {
       superShot = true;
       this.superBar[team] = 0;
     }
-    const fire = this.fireShot[team];
-    this.fireShot[team] = false;
+    const fire = this.fireShot[team] || !!this.cfg.mods?.alwaysFire;
+    this.fireShot[team] = !!this.cfg.mods?.alwaysFire;
 
     if (assist && dGoal < 420) {
       const d = Math.abs(Math.atan2(Math.sin(dir - toGoal), Math.cos(dir - toGoal)));
@@ -640,7 +644,8 @@ export class MatchSim {
 
   addSuper(team: 0 | 1, amount: number) {
     const before = this.superBar[team];
-    this.superBar[team] = Math.min(1, before + amount);
+    const mult = this.cfg.mods?.superMult ?? 1;
+    this.superBar[team] = Math.min(1, before + amount * mult);
     if (before < 1 && this.superBar[team] >= 1) this.events.push({ type: 'superReady', team });
   }
 
@@ -653,6 +658,7 @@ export class MatchSim {
     if (this.turbo[p.team] > 0) s *= 1.2;
     if (p.isGK) s *= 1.05;
     if (p.injured) s *= 0.86;
+    if (this.cfg.mods?.speedMult) s *= this.cfg.mods.speedMult;
     return s;
   }
 
@@ -688,7 +694,8 @@ export class MatchSim {
       // sprint e fiato
       const wantsSprint = p.wantSprint && (p.stamina > 0.05 || this.turbo[p.team] > 0);
       p.sprinting = wantsSprint && len(p.wantX, p.wantY) > 0.3;
-      if (p.sprinting && this.turbo[p.team] <= 0) p.stamina = Math.max(0, p.stamina - dt * 0.32 * (p.def.skills?.includes('motore') ? 0.6 : 1));
+      const stMult = this.cfg.mods?.staminaMult ?? 1;
+      if (p.sprinting && this.turbo[p.team] <= 0) p.stamina = Math.max(0, p.stamina - dt * 0.32 * stMult * (p.def.skills?.includes('motore') ? 0.6 : 1));
       else p.stamina = Math.min(1, p.stamina + dt * 0.18);
       const ms = this.maxSpeed(p);
       const dvx = p.wantX * ms - p.vx;
@@ -1492,7 +1499,7 @@ export class MatchSim {
     if (!this.cfg.powerUps) return;
     this.powerUpT -= dt;
     if (this.powerUpT <= 0 && this.powerUps.length < 2) {
-      this.powerUpT = this.rng.range(13, 20);
+      this.powerUpT = this.cfg.mods?.fastPowerUps ? this.rng.range(6, 10) : this.rng.range(13, 20);
       const kinds: PowerUpKind[] = ['fuoco', 'turbo', 'muro'];
       const kind = this.rng.pick(kinds);
       const pu: PowerUp = {

@@ -38,32 +38,34 @@ export class MissionsScene extends Phaser.Scene {
     txt(this, W - 14, 18, `${nDone}/${MISSIONS.length}`, 8, nDone === MISSIONS.length ? '#ffd23f' : '#8a8fb0').setOrigin(1, 0.5);
 
     const cols = 6;
-    const gap = 6;
+    const rows = Math.ceil(MISSIONS.length / cols);
+    const gap = 5;
     const cw = Math.min(84, (W - 32 - gap * (cols - 1)) / cols);
-    const ch = 44;
+    const ch = 36;
     const x0 = W / 2 - (cols * cw + (cols - 1) * gap) / 2;
+    const y0 = 36;
     const g = this.add.graphics();
     MISSIONS.forEach((m, i) => {
       const x = x0 + (i % cols) * (cw + gap);
-      const y = 40 + Math.floor(i / cols) * (ch + gap);
+      const y = y0 + Math.floor(i / cols) * (ch + gap);
       const unlocked = isUnlocked(i, done);
       const isSel = i === this.sel;
       const fill = !unlocked ? 0x16172a : done[m.id] ? 0x1f4a33 : 0x22253a;
       g.fillStyle(0x1a1222).fillRect(x - 2, y - 2, cw + 4, ch + 4);
       g.fillStyle(fill).fillRect(x, y, cw, ch);
       if (isSel) g.lineStyle(2, COLORS.accent).strokeRect(x - 1, y - 1, cw + 2, ch + 2);
-      txt(this, x + 6, y + 9, String(i + 1), 8, unlocked ? '#ffd23f' : '#3a3d55').setOrigin(0, 0.5);
+      txt(this, x + 6, y + 8, String(i + 1), 8, unlocked ? '#ffd23f' : '#3a3d55').setOrigin(0, 0.5);
       if (!unlocked) {
         // lucchetto
-        g.fillStyle(0x3a3d55).fillRect(x + cw / 2 - 6, y + 22, 12, 9);
-        g.lineStyle(2, 0x3a3d55).strokeRect(x + cw / 2 - 4, y + 16, 8, 8);
+        g.fillStyle(0x3a3d55).fillRect(x + cw / 2 - 6, y + 18, 12, 8);
+        g.lineStyle(2, 0x3a3d55).strokeRect(x + cw / 2 - 4, y + 13, 8, 7);
       } else {
         const t = teamById(m.team);
-        g.fillStyle(t.colors.shirt).fillRect(x + cw - 14, y + 4, 8, 10);
-        g.fillStyle(t.colors.shirt2).fillRect(x + cw - 10, y + 4, 2, 10);
-        txt(this, x + cw / 2, y + 30, m.title, 6, '#ffffff', { wordWrap: { width: cw - 6 }, align: 'center' });
+        g.fillStyle(t.colors.shirt).fillRect(x + cw - 14, y + 4, 8, 9);
+        g.fillStyle(t.colors.shirt2).fillRect(x + cw - 10, y + 4, 2, 9);
+        txt(this, x + cw / 2, y + 25, m.title, 6, '#ffffff', { wordWrap: { width: cw - 6 }, align: 'center' });
         if (done[m.id]) {
-          g.fillStyle(COLORS.good).fillRect(x + cw - 26, y + 6, 8, 3).fillRect(x + cw - 24, y + 9, 4, 3);
+          g.fillStyle(COLORS.good).fillRect(x + cw - 26, y + 5, 8, 3).fillRect(x + cw - 24, y + 8, 4, 3);
         }
       }
       const z = this.add.zone(x + cw / 2, y + ch / 2, cw + 4, ch + 4).setInteractive({ useHandCursor: true });
@@ -77,7 +79,7 @@ export class MissionsScene extends Phaser.Scene {
 
     // dettaglio
     const m = MISSIONS[this.sel];
-    const dy = 40 + 2 * (ch + gap) + 6;
+    const dy = y0 + rows * (ch + gap) + 4;
     const pg = this.add.graphics();
     const pw = Math.min(W - 32, 520);
     const ph = H - 44 - dy;
@@ -85,13 +87,21 @@ export class MissionsScene extends Phaser.Scene {
     const lx = W / 2 - pw / 2 + 12;
     txt(this, lx, dy + 12, `${this.sel + 1}. ${m.title}`, 8, '#ffd23f').setOrigin(0, 0.5);
     if (done[m.id]) txt(this, W / 2 + pw / 2 - 12, dy + 12, 'COMPLETATA', 6, '#5be37d').setOrigin(1, 0.5);
-    txt(this, lx, dy + 28, m.brief, 6, '#d8dcf0', { wordWrap: { width: pw - 24 }, lineSpacing: 4 }).setOrigin(0, 0);
+    txt(this, lx, dy + 26, m.brief, 6, '#d8dcf0', { wordWrap: { width: pw - 24 }, lineSpacing: 4 }).setOrigin(0, 0);
     m.goals.forEach((o, i) => {
-      const yy = dy + 58 + i * 13;
+      const yy = dy + 56 + i * 13;
       pg.fillStyle(COLORS.accent2).fillRect(lx, yy - 3, 6, 6);
       txt(this, lx + 12, yy, objectiveText(o), 6, '#ffffff').setOrigin(0, 0.5);
     });
-    const info = `${teamById(m.team).short} vs ${teamById(m.opp).short} · ${PITCHES[m.pitch].name} · CPU ${m.difficulty} · ${Math.floor(m.duration / 60)}:${String(m.duration % 60).padStart(2, '0')}${m.startScore ? ` · si parte ${m.startScore[0]}-${m.startScore[1]}` : ''}${m.powerUps ? '' : ' · no power-up'}`;
+    const extras = [
+      m.weather ? m.weather : '',
+      m.night ? 'notte' : '',
+      m.mods?.alwaysFire ? 'tiro fuoco' : '',
+      m.mods?.superMult && m.mods.superMult > 1 ? `super ${m.mods.superMult}x` : '',
+      m.startScore ? `si parte ${m.startScore[0]}-${m.startScore[1]}` : '',
+      m.powerUps ? '' : 'no power-up',
+    ].filter(Boolean);
+    const info = `${teamById(m.team).short} vs ${teamById(m.opp).short} · ${PITCHES[m.pitch].name} · CPU ${m.difficulty} · ${Math.floor(m.duration / 60)}:${String(m.duration % 60).padStart(2, '0')}${extras.length ? ' · ' + extras.join(' · ') : ''}`;
     txt(this, lx, dy + ph - 12, info, 6, '#8a8fb0').setOrigin(0, 0.5);
 
     button(this, 64, H - 22, 96, 26, 'INDIETRO', () => backToMenu(this), { color: 0x3a3d55 });
@@ -105,6 +115,7 @@ export class MissionsScene extends Phaser.Scene {
       mode: 'missioni',
       modeData: { mission: m.id },
       startScore: m.startScore,
+      superStart: m.superStart,
       hudGoal: m.goals.map(objectiveText).join(' + ').toUpperCase(),
       config: {
         home,
@@ -115,6 +126,9 @@ export class MissionsScene extends Phaser.Scene {
         powerUps: m.powerUps,
         goldenGoal: m.goldenGoal,
         humanTeam: 0,
+        weather: m.weather,
+        night: m.night,
+        mods: m.mods,
       },
     };
     sfx.unlock();
