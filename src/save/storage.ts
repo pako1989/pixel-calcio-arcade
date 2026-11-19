@@ -6,6 +6,7 @@ import type { AlbumSave } from '../modes/album';
 import { newProgress, type ProgressSave } from '../modes/progress';
 import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
+import type { LeggendaSave } from '../modes/leggenda';
 
 const KEY = 'pixel-calcio-arcade:v1';
 
@@ -47,6 +48,8 @@ export interface SaveData {
   album?: AlbumSave;
   /** Monete, negozio, crescita dei giocatori e rivalità. */
   progress?: ProgressSave;
+  /** Leggenda del Pallone (storia in stile anime). */
+  leggenda?: LeggendaSave;
 }
 
 const DEFAULTS: SaveData = {

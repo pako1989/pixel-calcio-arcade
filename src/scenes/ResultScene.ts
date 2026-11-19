@@ -126,6 +126,7 @@ export class ResultScene extends Phaser.Scene {
       cups: sv.trophies ?? 0,
       stickers: sv.album ? ownedStickers(sv.album) : 0,
       maxLevelPlayers: Object.values(p.xp).flat().filter((x) => levelOf(x) >= MAX_LEVEL).length,
+      legend: sv.leggenda?.cleared ?? 0,
     });
     for (const t of newT) {
       this.coins += t.reward;

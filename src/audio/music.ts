@@ -5,7 +5,7 @@ import { sfx } from './sfx';
  * Ogni brano è scritto a sedicesimi: "C5" nota, "-" tiene la nota, "." pausa.
  */
 
-export type TrackId = 'menu' | 'match' | 'rigori';
+export type TrackId = 'menu' | 'match' | 'rigori' | 'leggenda';
 
 interface Track {
   bpm: number;
@@ -22,7 +22,7 @@ interface Track {
   leadVol: number;
 }
 
-const TRACKS: Record<TrackId, Track> = {
+const TRACKS: Record<string, Track> = {
   menu: {
     bpm: 128,
     lead: [
@@ -71,6 +71,26 @@ const TRACKS: Record<TrackId, Track> = {
     drums: 'k..k....k..k....',
     leadVol: 0.05,
   },
+};
+
+TRACKS.leggenda = {
+  // sigla eroica da anime sportivo (originale)
+  bpm: 152,
+  lead: [
+    'G4 - B4 - D5 - - - G5 - - - F#5 - E5 -',
+    'D5 - - - A4 - D5 - F#5 - E5 - D5 - - -',
+    'E5 - G5 - B5 - - - A5 - G5 - F#5 - E5 -',
+    'E5 - - - D5 - C5 - D5 - - - . . . .',
+    'G5 - - - A5 - B5 - D6 - - - B5 - G5 -',
+    'A5 - - - F#5 - D5 - A5 - B5 - A5 - - -',
+    'G5 - E5 - C5 - E5 - G5 - C6 - B5 - A5 -',
+    'A5 - - - - - - - D5 . F#5 . A5 . D6 .',
+  ].join(' '),
+  chords: ['G', 'D', 'E', 'C', 'G', 'D', 'C', 'D'],
+  bass: 'r.r.o.r.r.r.o.rf',
+  drums: 'x.hsx.hsx.hsxshs',
+  arp: true,
+  leadVol: 0.06,
 };
 
 const NOTE: Record<string, number> = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };

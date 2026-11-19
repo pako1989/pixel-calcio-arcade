@@ -17,6 +17,8 @@ import { PenaltyScene } from './scenes/PenaltyScene';
 import { AlbumScene } from './scenes/AlbumScene';
 import { ClubScene } from './scenes/ClubScene';
 import { TrainingScene } from './scenes/TrainingScene';
+import { LeggendaScene } from './scenes/LeggendaScene';
+import { EpicMatchScene } from './scenes/EpicMatchScene';
 import { sfx } from './audio/sfx';
 import { commentary } from './audio/commentary';
 
@@ -45,7 +47,7 @@ const game = new Phaser.Game({
   },
   input: { activePointers: 4 },
   fps: { target: 60, min: 30 },
-  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene, TournamentScene, MissionsScene, CareerScene, StoryScene, ConquistaScene, ManagerScene, PenaltyScene, AlbumScene, ClubScene, TrainingScene, SettingsScene],
+  scene: [BootScene, MatchScene, HudScene, TitleScene, SetupScene, ResultScene, TournamentScene, MissionsScene, CareerScene, StoryScene, ConquistaScene, ManagerScene, PenaltyScene, AlbumScene, ClubScene, TrainingScene, LeggendaScene, EpicMatchScene, SettingsScene],
 });
 
 let resizeT: number | undefined;
