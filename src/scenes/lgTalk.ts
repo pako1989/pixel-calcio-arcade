@@ -112,7 +112,8 @@ export class LgTalk {
     } else {
       g.fillStyle(0x000000, 0.35).fillRect(0, H - 98, W, 98);
     }
-    const zone = s.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
+    // dentro un contenitore fisso: anche la zona del tocco deve ignorare lo scorrimento della telecamera
+    const zone = s.add.zone(0, 0, W, H).setOrigin(0).setScrollFactor(0).setInteractive();
     zone.on('pointerup', () => this.advance());
     this.c.add(zone);
     if (fb && !full) this.c.add(txt(s, 14, H - 104, '~ RICORDO ~', 6, '#e8c890').setOrigin(0, 0.5));
