@@ -235,6 +235,8 @@ export class FieldMatch extends EpicMatch {
         // chi riceve si ferma dov'è: il pallone arriva lì
         this.x = this.pos[s.to].x;
         this.stun[s.from] = 0;
+        // il joystick passa a chi riceve
+        if (this.side === 0) this.ctrl = s.to;
       }
     }
     this.cooldown = Math.max(this.cooldown, 0.8);
@@ -291,6 +293,7 @@ export class FieldMatch extends EpicMatch {
     this.tick(dt * TIME_K);
     this.cooldown = Math.max(0, this.cooldown - dt);
     for (const id of Object.keys(this.stun)) this.stun[id] = Math.max(0, this.stun[id] - dt);
+    if (this.side === 0) this.ctrl = this.carrier;
     const carrier = this.carrier;
     const cpos = this.pos[carrier];
     const attSide = this.side;

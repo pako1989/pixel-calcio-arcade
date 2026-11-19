@@ -94,6 +94,21 @@ describe('leggenda: campo libero', () => {
     throw new Error('nessuno scontro');
   });
 
+  it('dopo un passaggio si comanda chi riceve, e si muove', () => {
+    const m = new FieldMatch(heroTeam(3), rivalTeam(3), { minutes: 40, assist: 60, known: [], seed: 5 });
+    expect(m.side).toBe(0);
+    const to = m.passTargets()[0].id;
+    m.engagers = [];
+    const steps = m.duel({ kind: 'passaggio', to }, null, { kind: 'intercetto' });
+    if (!steps.some((s) => s.t === 'pass')) return;
+    expect(m.carrier).toBe(to);
+    expect(m.ctrl).toBe(to);
+    m.cooldown = 5;
+    const x0 = m.pos[to].x;
+    m.step(0.5, { mx: 1, my: 0 });
+    expect(m.pos[to].x).toBeGreaterThan(x0 + 2);
+  });
+
   it('ogni episodio è vincibile ma non banale', () => {
     const rates: number[] = [];
     for (let ep = 0; ep < EPISODES.length; ep++) {
