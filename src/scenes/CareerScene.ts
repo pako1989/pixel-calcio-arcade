@@ -11,6 +11,12 @@ import { PITCHES } from '../data/pitches';
 import { backToMenu, backToScene } from './demo';
 import { askName } from '../ui/nameInput';
 import { sfx } from '../audio/sfx';
+import { teamById } from '../data/teams';
+import {
+  avgVote, isBench, maxLevelFor, newPro, opponentOf, position, proBefore, proPitch, proRetireLines, proTeams, PRO_ROUNDS, RETIRE_AGE, LAST_AGE,
+  retire, signOffer, statusOf,
+} from '../modes/pro';
+import { cabinetOverlay, fameRow, newsOverlay, tableOverlay, talkOverlay, trustRow } from './careerUi';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
 const STYLE_NAMES = ['CORTI', 'RASATI', 'LUNGHI', 'CIUFFO'];
@@ -136,7 +142,9 @@ export class CareerScene extends Phaser.Scene {
   // ---------- pagina della carriera ----------
   private buildHub(c: CareerState, W: number, H: number) {
     const step = STORY[c.step];
-    const { mine } = teamsFor(c, step);
+    const pro = c.pro;
+    const mine = pro ? proTeams(c, pro).mine : teamsFor(c, step).mine;
+    const maxLv = maxLevelFor(c);
     const g = this.add.graphics();
 
     // scheda del giocatore
@@ -147,7 +155,8 @@ export class CareerScene extends Phaser.Scene {
     this.add.image(lx + 40, 82, 'hero_hub', frameIndex('down', c.finished ? 'celebrate' : 'idle')).setScale(3).setOrigin(0.5, 1);
     txt(this, lx + 76, 30, c.hero.name.toUpperCase(), 8, '#ffd23f').setOrigin(0, 0.5);
     txt(this, lx + 76, 46, `N. ${c.hero.number} · ${mine.short}`, 6, '#d8dcf0').setOrigin(0, 0.5);
-    txt(this, lx + 76, 60, `${c.apps} partite · ${c.goals} gol`, 6, '#8a8fb0').setOrigin(0, 0.5);
+    const votes = pro ? pro.votes : c.votes ?? [];
+    txt(this, lx + 76, 60, `${c.apps} partite · ${c.goals} gol${votes.length ? ` · media ${avgVote(votes)}` : ''}`, 6, '#8a8fb0').setOrigin(0, 0.5);
     g.fillStyle(mine.colors.shirt).fillRect(lx + 76, 70, 10, 6);
     g.fillStyle(mine.colors.shirt2).fillRect(lx + 86, 70, 10, 6);
     txt(this, lx + 102, 73, mine.name, 6, '#8a8fb0').setOrigin(0, 0.5);
@@ -160,14 +169,15 @@ export class CareerScene extends Phaser.Scene {
       txt(this, lx + 12, y, a.label, 6, '#ffffff').setOrigin(0, 0.5);
       const bx = lx + 92;
       const lv = c.attrs[a.id];
-      for (let k = 0; k < MAX_LEVEL; k++) {
-        g.fillStyle(0x1a1222).fillRect(bx + k * 20 - 1, y - 5, 18, 10);
-        g.fillStyle(k < lv ? COLORS.accent : 0x2e3250).fillRect(bx + k * 20, y - 4, 16, 8);
+      const cw = maxLv > MAX_LEVEL ? 13 : 20;
+      for (let k = 0; k < maxLv; k++) {
+        g.fillStyle(0x1a1222).fillRect(bx + k * cw - 1, y - 5, cw - 2, 10);
+        g.fillStyle(k < lv ? (k >= MAX_LEVEL ? 0xff7ab8 : COLORS.accent) : 0x2e3250).fillRect(bx + k * cw, y - 4, cw - 4, 8);
       }
-      if (c.points > 0 && lv < MAX_LEVEL) {
+      if (c.points > 0 && lv < maxLv) {
         button(this, lx + lw - 18, y, 20, 18, '+', () => {
           save((s) => {
-            if (!s.career || s.career.points <= 0 || s.career.attrs[a.id] >= MAX_LEVEL) return;
+            if (!s.career || s.career.points <= 0 || s.career.attrs[a.id] >= maxLevelFor(s.career)) return;
             s.career.points--;
             s.career.attrs[a.id]++;
           });
@@ -176,10 +186,18 @@ export class CareerScene extends Phaser.Scene {
         }, { size: 8, color: 0x2f9a50 });
       }
     });
-    txt(this, lx + 12, 244, 'SPECIALI', 6, '#8a8fb0').setOrigin(0, 0.5);
+    trustRow(this, g, lx + 12, 236, lw - 24, c);
+    if (pro) fameRow(this, g, lx + 12, 254, lw - 24, pro);
+    const perkY = pro ? 272 : 256;
+    txt(this, lx + 12, perkY, 'SPECIALI', 6, '#8a8fb0').setOrigin(0, 0.5);
     (['bomber', 'leader'] as const).forEach((p, i) => {
       const has = c.perks.includes(p);
-      const y = 260 + i * 18;
+      if (pro) {
+        g.fillStyle(has ? 0xff7ab8 : 0x2e3250).fillRect(lx + 70 + i * 90, perkY - 4, 8, 8);
+        txt(this, lx + 82 + i * 90, perkY, has ? PERKS[p].name.split(' ').pop()! : '???', 6, has ? '#ffffff' : '#5a5f80').setOrigin(0, 0.5);
+        return;
+      }
+      const y = 270 + i * 16;
       g.fillStyle(has ? 0xff7ab8 : 0x2e3250).fillRect(lx + 12, y - 4, 8, 8);
       txt(this, lx + 26, y, has ? `${PERKS[p].name}: ${PERKS[p].desc}` : '??? (si sblocca nella storia)', 6, has ? '#ffffff' : '#5a5f80', { wordWrap: { width: lw - 36 } }).setOrigin(0, 0.5);
     });
@@ -189,15 +207,35 @@ export class CareerScene extends Phaser.Scene {
     const rw = W - rx - 16;
     const rcx = rx + rw / 2;
     panel(g, rx, 12, rw, 248, 0x1b1d2e, 0x3fd0ff, 0.94);
-    if (c.finished) {
+    // giornale, classifica e bacheca
+    const extra: [string, () => void][] = [['GIORNALE', () => newsOverlay(this, c)]];
+    if (pro) extra.push(['CLASSIFICA', () => tableOverlay(this, pro)], ['BACHECA', () => cabinetOverlay(this, c)]);
+    extra.forEach(([label, fn], i) => {
+      const bw = Math.min(100, (rw - 8) / extra.length - 6);
+      const bx = rcx + (i - (extra.length - 1) / 2) * (bw + 8);
+      button(this, bx, 280, bw, 22, label, () => {
+        sfx.select();
+        fn();
+      }, { size: 6, color: i === 0 ? 0x6a4a2a : 0x2e3250, badge: i === 0 && c.news?.length ? 'NEW' : undefined });
+    });
+    if (pro) this.buildProPanel(c, rx, rw, g);
+    else if (c.finished) {
       shadowTxt(this, rcx, 44, 'LEGGENDA', 16, '#ffd23f');
       txt(this, rcx, 70, 'Hai vinto la Coppa con le Rondini FC!', 6, '#ffffff', { wordWrap: { width: rw - 20 }, align: 'center' });
       txt(this, rcx, 100, `Partite: ${c.apps}`, 8, '#d8dcf0');
       txt(this, rcx, 120, `Gol: ${c.goals}`, 8, '#d8dcf0');
       txt(this, rcx, 140, `Vittorie: ${c.wins}`, 8, '#d8dcf0');
-      txt(this, rcx, 172, 'Puoi rivivere la storia con', 6, '#8a8fb0');
-      txt(this, rcx, 186, 'un nuovo campione.', 6, '#8a8fb0');
-      button(this, rcx, 226, Math.min(200, rw - 20), 28, 'RIGUARDA IL FINALE', () => {
+      txt(this, rcx, 164, 'La storia continua: stagioni, mercato,', 6, '#8a8fb0');
+      txt(this, rcx, 178, 'Nazionale... fino a diventare un MITO.', 6, '#8a8fb0');
+      const goPro = button(this, rcx, 208, Math.min(200, rw - 20), 28, 'CARRIERA DA PRO', () => {
+        save((s) => {
+          if (s.career && !s.career.pro) s.career.pro = newPro(s.career);
+        });
+        sfx.select();
+        this.build();
+      }, { size: 8, color: COLORS.good, textColor: '#1a1222' });
+      this.tweens.add({ targets: goPro.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      button(this, rcx, 242, Math.min(200, rw - 20), 22, 'RIGUARDA IL FINALE', () => {
         backToScene(this, 'story', { lines: STORY[STORY.length - 1].win, step: STORY.length - 1, then: 'career' });
       }, { size: 6, color: 0x8a3fd0 });
     } else {
@@ -226,7 +264,6 @@ export class CareerScene extends Phaser.Scene {
         backToScene(this, 'story', { lines: step.before, step: c.step, then: 'match' });
       }, { color: COLORS.good, size: 8, textColor: '#1a1222' });
       this.tweens.add({ targets: play.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      if (c.points > 0) txt(this, rcx, 276, 'Hai punti abilità da spendere!', 6, '#ffd23f');
     }
 
     button(this, 64, H - 24, 96, 26, 'MENU', () => backToMenu(this), { color: 0x3a3d55 });
@@ -248,5 +285,97 @@ export class CareerScene extends Phaser.Scene {
       save((s) => delete s.career);
       this.build();
     }, { size: 6, color: this.confirmReset ? 0x8a3040 : 0x3a3d55 });
+    if (c.talk) talkOverlay(this, c, () => this.build());
+  }
+
+  // ---------- carriera da professionista ----------
+  private buildProPanel(c: CareerState, rx: number, rw: number, g: Phaser.GameObjects.Graphics) {
+    const p = c.pro!;
+    const rcx = rx + rw / 2;
+    const st = statusOf(p.reputation);
+    txt(this, rcx, 26, `STAGIONE ${p.season} · ${p.age} ANNI · ${st.name}`, 6, st.color);
+    if (p.phase === 'retired') {
+      shadowTxt(this, rcx, 56, p.reputation >= 100 ? 'MITO' : 'FINE CARRIERA', 16, '#ffd23f');
+      const lines = [
+        `${p.log.length} stagioni · ${c.apps} partite · ${c.goals} gol`,
+        `Scudetti ${p.cabinet.scudetti} · Palloni d'oro ${p.cabinet.pallone}`,
+        `Capocannoniere ${p.cabinet.cannoniere} volte · Nazioni ${p.cabinet.nazionale}`,
+        p.reputation >= 100 ? 'Il tuo nome è nella leggenda.' : 'Puoi ricominciare con un nuovo campione',
+        p.reputation >= 100 ? '' : 'e puntare a diventare un MITO.',
+      ];
+      lines.forEach((l, i) => txt(this, rcx, 92 + i * 18, l, 6, i < 3 ? '#ffffff' : '#8a8fb0'));
+      button(this, rcx, 232, Math.min(200, rw - 20), 26, 'RIVIVI L\'ADDIO', () => {
+        backToScene(this, 'story', { lines: proRetireLines(c), step: 0, then: 'career', saga: 'pro' });
+      }, { size: 6, color: 0x8a3fd0 });
+      return;
+    }
+    if (p.phase === 'offers') {
+      shadowTxt(this, rcx, 46, 'MERCATO', 16, '#ffffff');
+      const last = p.log[p.log.length - 1];
+      if (last) txt(this, rcx, 66, `Stagione chiusa al ${last.pos}° posto · ${last.goals} gol · media ${last.avg}`, 6, '#8a8fb0');
+      const forced = p.age >= LAST_AGE;
+      if (!forced) {
+        p.offers.forEach((o, i) => {
+          const y = 96 + i * 42;
+          const t = teamById(o.club);
+          const bw = rw - 20;
+          const b = button(this, rcx, y, bw, 36, '', () => {
+            save((s) => {
+              if (s.career?.pro?.phase === 'offers') signOffer(s.career, o);
+            });
+            sfx.fanfare();
+            this.build();
+          }, { color: o.renew ? 0x2e3250 : 0x24405a });
+          const lx = -bw / 2 + 10;
+          const sw = this.add.graphics();
+          sw.fillStyle(0x1a1222).fillRect(lx - 1, -11, 18, 18);
+          sw.fillStyle(t.colors.shirt).fillRect(lx, -10, 16, 16);
+          sw.fillStyle(t.colors.shirt2).fillRect(lx + 6, -10, 4, 16);
+          b.c.add(sw);
+          b.c.add(txt(this, lx + 24, -7, (o.renew ? 'RINNOVO · ' : '') + t.name + ` · ${t.stars} stelle`, 6, '#ffffff').setOrigin(0, 0.5));
+          b.c.add(txt(this, lx + 24, 7, `${o.salary} monete a partita · ${o.role === 'titolare' ? 'posto da titolare' : 'posto da conquistare'}`, 6, o.role === 'titolare' ? '#5be37d' : '#ffd23f').setOrigin(0, 0.5));
+        });
+      } else {
+        txt(this, rcx, 130, `${p.age} anni: è arrivato il momento.`, 8, '#ffffff');
+      }
+      if (p.age >= RETIRE_AGE) {
+        button(this, rcx, 234, Math.min(200, rw - 20), 24, 'RITIRATI', () => {
+          save((s) => s.career && retire(s.career));
+          backToScene(this, 'story', { lines: proRetireLines(c), step: 0, then: 'career', saga: 'pro' });
+        }, { size: 6, color: forced ? COLORS.good : 0x8a3040, textColor: forced ? '#1a1222' : '#ffffff' });
+      } else {
+        txt(this, rcx, 234, 'Scegli dove giocare la prossima stagione.', 6, '#5a5f80');
+      }
+      return;
+    }
+    const nat = p.phase === 'nazionale';
+    const { mine, opp } = proTeams(c, p);
+    shadowTxt(this, rcx, 46, nat ? 'FINALE DELLE NAZIONI' : `GIORNATA ${p.round + 1}/${PRO_ROUNDS}`, 8, nat ? '#ffd23f' : '#ffffff');
+    txt(this, rcx, 64, nat ? 'Sei stato convocato in Nazionale!' : `${position(p)}° in classifica · ${p.goals} gol in stagione`, 6, '#3fd0ff');
+    const drawTeam = (x: number, t: typeof mine) => {
+      g.fillStyle(0x1a1222).fillRect(x - 13, 80, 26, 26);
+      g.fillStyle(t.colors.shirt).fillRect(x - 11, 82, 22, 22);
+      g.fillStyle(t.colors.shirt2).fillRect(x - 3, 82, 6, 22);
+      txt(this, x, 116, t.short, 6, '#ffffff');
+    };
+    drawTeam(rcx - 60, mine);
+    txt(this, rcx, 93, 'VS', 8, '#ffd23f');
+    drawTeam(rcx + 60, opp);
+    txt(this, rcx, 132, opp.name, 6, '#d8dcf0');
+    txt(this, rcx, 148, `Campo: ${proPitch(p).name}`, 6, '#8a8fb0');
+    const bench = !nat && isBench(c);
+    g.fillStyle(0x0d0a1a, 0.8).fillRect(rx + 10, 160, rw - 20, 34);
+    txt(this, rcx, 170, bench ? 'PARTI DALLA PANCHINA' : nat ? 'PARTITA SECCA' : 'TITOLARE', 6, bench ? '#ff9a9a' : '#5be37d');
+    txt(this, rcx, 184, bench ? 'Entri a metà partita: alza i voti per riprenderti il posto' : nat ? 'Pareggio: golden gol' : 'Voto alto = più fiducia, fama e offerte', 6, '#ffffff', { wordWrap: { width: rw - 28 }, align: 'center' });
+    if (opponentOf(p) === p.rocco && p.club !== p.rocco && !nat) txt(this, rcx, 206, 'Di fronte c\'è Rocco Ferraro!', 6, '#ff9a9a');
+    const play = button(this, rcx, 234, Math.min(170, rw - 20), 28, 'GIOCA', () => {
+      sfx.select();
+      let lines: ReturnType<typeof proBefore> = [];
+      save((s) => {
+        if (s.career?.pro) lines = proBefore(s.career);
+      });
+      backToScene(this, 'story', { lines, step: 0, then: 'match', saga: 'pro' });
+    }, { color: COLORS.good, size: 8, textColor: '#1a1222' });
+    this.tweens.add({ targets: play.c, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 }

@@ -2,6 +2,8 @@ import { makeTeam, teamById, type TeamSeed } from '../data/teams';
 import type { Difficulty, PitchId, PlayerDef, TeamDef } from '../sim/types';
 import type { MatchLaunch, MatchOutcome } from './modes';
 import { PITCHES } from '../data/pitches';
+import { HERO_IDX, heroTally, heroVote, makeHeadline, makeTalk, resultOf, trustAfter, type Headline, type Talk } from './spogliatoio';
+import type { ProState } from './pro';
 
 /**
  * "Diventa un mito": modalità storia. Crei il tuo giocatore e lo porti
@@ -47,6 +49,16 @@ export interface CareerState {
   apps: number;
   wins: number;
   finished: boolean;
+  /** Fiducia dell'allenatore (0..100). Assente nei salvataggi vecchi: 60. */
+  trust?: number;
+  /** Colloquio dopo l'ultima partita, in attesa di risposta. */
+  talk?: Talk;
+  /** Titoli del giornale delle ultime partite (il più recente per primo). */
+  news?: Headline[];
+  /** Voti in pagella di tutte le partite della storia. */
+  votes?: number[];
+  /** Carriera da professionista, dopo la Coppa. */
+  pro?: ProState;
 }
 
 export type CharId = 'hero' | 'nonno' | 'mister' | 'rocco' | 'max' | 'sara' | 'title';
@@ -289,8 +301,12 @@ export function newCareer(hero: Hero, difficulty: Difficulty, control: CareerCon
   };
 }
 
-export function heroDef(c: CareerState): PlayerDef {
-  const lv = (id: AttrId) => 0.84 + c.attrs[id] * 0.05;
+export function heroDef(c: CareerState, maxLevel = MAX_LEVEL): PlayerDef {
+  // oltre il 5 (solo da pro) ogni livello vale la metà
+  const lv = (id: AttrId) => {
+    const l = Math.min(maxLevel, c.attrs[id]);
+    return 0.84 + Math.min(MAX_LEVEL, l) * 0.05 + Math.max(0, l - MAX_LEVEL) * 0.025;
+  };
   return {
     name: c.hero.name,
     number: c.hero.number,
@@ -314,7 +330,7 @@ export function clubById(id: string, heroName = ''): TeamDef {
   return t;
 }
 
-const ROCCO_LOOK = { skin: 1, hair: 4, hairStyle: 3 };
+export const ROCCO_LOOK = { skin: 1, hair: 4, hairStyle: 3 };
 
 export function teamsFor(c: CareerState, step: StoryStep): { mine: TeamDef; opp: TeamDef } {
   const mine = clubById(step.team, c.hero.name);
@@ -345,6 +361,7 @@ export function careerLaunch(c: CareerState, fixKits: (h: TeamDef, a: TeamDef) =
     startScore: step.startScore,
     superStart: c.perks.includes('bomber') ? 0.5 : 0,
     hudGoal: GOAL_TEXT[step.goal].toUpperCase(),
+    spotlight: HERO_IDX,
     modeData: { step: c.step },
     config: {
       home: mine,
@@ -370,6 +387,8 @@ export interface CareerReport {
   points: number;
   perk?: Perk;
   finished: boolean;
+  vote: number;
+  trust: number;
 }
 
 /** Applica il risultato di una partita della storia. */
@@ -396,7 +415,18 @@ export function applyCareerResult(c: CareerState, out: MatchOutcome): CareerRepo
     }
   }
   c.points += points;
-  return { success, heroGoals: hg, points, perk, finished: c.finished && success };
+  // pagella, fiducia, colloquio e giornale
+  const vote = heroVote(out);
+  const res = resultOf(out);
+  const before = c.trust ?? 60;
+  c.trust = trustAfter(before, vote, res);
+  c.votes = [...(c.votes ?? []), vote];
+  const idx = STORY.indexOf(step);
+  const speaker = idx === 0 ? { who: 'nonno' as const, name: 'Nonno Tano' } : { who: 'mister' as const, name: 'Mister Bruno' };
+  c.talk = makeTalk(vote, hg, res, false, c.apps * 3 + hg, speaker);
+  const { mine, opp } = teamsFor(c, step);
+  c.news = [makeHeadline(c.hero.name, mine.name, opp.name, vote, heroTally(out), res, out.result.score, c.apps), ...(c.news ?? [])].slice(0, 6);
+  return { success, heroGoals: hg, points, perk, finished: c.finished && success, vote, trust: c.trust - before };
 }
 
 export function upgradeCost(): number {

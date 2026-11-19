@@ -10,6 +10,7 @@ import { backToMenu, backToScene, startMatch } from './demo';
 import { applyUserResult, ROUND_NAMES } from '../modes/tournament';
 import { checkObjective, MISSIONS, objectiveText } from '../modes/missions';
 import { applyCareerResult, PERKS, STORY } from '../modes/career';
+import { applyProResult, proSeasonEnd } from '../modes/pro';
 import { teamById } from '../data/teams';
 import { applyMatch, cupDue, DIVISIONS, ensureManager, nextMatch } from '../modes/manager';
 import { newAlbum, owned as ownedStickers, packsForMatch } from '../modes/album';
@@ -168,7 +169,7 @@ export class ResultScene extends Phaser.Scene {
 
   private makeReport(d: MatchOutcome): ModeReport | undefined {
     const [a, b] = d.result.score;
-    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number; season?: number; week?: number; cup?: number };
+    const md = (d.launch.modeData ?? {}) as { round?: number; mission?: string; step?: number; season?: number; week?: number; cup?: number; pro?: boolean; phase?: string };
     if (d.launch.mode === 'torneo') {
       const st = load().tournament;
       if (!st || st.round !== md.round) return undefined;
@@ -233,6 +234,36 @@ export class ResultScene extends Phaser.Scene {
         next: { label: 'MISSIONI', go: (s) => backToScene(s, 'missions') },
       };
     }
+    if (d.launch.mode === 'mito' && md.pro) {
+      const c = load().career;
+      const p = c?.pro;
+      if (!c || !p || p.season !== md.season || p.round !== md.round || p.phase !== md.phase) return undefined;
+      const nat = p.phase === 'nazionale';
+      const rep = applyProResult(c, d);
+      save((s) => {
+        s.career = c;
+        progressOf().coins += rep.salary;
+      });
+      const lines: ReportLine[] = [
+        { text: nat ? 'FINALE DELLE NAZIONI' : `STAGIONE ${md.season} · GIORNATA ${md.round + 1}${rep.fromBench ? ' · DALLA PANCHINA' : ''}`, color: '#8a8fb0' },
+        { text: `Voto di ${c.hero.name}: ${rep.vote}   ·   Gol: ${rep.goals}`, color: rep.vote >= 7 ? '#5be37d' : rep.vote < 6 ? '#ff9a9a' : '#ffffff' },
+        { text: `Fiducia del mister ${rep.trust >= 0 ? '+' : ''}${rep.trust}   ·   Fama +${rep.rep}`, color: '#3fd0ff' },
+        { text: `+${rep.points} punti abilità   ·   ingaggio +${rep.salary} monete`, color: '#ffd23f' },
+      ];
+      if (rep.seasonEnd) lines.push({ text: `Fine stagione: ${rep.seasonEnd.pos}° posto${rep.seasonEnd.prizes.length ? ' · ' + rep.seasonEnd.prizes.join(', ') : ''}`, color: '#ff7ab8' });
+      if (nat) lines.push({ text: rep.natWon ? 'Campioni delle Nazioni!' : 'La Selezione del Mondo vince la finale', ok: !!rep.natWon });
+      const after = rep.seasonEnd ? proSeasonEnd(c, rep) : nat ? [{ who: 'sara' as const, text: rep.natWon ? 'LA NAZIONALE PIXEL È CAMPIONE! {nome} alza la coppa sotto il cielo dello stadio!' : 'Finale persa, ma che orgoglio vedere {nome} con la maglia della Nazionale.' }] : [];
+      return {
+        title: nat ? (rep.natWon ? 'CAMPIONI!' : 'FINALE PERSA') : rep.res === 'w' ? 'VITTORIA!' : rep.res === 'l' ? 'SCONFITTA' : 'PAREGGIO',
+        titleColor: rep.res === 'w' ? '#ffd23f' : rep.res === 'l' ? '#ff5a5a' : '#ffffff',
+        lines,
+        retry: false,
+        next: {
+          label: 'CONTINUA',
+          go: (s) => (after.length ? backToScene(s, 'story', { lines: after, step: 0, then: 'career', saga: 'pro' }) : backToScene(s, 'career')),
+        },
+      };
+    }
     if (d.launch.mode === 'mito') {
       const c = load().career;
       if (!c || c.step !== md.step || c.finished) return undefined;
@@ -242,7 +273,7 @@ export class ResultScene extends Phaser.Scene {
       const lines: ReportLine[] = [
         { text: `${step.chapter} · ${step.title}`, color: '#8a8fb0' },
         { text: rep.success ? 'Obiettivo raggiunto' : 'Obiettivo mancato', ok: rep.success },
-        { text: `Gol di ${c.hero.name}: ${rep.heroGoals}`, color: '#ffffff' },
+        { text: `Gol di ${c.hero.name}: ${rep.heroGoals}   ·   Voto: ${rep.vote}`, color: rep.vote >= 7 ? '#5be37d' : rep.vote < 6 ? '#ff9a9a' : '#ffffff' },
         { text: `+${rep.points} punti abilità`, color: '#ffd23f' },
       ];
       if (rep.perk) lines.push({ text: `Nuova abilità: ${PERKS[rep.perk].name}`, color: '#ff7ab8' });

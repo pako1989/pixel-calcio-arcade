@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
 import { load } from '../save/storage';
 import { careerLaunch, castFor, fillName, STORY, type CastMember } from '../modes/career';
+import { proCast, proFill, proLaunch, proPlace } from '../modes/pro';
 import { CITIES, conquistaLaunch, cqCast, fillCq, type CqLine } from '../modes/conquista';
 import type { MatchLaunch } from '../modes/modes';
 import { frameIndex, makePlayerSheet } from '../gfx/sprites';
@@ -22,7 +23,7 @@ export interface StoryData {
   /** Dopo i dialoghi: si gioca la partita o si torna alla pagina della modalità. */
   then: 'match' | 'career' | 'conquista';
   /** Storia di "Diventa un mito" (predefinita) o di "Quartiere contro Città". */
-  saga?: 'mito' | 'conquista';
+  saga?: 'mito' | 'conquista' | 'pro';
   /** Quartiere contro Città: città appena conquistata (per l'animazione sulla mappa). */
   celebrate?: number;
 }
@@ -84,6 +85,17 @@ export class StoryScene extends Phaser.Scene {
         cast: (l) => cqCast(q, this.d.step, l as CqLine),
         launch: () => (q.finished ? null : conquistaLaunch(q, fixKits)),
         back: 'conquista',
+      };
+    }
+    if (this.d.saga === 'pro') {
+      const c = load().career!;
+      const cast = proCast(c);
+      return {
+        place: proPlace(c),
+        fill: (t) => proFill(t, c),
+        cast: (l) => cast[l.who as keyof typeof cast],
+        launch: () => (c.pro && (c.pro.phase === 'league' || c.pro.phase === 'nazionale') ? proLaunch(c, fixKits) : null),
+        back: 'career',
       };
     }
     const c = load().career!;
