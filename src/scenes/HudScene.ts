@@ -38,6 +38,8 @@ export class HudScene extends Phaser.Scene {
   private lastScore = '';
   private help?: Phaser.GameObjects.Container;
 
+  private voteT?: Phaser.GameObjects.Text;
+
   constructor() {
     super('hud');
   }
@@ -89,6 +91,18 @@ export class HudScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.onUp, this);
     this.scale.on('resize', this.layout, this);
     this.match.events.on('msg', this.showMsg, this);
+    this.voteT = undefined;
+    if (this.match.launch.spotlight !== undefined) {
+      this.voteT = txt(this, this.scale.width - 42, 18, 'VOTO 6', 6, '#ffffff', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } }).setOrigin(1, 0.5);
+      const onVote = (v: number) => {
+        if (!this.voteT) return;
+        const prev = parseFloat(this.voteT.text.slice(5));
+        this.voteT.setText(`VOTO ${v}`).setColor(v >= 7 ? '#5be37d' : v < 6 ? '#ff9a9a' : '#ffffff');
+        this.tweens.add({ targets: this.voteT, scale: { from: v > prev ? 1.4 : 0.8, to: 1 }, duration: 260, ease: 'Back.easeOut' });
+      };
+      this.match.events.on('vote', onVote);
+      this.events.once('shutdown', () => this.match.events.off('vote', onVote));
+    }
     this.events.once('shutdown', () => {
       this.scale.off('resize', this.layout, this);
       this.match.events.off('msg', this.showMsg, this);
@@ -124,6 +138,7 @@ export class HudScene extends Phaser.Scene {
     this.windT?.setPosition(46, 14);
     this.condT?.setPosition(8, this.windT ? 46 : 14);
     this.pauseBtn.c.setPosition(W - 22, 18);
+    this.voteT?.setPosition(W - 42, 18);
     // pulsanti touch: arco in basso a destra
     const pos: Record<string, [number, number, number]> = {
       shoot: [W - 54, H - 56, 30],

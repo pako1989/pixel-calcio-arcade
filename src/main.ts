@@ -58,6 +58,8 @@ window.addEventListener('resize', () => {
 });
 
 document.getElementById('loading')?.remove();
+// solo in sviluppo: accesso al gioco dalla console per le prove
+if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game;
 
 // il primo tocco sblocca audio e voce (richiesto dai browser dei telefoni)
 const unlockAudio = () => {

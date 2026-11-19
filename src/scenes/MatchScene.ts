@@ -15,6 +15,8 @@ import { demoLaunch, fixKits } from './demo';
 import { load, progressOf } from '../save/storage';
 import { ballTint, equipped, GROWTH_MODES, grownTeam, isRival, kitVariant } from '../modes/progress';
 import { TallyTracker } from '../modes/tally';
+import { voteFor } from '../modes/ratings';
+import { LIVE } from '../modes/spogliatoio';
 
 interface PSprite {
   p: Player;
@@ -99,6 +101,10 @@ export class MatchScene extends Phaser.Scene {
   finished = false;
   private tally = new TallyTracker();
   private baseZoom = 1;
+  /** Chi aveva la palla prima dell'ultimo passo (per "palla persa"). */
+  private prevOwner: Player | null = null;
+  private liveN = 0;
+  private lastVote = -1;
 
   constructor() {
     super('match');
@@ -118,6 +124,9 @@ export class MatchScene extends Phaser.Scene {
     this.demoT = 0;
     this.finished = false;
     this.tally = new TallyTracker();
+    this.prevOwner = null;
+    this.liveN = 0;
+    this.lastVote = -1;
     this.vignette = undefined;
     this.nightOverlay = undefined;
     this.fog = undefined;
@@ -659,6 +668,7 @@ export class MatchScene extends Phaser.Scene {
       this.acc += dt * this.timeScale;
       let n = 0;
       while (this.acc >= STEP && n < 5) {
+        this.prevOwner = this.sim.ball.owner;
         this.sim.update(STEP, this.launch.demo ? undefined : this.ctrl);
         this.acc -= STEP;
         n++;
@@ -705,11 +715,57 @@ export class MatchScene extends Phaser.Scene {
     const sim = this.sim;
     const demo = !!this.launch.demo;
     const human = sim.humanTeam;
+    const spot = demo ? undefined : this.launch.spotlight;
     for (const e of sim.events) {
+      const assistsBefore = spot !== undefined ? (this.tally.t.players[0][spot]?.assists ?? 0) : 0;
       if (!demo) this.tally.feed(e, sim.elapsed);
       this.onEvent(e, demo, human);
+      if (spot !== undefined) this.spotlightEvent(e, spot, assistsBefore);
     }
     sim.events.length = 0;
+  }
+
+  /** Commenti in diretta sulle giocate del tuo campione e voto nell'HUD. */
+  private spotlightEvent(e: SimEvent, spot: number, assistsBefore: number) {
+    const me = this.sim.teams[0][spot];
+    if (!me) return;
+    const mine = 'team' in e && e.team === 0 && 'idx' in e && e.idx === spot;
+    const lostByMe = (e.type === 'steal' || (e.type === 'tackle' && e.won)) && e.team === 1 && this.prevOwner === me;
+    let label: string | undefined;
+    let good = true;
+    const pick = (a: string[]) => a[this.liveN++ % a.length];
+    if (e.type === 'goal' && e.team === 0 && (this.tally.t.players[0][spot]?.assists ?? 0) > assistsBefore) label = pick(LIVE.assist);
+    else if (mine && e.type === 'pass') label = pick(LIVE.pass);
+    else if (mine && e.type === 'shot') label = pick(LIVE.shot);
+    else if (mine && (e.type === 'steal' || (e.type === 'tackle' && e.won))) label = pick(LIVE.win);
+    else if (mine && e.type === 'tackle' && !e.won) {
+      label = pick(LIVE.failTackle);
+      good = false;
+    } else if (mine && e.type === 'trick' && e.kind !== 'lontano' && e.kind !== 'sponda') label = pick(LIVE.trick);
+    else if (e.type === 'foul' && e.team === 0 && e.byIdx === spot) {
+      label = pick(LIVE.foul);
+      good = false;
+    } else if (lostByMe) {
+      label = pick(LIVE.lost);
+      good = false;
+    }
+    const isGoal = e.type === 'goal';
+    if (!label && !isGoal) return;
+    if (label) {
+      const t = this.add
+        .text(me.x, me.y - 30, label, { fontFamily: '"Press Start 2P", monospace', fontSize: '8px', color: good ? '#5be37d' : '#ff7a7a', stroke: '#1a1222', strokeThickness: 3, resolution: 3 })
+        .setOrigin(0.5, 1)
+        .setDepth(5000);
+      this.tweens.add({ targets: t, y: me.y - 44, alpha: { from: 1, to: 0 }, duration: 1100, ease: 'Sine.easeOut', onComplete: () => t.destroy() });
+    }
+    const pt = this.tally.t.players[0][spot];
+    if (!pt) return;
+    const role = this.launch.config.home.players[spot]?.role ?? 'FWD';
+    const v = voteFor(role, pt, this.sim.score[0], this.sim.score[1]);
+    if (v !== this.lastVote) {
+      this.lastVote = v;
+      this.events.emit('vote', v);
+    }
   }
 
   private onEvent(e: SimEvent, demo: boolean, human: 0 | 1 | null) {

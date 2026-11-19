@@ -39,6 +39,8 @@ export interface MatchLaunch {
   hudGoal?: string;
   /** Pareggio a fine tempo: si va ai calci di rigore. */
   penalties?: boolean;
+  /** Giocatore della squadra 0 da seguire (indice): commenti in diretta e voto nell'HUD. */
+  spotlight?: number;
   /** Dati extra della modalità (es. turno del torneo, id della missione). */
   modeData?: unknown;
 }
