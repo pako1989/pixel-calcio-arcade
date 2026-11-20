@@ -23,3 +23,27 @@ describe('Carriera Allenatore Avanzata (Sponsor & Contratti)', () => {
     expect(ok).toBe(true);
   });
 });
+
+describe('Allenatore avanzato: sponsor, prestiti, salvataggi vecchi', () => {
+  it('firma sponsor: bonus, una a stagione, lega minima', async () => {
+    const { canSignSponsor, signSponsor, sponsorWeekly, DIVISIONS } = await import('../src/modes/manager');
+    const st = newManager('Atletico Test', 0, 'normale');
+    expect(sponsorWeekly(st)).toBe(DIVISIONS[st.division].sponsor);
+    expect(canSignSponsor(st, 2)).not.toBeNull();
+    st.division = 1;
+    const b = st.budget;
+    expect(signSponsor(st, 1)).toBe(true);
+    expect(st.budget).toBeGreaterThan(b);
+    expect(sponsorWeekly(st)).toBeGreaterThan(DIVISIONS[1].sponsor);
+    expect(canSignSponsor(st, 0)).toBe('UNO A STAGIONE');
+  });
+  it('salvataggio senza sponsor viene sistemato', async () => {
+    const { ensureManager } = await import('../src/modes/manager');
+    const st = newManager('Atletico Test', 0, 'normale') as any;
+    delete st.sponsor;
+    delete st.boardConfidence;
+    ensureManager(st);
+    expect(st.sponsor.weekly).toBeGreaterThan(0);
+    expect(st.boardConfidence).toBe(75);
+  });
+});
