@@ -271,6 +271,16 @@ class Sfx {
     this.tone('sine', 70, 40, 0.12, 0.35);
     this.tone('sine', 65, 38, 0.12, 0.25, 0.18);
   }
+  /** Respingente da flipper. */
+  bumper() {
+    this.tone('square', 740, 1280, 0.08, 0.16);
+    this.tone('triangle', 480, 960, 0.12, 0.14, 0.04);
+  }
+  /** Eruzione geyser di vapore. */
+  geyser() {
+    this.noise(0.55, 0.35, 1100, 0.7, 'bandpass', 0, 0.03);
+    this.tone('sine', 180, 60, 0.22, 0.22);
+  }
 
   // ---------- ambiente continuo ----------
 

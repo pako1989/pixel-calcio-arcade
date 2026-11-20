@@ -16,7 +16,7 @@ export interface Totals {
   sfide: number;
 }
 
-export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5' | 'leggenda' | 'sopravvivenza' | 'missioni';
+export type TrophyStat = keyof Totals | 'coppe' | 'figurine' | 'livello5' | 'leggenda' | 'sopravvivenza' | 'missioni' | 'worldtour';
 
 export interface TrophyDef {
   id: string;
@@ -63,6 +63,8 @@ export const TROPHIES: TrophyDef[] = [
   T('sopravvivenza', 5, 'Cacciatore di Boss', 'Sopravvivenza: batti un Boss', 150),
   T('sopravvivenza', 10, 'Re della Scala', 'Sopravvivenza: supera 10 round', 350),
   T('missioni', 18, 'Tuttofare', 'Completa tutte le 18 missioni', 250),
+  T('worldtour', 3, 'Giro del Mondo', 'World Tour: supera 3 tappe', 100),
+  T('worldtour', 6, 'Re della Strada', 'Completa lo Street World Tour', 350),
 ];
 
 export function newTotals(): Totals {
@@ -94,6 +96,8 @@ export interface TrophyCtx {
   survival?: number;
   /** Numero di missioni completate. */
   missions?: number;
+  /** Tappe superate nello Street World Tour. */
+  worldTour?: number;
 }
 
 export function trophyValue(d: TrophyDef, c: TrophyCtx): number {
@@ -103,6 +107,7 @@ export function trophyValue(d: TrophyDef, c: TrophyCtx): number {
   if (d.stat === 'leggenda') return c.legend ?? 0;
   if (d.stat === 'sopravvivenza') return c.survival ?? 0;
   if (d.stat === 'missioni') return c.missions ?? 0;
+  if (d.stat === 'worldtour') return c.worldTour ?? 0;
   return c.totals[d.stat];
 }
 

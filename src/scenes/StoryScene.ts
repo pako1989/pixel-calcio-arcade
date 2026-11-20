@@ -4,6 +4,7 @@ import { load } from '../save/storage';
 import { careerLaunch, castFor, fillName, STORY, type CastMember } from '../modes/career';
 import { proCast, proFill, proLaunch, proPlace } from '../modes/pro';
 import { CITIES, conquistaLaunch, cqCast, fillCq, type CqLine } from '../modes/conquista';
+import { fillWt, WORLD_STAGES, wtCast, wtLaunch, type WtLine } from '../modes/worldTour';
 import type { MatchLaunch } from '../modes/modes';
 import { frameIndex, makePlayerSheet } from '../gfx/sprites';
 import { backToScene, fixKits, startMatch } from './demo';
@@ -21,10 +22,10 @@ export interface StoryData {
   /** Capitolo a cui appartengono le battute (per divise e ritratti). */
   step: number;
   /** Dopo i dialoghi: si gioca la partita o si torna alla pagina della modalità. */
-  then: 'match' | 'career' | 'conquista';
-  /** Storia di "Diventa un mito" (predefinita) o di "Quartiere contro Città". */
-  saga?: 'mito' | 'conquista' | 'pro';
-  /** Quartiere contro Città: città appena conquistata (per l'animazione sulla mappa). */
+  then: 'match' | 'career' | 'conquista' | 'worldtour';
+  /** Storia di "Diventa un mito", "Quartiere contro Città" o "Street World Tour". */
+  saga?: 'mito' | 'conquista' | 'pro' | 'worldtour';
+  /** Tappa appena vinta (per l'animazione sulla mappa). */
   celebrate?: number;
 }
 
@@ -85,6 +86,17 @@ export class StoryScene extends Phaser.Scene {
         cast: (l) => cqCast(q, this.d.step, l as CqLine),
         launch: () => (q.finished ? null : conquistaLaunch(q, fixKits)),
         back: 'conquista',
+      };
+    }
+    if (this.d.saga === 'worldtour') {
+      const wt = load().worldTour!;
+      const st = WORLD_STAGES[Math.min(this.d.step, WORLD_STAGES.length - 1)];
+      return {
+        place: st.place,
+        fill: (t) => fillWt(t, wt),
+        cast: (l) => wtCast(wt, this.d.step, l as WtLine),
+        launch: () => (wt.finished ? null : wtLaunch(wt, fixKits)),
+        back: 'worldtour',
       };
     }
     if (this.d.saga === 'pro') {
@@ -221,6 +233,6 @@ export class StoryScene extends Phaser.Scene {
     const src = this.source();
     const launch = this.d.then === 'match' ? src.launch() : null;
     if (launch) startMatch(this, launch);
-    else backToScene(this, src.back, this.d.saga === 'conquista' ? { celebrate: this.d.celebrate } : undefined);
+    else backToScene(this, src.back, this.d.saga === 'conquista' || this.d.saga === 'worldtour' ? { celebrate: this.d.celebrate } : undefined);
   }
 }

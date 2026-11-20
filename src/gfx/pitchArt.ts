@@ -33,6 +33,9 @@ export const THEMES: Record<PitchId, Theme> = {
   piazza: { a: 0x9a8e7c, b: 0x948873, line: 0xf4efe2, apron: 0x857a68, board: 0xb59a74, boardHi: 0xd2b88f, around: 0xa49276, post: 0xf4f4f4, net: 'rgba(255,255,255,0.55)', crowd: 0.45, night: false },
   montagna: { a: 0x4f9a3c, b: 0x58a644, line: 0xf4f4ea, apron: 0x3f8a32, board: 0x7a5232, boardHi: 0x9a6a42, around: 0x5f8f48, post: 0xf4f4f4, net: 'rgba(255,255,255,0.55)', crowd: 0.3, night: false },
   molo: { a: 0xa8784a, b: 0x9c6e42, line: 0xf4f0e0, apron: 0x7a5434, board: 0x5a3c24, boardHi: 0x7a5434, around: 0x1f6aa8, post: 0xf4f4f4, net: 'rgba(255,255,255,0.6)', crowd: 0.3, night: false },
+  flipper: { a: 0x1d1a38, b: 0x242046, line: 0x39e6ff, apron: 0x151228, board: 0x2a2252, boardHi: 0xff3fa4, around: 0x100d20, post: 0xffd23f, net: 'rgba(57,230,255,0.55)', crowd: 0.55, night: true },
+  fango: { a: 0x4c6e32, b: 0x44642c, line: 0xe6e0cc, apron: 0x564028, board: 0x5a3e24, boardHi: 0x7a5634, around: 0x3c4d2a, post: 0xe8e0d0, net: 'rgba(235,225,205,0.5)', crowd: 0.25, night: false },
+  vulcano: { a: 0x3b2a2e, b: 0x453136, line: 0xff9b42, apron: 0x281c1f, board: 0x24191c, boardHi: 0xff5a1e, around: 0x1e1316, post: 0xffd28a, net: 'rgba(255,150,80,0.55)', crowd: 0.3, night: true },
 };
 
 function ctx2d(w: number, h: number) {
@@ -185,6 +188,57 @@ export function drawPitch(scene: Phaser.Scene, p: PitchDef, key: string) {
       }
     }
     for (let i = 0; i < 6; i++) fill(ctx, shade(th.a, 0.9), ox + rng.range(30, W - 60), oy + rng.range(30, H - 40), rng.range(14, 30), rng.range(6, 14), 0.6);
+  } else if (p.id === 'flipper') {
+    // plancia arcade a scacchiera neon con frecce luminose
+    const tile = 30;
+    for (let y = 0; y < H; y += tile) {
+      for (let x = 0; x < W; x += tile) {
+        const c = ((x / tile + y / tile) | 0) % 2 === 0 ? th.a : th.b;
+        fill(ctx, c, ox + x, oy + y, Math.min(tile, W - x), Math.min(tile, H - y));
+      }
+    }
+    for (let x = 0; x < W; x += 60) fill(ctx, 0x39e6ff, ox + x, oy, 1, H, 0.14);
+    for (let y = 0; y < H; y += 60) fill(ctx, 0xff3fa4, ox, oy + y, W, 1, 0.14);
+    // corsie laterali illuminate e frecce verso porta
+    for (const fx of [0.22, 0.78]) {
+      const dir = fx < 0.5 ? -1 : 1;
+      for (const fy of [0.22, 0.78]) {
+        const cx = ox + W * fx;
+        const cy = oy + H * fy;
+        for (let k = 0; k < 3; k++) {
+          const ax = cx + dir * (k - 1) * 14;
+          const c = k % 2 ? 0xffd23f : 0xff3fa4;
+          for (let r = 0; r < 6; r++) fill(ctx, c, ax + dir * r, cy - (5 - r), 2, (5 - r) * 2 + 1, 0.45);
+        }
+      }
+    }
+  } else if (p.id === 'fango') {
+    const band = 56;
+    for (let x = 0; x < W; x += band) fill(ctx, (x / band) % 2 === 0 ? th.a : th.b, ox + x, oy, Math.min(band, W - x), H);
+    noise(ctx, rng, ox, oy, W, H, [shade(th.a, 0.86), 0x5c442a, shade(th.b, 1.08)], 0.16);
+    // pozze di fango ellittiche con bordo scuro e riflesso umido
+    for (const m of p.mud ?? []) {
+      for (let dy = -m.ry; dy <= m.ry; dy++) {
+        const w = Math.sqrt(Math.max(0, 1 - (dy / m.ry) ** 2)) * m.rx;
+        fill(ctx, 0x4b341e, ox + m.x - w, oy + m.y + dy, w * 2, 1, 0.92);
+        if (Math.abs(dy) < m.ry * 0.78) fill(ctx, 0x66482a, ox + m.x - w * 0.75, oy + m.y + dy, w * 1.5, 1, 0.88);
+      }
+      fill(ctx, 0x8f6b45, ox + m.x - m.rx * 0.45, oy + m.y - m.ry * 0.35, m.rx * 0.35, 2, 0.6);
+      fill(ctx, 0x3b2715, ox + m.x + m.rx * 0.15, oy + m.y + m.ry * 0.2, m.rx * 0.25, 2, 0.7);
+    }
+  } else if (p.id === 'vulcano') {
+    fill(ctx, th.a, ox, oy, W, H);
+    noise(ctx, rng, ox, oy, W, H, [th.b, 0x2c1d20, 0x56393c, 0xff6a1a], 0.12);
+    // crepe di magma nel basalto
+    for (let i = 0; i < 18; i++) {
+      let cx = rng.range(24, W - 24);
+      let cy = rng.range(24, H - 24);
+      for (let k = 0; k < 20; k++) {
+        fill(ctx, k % 3 === 0 ? 0xff7a1a : 0xa82a18, ox + cx, oy + cy, 2, 2, 0.75);
+        cx += rng.range(-3, 3);
+        cy += rng.range(-2, 2);
+      }
+    }
   } else {
     const band = 56;
     for (let x = 0; x < W; x += band) fill(ctx, (x / band) % 2 === 0 ? th.a : th.b, ox + x, oy, Math.min(band, W - x), H);
@@ -343,6 +397,22 @@ function drawBoards(ctx: CanvasRenderingContext2D, p: PitchDef, th: Theme, rng: 
     fill(ctx, 0x39e6ff, ox - 6, oy - 4, W + 12, 1);
     fill(ctx, 0xff3fa4, ox - 6, oy + H + 6, W + 12, 1);
     for (let x = 0; x < W; x += 24) fill(ctx, 0x5a6c8c, ox + x, oy - bh + 2, 1, bh - 6);
+  } else if (p.id === 'flipper') {
+    fill(ctx, 0x39e6ff, ox - 6, oy - 4, W + 12, 2);
+    fill(ctx, 0xffd23f, ox - 6, oy - bh + 3, W + 12, 2);
+    for (let x = 16; x < W; x += 48) {
+      fill(ctx, 0xff3fa4, ox + x, oy - bh + 6, 18, 4);
+      fill(ctx, 0x39e6ff, ox + x + 22, oy - bh + 6, 18, 4);
+    }
+  } else if (p.id === 'fango') {
+    for (let x = -6; x < W + 6; x += 18) fill(ctx, 0x3f2a18, ox + x, oy - bh, 2, bh);
+    for (let i = 0; i < 16; i++) fill(ctx, 0x4b341e, ox + rng.range(0, W - 20), oy - 4, rng.range(10, 24), 4);
+  } else if (p.id === 'vulcano') {
+    for (let x = -6; x < W + 6; x += 14) {
+      const h = rng.range(bh - 4, bh + 2);
+      fill(ctx, 0x332226, ox + x, oy - h, 12, h);
+    }
+    fill(ctx, 0xff5a1e, ox - 6, oy - 3, W + 12, 2, 0.8);
   } else if (p.id === 'spiaggia') {
     for (let x = -6; x < W + 6; x += 12) fill(ctx, shade(th.board, 0.8), ox + x, oy - bh, 1, bh);
   } else {
@@ -600,6 +670,52 @@ function drawSurroundings(ctx: CanvasRenderingContext2D, p: PitchDef, _th: Theme
       }
       break;
     }
+    case 'flipper': {
+      // sala giochi retro neon con cabinati ai lati e insegna gigante
+      for (let y = 0; y < M - 20; y++) fill(ctx, mix(0x0b0820, 0x26124a, y / (M - 20)), 0, y, W, 1);
+      for (let x = 24; x < W - 40; x += 56) {
+        const c = rng.pick([0xff3fa4, 0x39e6ff, 0xffd23f, 0x5be37d]);
+        fill(ctx, 0x1e183a, x, 24, 32, 54);
+        fill(ctx, c, x + 3, 27, 26, 6);
+        fill(ctx, 0x101428, x + 5, 36, 22, 16);
+        fill(ctx, c, x + 8, 40, 16, 8, 0.7);
+      }
+      pixelText(ctx, 'ARCADE FLIPPER', W / 2, 6, 0xffd23f, 12);
+      for (let x = 20; x < W - 20; x += 40) {
+        fill(ctx, x % 80 === 20 ? 0xff3fa4 : 0x39e6ff, x, M + p.height + 30, 20, 4, 0.7);
+      }
+      break;
+    }
+    case 'fango': {
+      // campagna dopo il temporale: alberi, pozzanghere e staccionate
+      noise(ctx, rng, 0, 0, W, H, [0x324222, 0x4b341e], 0.08);
+      for (let i = 0; i < 16; i++) {
+        const tx = rng.range(12, W - 24);
+        const ty = i < 8 ? rng.range(8, M - 40) : M + p.height + rng.range(24, M - 30);
+        fill(ctx, 0x4b341e, tx + 6, ty + 14, 4, 10);
+        fill(ctx, 0x2b5a28, tx, ty, 16, 16);
+        fill(ctx, 0x3e7834, tx + 3, ty + 2, 8, 8);
+      }
+      for (let i = 0; i < 8; i++) {
+        fill(ctx, 0x5c4228, rng.range(20, W - 60), M + p.height + rng.range(18, M - 26), rng.range(24, 44), 8, 0.65);
+      }
+      break;
+    }
+    case 'vulcano': {
+      // crateri di lava fusa attorno al campo
+      for (let y = 0; y < M - 24; y++) fill(ctx, mix(0x140b0e, 0x3a1814, y / (M - 24)), 0, y, W, 1);
+      // fiume di lava in alto e in basso
+      for (let x = 0; x < W; x += 3) {
+        const off = Math.round(Math.sin(x * 0.04) * 5);
+        fill(ctx, 0xd83214, x, 28 + off, 3, 20);
+        fill(ctx, 0xff9a1a, x, 33 + off, 3, 9);
+        fill(ctx, 0xfff08a, x, 36 + off, 2, 3, 0.8);
+        fill(ctx, 0xd83214, x, H - 46 + off, 3, 18);
+        fill(ctx, 0xff7a1a, x, H - 41 + off, 3, 8);
+      }
+      noise(ctx, rng, 0, 0, W, H, [0x4a2626, 0xff5a1e], 0.04);
+      break;
+    }
   }
 }
 
@@ -698,6 +814,14 @@ export function drawCrowd(scene: Phaser.Scene, p: PitchDef, homeColor: number, a
     areas.push([40, M - 34, W - 80, 10]);
   } else if (p.id === 'molo') {
     areas.push([60, M + p.height + 22, W - 120, 8]);
+  } else if (p.id === 'flipper') {
+    areas.push([40, M - 40, W - 80, 10]);
+    areas.push([40, M + p.height + 16, W - 80, 12]);
+  } else if (p.id === 'fango') {
+    areas.push([50, M - 36, W - 100, 10]);
+    areas.push([50, M + p.height + 14, W - 100, 12]);
+  } else if (p.id === 'vulcano') {
+    areas.push([50, M - 38, W - 100, 10]);
   } else {
     areas.push([20, M - 48, W - 40, 6]);
     areas.push([30, M + p.height + 14, W - 60, 12]);

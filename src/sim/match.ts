@@ -84,6 +84,12 @@ export class MatchSim {
   fireShot: [boolean, boolean] = [false, false];
   turbo: [number, number] = [0, 0];
   wall: [number, number] = [0, 0];
+  /** Ghiaccio attivo: la squadra avversaria viene rallentata. */
+  ice: [number, number] = [0, 0];
+  /** Calamita attiva: attira la palla libera verso i propri giocatori. */
+  magnet: [number, number] = [0, 0];
+  /** Pallone gigante attivo: tiri e rimbalzi potenziati. */
+  giant: [number, number] = [0, 0];
   powerUps: PowerUp[] = [];
   private powerUpT = 12;
   private nextPowerUpId = 1;
@@ -93,6 +99,8 @@ export class MatchSim {
   wave = 0;
   waveDir: 1 | -1 = 1;
   private waveT = 9;
+  /** Stato precedente eruzione di ogni geyser per emettere l'evento una sola volta. */
+  private geyserActive: boolean[] = [];
   stats: MatchStats = { shots: [0, 0], passes: [0, 0], tackles: [0, 0], possession: [0, 0] };
   /** Barra dello spettacolo (0..1) e punti stile totali per squadra. */
   style: [number, number] = [0, 0];
@@ -175,7 +183,7 @@ export class MatchSim {
     b.y = this.H / 2;
     b.z = 0;
     b.stop();
-    b.fire = b.superShot = b.isShot = false;
+    b.fire = b.superShot = b.giant = b.isShot = false;
     b.passTarget = null;
     b.lastTouch = null;
     const KO: [number, number][] = [
@@ -232,6 +240,7 @@ export class MatchSim {
     this.phaseT = 3.2;
     b.fire = false;
     b.superShot = false;
+    b.giant = false;
     b.isShot = false;
     for (const p of this.players) {
       p.setState(p.team === team ? 'celebrate' : 'sad', 0);
@@ -358,9 +367,13 @@ export class MatchSim {
     for (const t of [0, 1] as const) {
       if (this.turbo[t] > 0) this.turbo[t] -= dt;
       if (this.wall[t] > 0) this.wall[t] -= dt;
+      if (this.ice[t] > 0) this.ice[t] -= dt;
+      if (this.magnet[t] > 0) this.magnet[t] -= dt;
+      if (this.giant[t] > 0) this.giant[t] -= dt;
     }
     this.updateWind(dt);
     this.updateWaves(dt);
+    this.updateGeysers(dt);
     this.updatePowerUps(dt);
     if (this.callT > 0) this.callT -= dt;
 
@@ -562,6 +575,7 @@ export class MatchSim {
     b.spin = spin;
     b.passTarget = null;
     b.isShot = false;
+    b.giant = this.giant[p.team] > 0;
     b.shotFrom = null;
     b.banked = false;
     p.kickCd = 0.32;
@@ -603,6 +617,10 @@ export class MatchSim {
     let vz = 20 + 105 * power * power + this.rng.range(0, 15);
     let spin = 0;
     if (fire) speed *= 1.3;
+    if (this.giant[team] > 0) {
+      speed *= 1.18;
+      vz *= 1.22;
+    }
     if (superShot) {
       speed *= 1.4;
       vz = 60;
@@ -649,13 +667,36 @@ export class MatchSim {
     if (before < 1 && this.superBar[team] >= 1) this.events.push({ type: 'superReady', team });
   }
 
+  /** Restituisce true se il punto (x, y) è dentro una pozza di fango. */
+  inMud(x: number, y: number): boolean {
+    for (const m of this.pitch.mud ?? []) {
+      const dx = (x - m.x) / m.rx;
+      const dy = (y - m.y) / m.ry;
+      if (dx * dx + dy * dy <= 1) return true;
+    }
+    return false;
+  }
+
+  /** Stato di un geyser sul campo vulcano: 'idle' | 'warn' | 'erupt'. */
+  geyserState(idx: number): 'idle' | 'warn' | 'erupt' {
+    const g = this.pitch.geysers?.[idx];
+    if (!g) return 'idle';
+    const t = (this.elapsed + g.phase) % g.period;
+    if (t >= g.period - 1.2) return 'erupt';
+    if (t >= g.period - 2.8) return 'warn';
+    return 'idle';
+  }
+
   // ---------- movimento giocatori ----------
   maxSpeed(p: Player): number {
+    const opp = p.team === 0 ? 1 : 0;
     let s = 128 * p.def.stats.speed * this.pitch.playerSpeed;
     if (!this.isHuman(p)) s *= this.diff[p.team].speed;
     if (p.sprinting) s *= 1.32;
     if (this.ball.owner === p) s *= 0.92;
     if (this.turbo[p.team] > 0) s *= 1.2;
+    if (this.ice[opp] > 0) s *= 0.68;
+    if (this.inMud(p.x, p.y)) s *= 0.62;
     if (p.isGK) s *= 1.05;
     if (p.injured) s *= 0.86;
     if (this.cfg.mods?.speedMult) s *= this.cfg.mods.speedMult;
@@ -671,7 +712,8 @@ export class MatchSim {
       p.vx = p.vy = 0;
       return;
     }
-    const grip = this.pitch.playerGrip;
+    const opp = p.team === 0 ? 1 : 0;
+    const grip = this.pitch.playerGrip * (this.ice[opp] > 0 ? 0.55 : 1);
     this.checkDribble(p);
     if (p.state === 'slide') {
       const f = Math.exp(-3.2 * dt);
@@ -738,8 +780,8 @@ export class MatchSim {
       p.y = this.H - m;
       p.vy = Math.min(0, p.vy);
     }
-    // gira intorno agli ostacoli
-    for (const o of this.pitch.obstacles ?? []) {
+    // gira intorno agli ostacoli e ai respingenti
+    for (const o of [...(this.pitch.obstacles ?? []), ...(this.pitch.bumpers ?? [])]) {
       const dx = p.x - o.x;
       const dy = p.y - o.y;
       const d = Math.hypot(dx, dy);
@@ -862,8 +904,8 @@ export class MatchSim {
     b.vy = o.vy;
     b.vz = 0;
     b.roll += len(o.vx, o.vy) * 0.016;
-    // la palla al piede non entra nella fontana: scivola sul bordo
-    for (const ob of this.pitch.obstacles ?? []) {
+    // la palla al piede non entra nella fontana o nei respingenti: scivola sul bordo
+    for (const ob of [...(this.pitch.obstacles ?? []), ...(this.pitch.bumpers ?? [])]) {
       const dx = b.x - ob.x;
       const dy = b.y - ob.y;
       const d = Math.hypot(dx, dy);
@@ -915,6 +957,28 @@ export class MatchSim {
       if (this.pitch.slope) b.vy += this.pitch.slope * dt;
       if (this.wave > 0) b.vy += this.waveDir * 260 * this.wavePush * dt;
     }
+    // calamita: attira la palla libera (non durante un tiro in porta) verso la squadra
+    if (!b.owner && !b.isShot && this.phase === 'play') {
+      for (const t of [0, 1] as const) {
+        if (this.magnet[t] <= 0) continue;
+        let pullTo: Player | null = null;
+        let bestD = 175;
+        for (const p of this.teams[t]) {
+          if (p.isGK || p.out > 0 || !p.canAct) continue;
+          const d = dist(p, b);
+          if (d < bestD && d > 4) {
+            bestD = d;
+            pullTo = p;
+          }
+        }
+        if (pullTo) {
+          const n = norm(pullTo.x - b.x, pullTo.y - b.y);
+          const pull = 300 * (1 - bestD / 195);
+          b.vx += n.x * pull * dt;
+          b.vy += n.y * pull * dt;
+        }
+      }
+    }
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.z += b.vz * dt;
@@ -926,17 +990,20 @@ export class MatchSim {
     }
     if (b.z <= 0) {
       b.z = 0;
+      const mudNow = this.inMud(b.x, b.y);
+      const bounceK = mudNow ? 0.2 : b.giant ? Math.max(0.84, this.pitch.ballBounce) : this.pitch.ballBounce;
       if (b.vz < -40) {
-        b.vz = -b.vz * this.pitch.ballBounce;
+        b.vz = -b.vz * bounceK;
         if (b.vz > 25) this.events.push({ type: 'bounce', x: b.x, y: b.y, power: b.vz });
       } else b.vz = 0;
       if (b.vz === 0) {
-        const k = 0.95 * this.pitch.ballFriction;
+        const mudMult = mudNow ? 2.8 : 1;
+        const k = 0.95 * this.pitch.ballFriction * mudMult;
         const f = Math.exp(-k * dt);
         b.vx *= f;
         b.vy *= f;
         const s = b.speed;
-        const lin = 30 * this.pitch.ballFriction * dt;
+        const lin = 30 * this.pitch.ballFriction * mudMult * dt;
         if (s <= lin) {
           b.vx = b.vy = 0;
         } else {
@@ -996,6 +1063,38 @@ export class MatchSim {
           b.passTarget = null;
         }
         if (b.owner) b.owner.holdT = 0;
+      }
+    }
+    // respingenti elastici stile flipper
+    for (const bm of this.pitch.bumpers ?? []) {
+      if (b.z >= 22) continue;
+      const dx = b.x - bm.x;
+      const dy = b.y - bm.y;
+      const d = Math.hypot(dx, dy);
+      const min = bm.r + r;
+      if (d < min && d > 1e-4) {
+        const nx = dx / d;
+        const ny = dy / d;
+        b.x = bm.x + nx * (min + 1);
+        b.y = bm.y + ny * (min + 1);
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) {
+          b.vx -= (1 + bm.boost) * vn * nx;
+          b.vy -= (1 + bm.boost) * vn * ny;
+        }
+        const sp = b.speed;
+        if (sp < 250) {
+          b.vx = nx * 260;
+          b.vy = ny * 260;
+        } else if (sp > 620) {
+          b.vx = (b.vx / sp) * 620;
+          b.vy = (b.vy / sp) * 620;
+        }
+        b.vz = Math.max(b.vz, 35);
+        if (b.shotFrom) b.banked = true;
+        b.isShot = false;
+        b.passTarget = null;
+        this.events.push({ type: 'bumper', x: bm.x, y: bm.y, power: Math.max(180, -vn) });
       }
     }
     const inMouth = b.y > this.goalTop + r && b.y < this.goalBottom - r;
@@ -1180,6 +1279,7 @@ export class MatchSim {
     b.isShot = false;
     b.fire = false;
     b.superShot = false;
+    b.giant = false;
     b.spin = 0;
     p.holdT = 0;
     if (s > 30) p.facing = Math.atan2(p.y - b.y, p.x - b.x) + Math.PI; // si gira verso la palla
@@ -1208,11 +1308,12 @@ export class MatchSim {
       let p = clamp(1.05 - (s - 200) / 900, 0.35, 0.95) * kp;
       if (b.superShot) p *= 0.45;
       if (b.fire) p *= 0.6;
+      if (b.giant) p *= 0.72;
       if (!this.rng.chance(clamp(p, 0.1, 0.97))) {
         gk.saveCd = 1;
         return; // battuto!
       }
-      const canCatch = !b.fire && !b.superShot && s < 330 * kp;
+      const canCatch = !b.fire && !b.superShot && !b.giant && s < 330 * kp;
       if (canCatch) {
         this.keeperCatch(gk);
         this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team, idx: gk.idx });
@@ -1244,7 +1345,7 @@ export class MatchSim {
     b.owner = gk;
     b.lastTouch = gk;
     b.stop();
-    b.fire = b.superShot = b.isShot = false;
+    b.fire = b.superShot = b.giant = b.isShot = false;
     b.passTarget = null;
     gk.holdT = 0;
     gk.facing = gk.team === 0 ? 0 : Math.PI;
@@ -1495,12 +1596,54 @@ export class MatchSim {
     return this.wave > 0 ? Math.sin(Math.min(1, this.wave) * Math.PI) : 0;
   }
 
+  private updateGeysers(dt: number) {
+    const geysers = this.pitch.geysers;
+    if (!geysers?.length) return;
+    const b = this.ball;
+    geysers.forEach((g, idx) => {
+      const erupting = this.geyserState(idx) === 'erupt';
+      const was = this.geyserActive[idx] ?? false;
+      this.geyserActive[idx] = erupting;
+      if (erupting && !was) this.events.push({ type: 'geyser', x: g.x, y: g.y });
+      if (!erupting) return;
+      // lancia in aria la palla se passa sul getto di vapore
+      if (b.z < 26 && dist(b, g) < g.r) {
+        if (b.owner) {
+          b.owner.pickupCd = 0.35;
+          b.owner = null;
+        }
+        b.vz = Math.max(b.vz, 225 + this.rng.range(0, 55));
+        b.z = Math.max(b.z, 4);
+        b.isShot = false;
+        b.passTarget = null;
+        if (b.speed < 80) {
+          const a = this.rng.range(0, Math.PI * 2);
+          b.vx += Math.cos(a) * 90;
+          b.vy += Math.sin(a) * 90;
+        }
+      }
+      // spinge leggermente fuori dal getto i giocatori sopra il cratere
+      for (const p of this.players) {
+        if (p.out > 0) continue;
+        const dx = p.x - g.x;
+        const dy = p.y - g.y;
+        const d = Math.hypot(dx, dy);
+        if (d < g.r) {
+          const nx = d > 1e-3 ? dx / d : 1;
+          const ny = d > 1e-3 ? dy / d : 0;
+          p.vx += nx * 240 * dt;
+          p.vy += ny * 240 * dt;
+        }
+      }
+    });
+  }
+
   private updatePowerUps(dt: number) {
     if (!this.cfg.powerUps) return;
     this.powerUpT -= dt;
     if (this.powerUpT <= 0 && this.powerUps.length < 2) {
       this.powerUpT = this.cfg.mods?.fastPowerUps ? this.rng.range(6, 10) : this.rng.range(13, 20);
-      const kinds: PowerUpKind[] = ['fuoco', 'turbo', 'muro'];
+      const kinds: PowerUpKind[] = ['fuoco', 'turbo', 'muro', 'ghiaccio', 'calamita', 'gigante'];
       const kind = this.rng.pick(kinds);
       const pu: PowerUp = {
         id: this.nextPowerUpId++,
@@ -1537,6 +1680,9 @@ export class MatchSim {
   applyPowerUp(kind: PowerUpKind, team: 0 | 1) {
     if (kind === 'fuoco') this.fireShot[team] = true;
     else if (kind === 'turbo') this.turbo[team] = 8;
-    else this.wall[team] = 9;
+    else if (kind === 'muro') this.wall[team] = 9;
+    else if (kind === 'ghiaccio') this.ice[team] = 5;
+    else if (kind === 'calamita') this.magnet[team] = 7;
+    else this.giant[team] = 8;
   }
 }

@@ -8,6 +8,7 @@ import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 import type { LeggendaSave } from '../modes/leggenda';
 import type { SurvivalRecord, SurvivalState } from '../modes/survival';
+import type { WorldTourState } from '../modes/worldTour';
 
 const KEY = 'pixel-calcio-arcade:v1';
 
@@ -54,6 +55,8 @@ export interface SaveData {
   /** Sopravvivenza roguelite: corsa in corso e record personale. */
   survival?: SurvivalState;
   survivalBest?: SurvivalRecord;
+  /** Street World Tour: campagna internazionale. */
+  worldTour?: WorldTourState;
 }
 
 const DEFAULTS: SaveData = {

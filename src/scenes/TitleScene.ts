@@ -47,27 +47,29 @@ export class TitleScene extends Phaser.Scene {
 
     // logo
     const lx = Math.min(170, W * 0.28);
-    const logo = this.add.container(lx, 48);
+    const logo = this.add.container(lx, 36);
     const l1 = shadowTxt(this, 0, 0, 'PIXEL', 24, '#ffffff', '#1a1222', 3);
     const l2 = shadowTxt(this, 0, 30, 'CALCIO', 32, '#ffd23f', '#a0381e', 4);
     const l3 = shadowTxt(this, 0, 58, 'A R C A D E', 8, '#3fd0ff', '#1a1222', 1);
     logo.add([l1.c, l2.c, l3.c]);
     this.tweens.add({ targets: l2.c, y: 27, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     // pallone che rimbalza vicino al logo
-    const ball = this.add.image(lx + 108, 68, 'ball').setScale(2);
-    this.tweens.add({ targets: ball, y: 44, duration: 380, yoyo: true, repeat: -1, ease: 'Quad.easeOut' });
+    const ball = this.add.image(lx + 108, 56, 'ball').setScale(2);
+    this.tweens.add({ targets: ball, y: 32, duration: 380, yoyo: true, repeat: -1, ease: 'Quad.easeOut' });
     this.tweens.add({ targets: ball, angle: 360, duration: 1400, repeat: -1 });
 
     // menu
-    let y = 124;
-    const survBest = load().survivalBest?.bestRound ?? 0;
+    let y = 112;
+    const sv = load();
+    const survBest = sv.survivalBest?.bestRound ?? 0;
+    const wt = sv.worldTour;
     for (const m of MODES) {
       const b = button(
         this,
         lx,
         y,
         210,
-        21,
+        20,
         m.title,
         () => {
           if (!m.available) return;
@@ -77,13 +79,13 @@ export class TitleScene extends Phaser.Scene {
           this.scene.stop();
         },
         {
-          color: !m.available ? 0x3a3d55 : m.id === 'mito' ? 0x8a3fd0 : m.id === 'conquista' ? 0x2f9a50 : m.id === 'manager' ? 0xc07a1a : m.id === 'leggenda' ? 0xe85a1a : m.id === 'sopravvivenza' ? 0xd02f6f : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
-          badge: !m.available ? 'PRESTO' : m.id === 'mito' ? 'STORIA' : m.id === 'leggenda' ? 'ANIME' : m.id === 'sopravvivenza' ? (survBest > 0 ? `REC ${survBest}` : 'ROGUELITE') : m.id === 'manager' ? 'NUOVO' : undefined,
+          color: !m.available ? 0x3a3d55 : m.id === 'worldtour' ? 0x1b8f9a : m.id === 'mito' ? 0x8a3fd0 : m.id === 'conquista' ? 0x2f9a50 : m.id === 'manager' ? 0xc07a1a : m.id === 'leggenda' ? 0xe85a1a : m.id === 'sopravvivenza' ? 0xd02f6f : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
+          badge: !m.available ? 'PRESTO' : m.id === 'worldtour' ? (wt?.finished ? 'VINTO' : wt ? `${wt.step}/6` : 'NUOVO') : m.id === 'mito' ? 'STORIA' : m.id === 'leggenda' ? 'ANIME' : m.id === 'sopravvivenza' ? (survBest > 0 ? `REC ${survBest}` : 'ROGUELITE') : undefined,
           size: m.title.length > 18 ? 7 : 8,
         },
       );
       if (!m.available) b.setEnabled(false);
-      y += 26;
+      y += 24;
     }
 
     // record e opzioni

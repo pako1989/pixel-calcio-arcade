@@ -17,6 +17,7 @@ import { newAlbum, owned as ownedStickers, packsForMatch } from '../modes/album'
 import { managerReportLines } from './ManagerScene';
 import { applyConquistaResult, CITIES, CQ_GOAL_TEXT } from '../modes/conquista';
 import { applySurvivalMatch, SURVIVAL_RULES } from '../modes/survival';
+import { applyWorldTourResult, WORLD_STAGES, WT_GOAL_TEXT } from '../modes/worldTour';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
 
@@ -130,6 +131,7 @@ export class ResultScene extends Phaser.Scene {
       legend: sv.leggenda?.cleared ?? 0,
       survival: sv.survivalBest?.bestRound ?? 0,
       missions: Object.values(sv.missions?.done ?? {}).filter(Boolean).length,
+      worldTour: sv.worldTour ? (sv.worldTour.finished ? WORLD_STAGES.length : sv.worldTour.step) : 0,
     });
     for (const t of newT) {
       this.coins += t.reward;
@@ -314,6 +316,32 @@ export class ResultScene extends Phaser.Scene {
           label: 'CONTINUA',
           go: (s) => backToScene(s, 'story', {
             lines: rep.success ? city.win : city.lose, step: idx, then: 'conquista', saga: 'conquista', celebrate: rep.success ? idx : undefined,
+          }),
+        },
+      };
+    }
+    if (d.launch.mode === 'worldtour') {
+      const wt = load().worldTour;
+      if (!wt || wt.step !== md.step || wt.finished) return undefined;
+      const idx = wt.step;
+      const rep = applyWorldTourResult(wt, d);
+      save((s) => (s.worldTour = wt));
+      const stage = rep.stage;
+      const lines: ReportLine[] = [
+        { text: `TAPPA ${idx + 1} · ${stage.name}`, color: '#8a8fb0' },
+        { text: WT_GOAL_TEXT[stage.goal], ok: rep.success },
+        { text: `Gol del capitano: ${rep.captainGoals}`, color: '#ffffff' },
+      ];
+      if (rep.success && idx < WORLD_STAGES.length - 1) lines.push({ text: `Souvenir: ${stage.souvenir.name}`, color: '#ff7ab8' });
+      return {
+        title: rep.finished ? 'CAMPIONI DEL MONDO!' : rep.success ? `${stage.name} SUPERATA!` : 'NON ANCORA...',
+        titleColor: rep.success ? '#5be37d' : '#ff5a5a',
+        lines,
+        retry: false,
+        next: {
+          label: 'CONTINUA',
+          go: (s) => backToScene(s, 'story', {
+            lines: rep.success ? stage.win : stage.lose, step: idx, then: 'worldtour', saga: 'worldtour', celebrate: rep.success ? idx : undefined,
           }),
         },
       };

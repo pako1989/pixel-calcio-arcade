@@ -81,16 +81,19 @@ export function drawSticker(scene: Phaser.Scene, def: StickerDef, x: number, y: 
   } else if (def.kind === 'campo') {
     const th = THEMES[def.pitch];
     const pw = w - 16;
-    const ph = (h - 30) * 0.7;
+    const ph = Math.max(16, (h - 36) * 0.72);
     const px = -pw / 2;
-    const py = -ph / 2 - 6;
+    const py = -ph / 2 - 2;
     for (let i = 0; i < 6; i++) g.fillStyle(i % 2 ? th.a : th.b).fillRect(px + (i * pw) / 6, py, pw / 6 + 1, ph);
     g.lineStyle(1, th.line).strokeRect(px, py, pw, ph);
     g.lineBetween(0, py, 0, py + ph);
     g.strokeCircle(0, py + ph / 2, ph * 0.18);
     const pdef = PITCHES[def.pitch];
     for (const o of pdef.obstacles ?? []) g.fillStyle(0xd8d0c0).fillCircle(px + (o.x / pdef.width) * pw, py + (o.y / pdef.height) * ph, 2);
-    c.add(txt(scene, 0, nameY, def.name.toUpperCase().replace(/^(CAMPO|STADIO|PRATO|MOLO|PIAZZA|TETTO|GABBIA) (IN |DEL |DI |DEL )?/, '').slice(0, Math.floor((w - 6) / 6)), 6, '#ffffff'));
+    for (const bm of pdef.bumpers ?? []) g.fillStyle(0xff3fa4).fillCircle(px + (bm.x / pdef.width) * pw, py + (bm.y / pdef.height) * ph, 2);
+    for (const m of pdef.mud ?? []) g.fillStyle(0x5c3e22).fillCircle(px + (m.x / pdef.width) * pw, py + (m.y / pdef.height) * ph, 2);
+    for (const gy of pdef.geysers ?? []) g.fillStyle(0xff9a1a).fillCircle(px + (gy.x / pdef.width) * pw, py + (gy.y / pdef.height) * ph, 2);
+    c.add(txt(scene, 0, nameY, def.name.toUpperCase().replace(/^(CAMPO|STADIO|PRATO|MOLO|PIAZZA|TETTO|GABBIA|ARENA|CRATERE) (IN |DEL |DI |DEL )?/, '').slice(0, Math.floor((w - 6) / 6)), 6, '#ffffff'));
   } else {
     const iconKey = def.icon === 'fuoco' || def.icon === 'turbo' || def.icon === 'muro' ? `pu_${def.icon}` : def.icon === 'pallone' ? 'ball' : null;
     if (iconKey) c.add(scene.add.image(0, -6, iconKey).setScale(def.icon === 'pallone' ? 4 : 3));
@@ -160,7 +163,7 @@ export class AlbumScene extends Phaser.Scene {
     const cols = p.stickers.length > 6 ? 4 : 3;
     const rows = Math.ceil(p.stickers.length / cols);
     const cw = cols === 4 ? 78 : 86;
-    const ch = 96;
+    const ch = rows >= 3 ? 58 : 96;
     const gx = (pw - cols * cw) / (cols + 1);
     p.stickers.forEach((s, i) => {
       const col = i % cols;

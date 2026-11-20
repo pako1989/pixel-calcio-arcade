@@ -67,6 +67,8 @@ export class MatchScene extends Phaser.Scene {
   private crowdT = 0;
   private excite = 0;
   private puSprites = new Map<number, { icon: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image }>();
+  private bumperNodes: { x: number; y: number; c: Phaser.GameObjects.Container }[] = [];
+  private geyserG?: Phaser.GameObjects.Graphics;
   private acc = 0;
   private timeScale = 1;
   private hitStop = 0;
@@ -141,6 +143,8 @@ export class MatchScene extends Phaser.Scene {
     this.chantT = 12 + Math.random() * 10;
     this.started = false;
     this.crowdA = this.crowdB = undefined;
+    this.bumperNodes = [];
+    this.geyserG = undefined;
     this.ctrl.reset();
   }
 
@@ -199,6 +203,21 @@ export class MatchScene extends Phaser.Scene {
       this.add.image(o.x + 3, o.y + 3, 'shadow').setScale((o.r * 2.2) / 14, 1.6).setAlpha(0.2).setDepth(3);
       void i;
     }
+    for (const bm of pitch.bumpers ?? []) {
+      this.add.image(bm.x + 2, bm.y + 3, 'shadow').setScale((bm.r * 2.1) / 14, 1.5).setAlpha(0.28).setDepth(3);
+      const c = this.add.container(bm.x, bm.y).setDepth(10 + bm.y * 0.01);
+      const g = this.add.graphics();
+      g.fillStyle(0x1a1222).fillCircle(0, 0, bm.r + 2);
+      g.fillStyle(0xff3fa4).fillCircle(0, 0, bm.r);
+      g.fillStyle(0x39e6ff).fillCircle(0, -1, bm.r * 0.72);
+      g.fillStyle(0xffd23f).fillCircle(0, -2, bm.r * 0.44);
+      g.fillStyle(0xffffff, 0.7).fillCircle(-bm.r * 0.16, -bm.r * 0.22, Math.max(2, bm.r * 0.14));
+      c.add(g);
+      this.bumperNodes.push({ x: bm.x, y: bm.y, c });
+    }
+    if (pitch.geysers?.length) {
+      this.geyserG = this.add.graphics().setDepth(2.5);
+    }
     if (pitch.waves) {
       if (!this.textures.exists('wavesheet')) {
         const cv = document.createElement('canvas');
@@ -240,7 +259,7 @@ export class MatchScene extends Phaser.Scene {
     this.passRing.setVisible(false);
 
     // --- particelle ---
-    const groundTint = pitch.id === 'spiaggia' ? 0xd9bd7c : pitch.id === 'neve' ? 0xffffff : pitch.id === 'quartiere' || pitch.id === 'piazza' ? 0x9a9ca2 : pitch.id === 'molo' ? 0xc89a6a : 0x6fbf5a;
+    const groundTint = pitch.id === 'spiaggia' ? 0xd9bd7c : pitch.id === 'neve' ? 0xffffff : pitch.id === 'quartiere' || pitch.id === 'piazza' ? 0x9a9ca2 : pitch.id === 'molo' ? 0xc89a6a : pitch.id === 'flipper' ? 0x39e6ff : pitch.id === 'fango' ? 0x6b4f35 : pitch.id === 'vulcano' ? 0xff8a3a : 0x6fbf5a;
     this.fx = {
       dust: this.add.particles(0, 0, 'px2', {
         lifespan: { min: 250, max: 520 },
@@ -500,6 +519,28 @@ export class MatchScene extends Phaser.Scene {
           sfx.thunder();
         }
       }
+    }
+    if (this.geyserG && this.sim.pitch.geysers) {
+      const gg = this.geyserG;
+      gg.clear();
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now * 0.018);
+      this.sim.pitch.geysers.forEach((gy, idx) => {
+        const st = this.sim.geyserState(idx);
+        gg.fillStyle(0x1f1417, 0.85).fillCircle(gy.x, gy.y, gy.r + 3);
+        gg.lineStyle(2, st === 'erupt' ? 0xfff3a0 : st === 'warn' ? 0xff9a1a : 0x5c2e28, 0.9).strokeCircle(gy.x, gy.y, gy.r);
+        if (st === 'idle') {
+          gg.fillStyle(0x4a201b, 0.7).fillCircle(gy.x, gy.y, gy.r * 0.55);
+        } else if (st === 'warn') {
+          gg.fillStyle(0xff6a1a, 0.35 + pulse * 0.45).fillCircle(gy.x, gy.y, gy.r * (0.65 + pulse * 0.25));
+        } else {
+          gg.fillStyle(0xff9a1a, 0.75).fillCircle(gy.x, gy.y, gy.r);
+          gg.fillStyle(0xfff5c0, 0.9).fillCircle(gy.x, gy.y, gy.r * 0.58);
+          if (Math.random() < dt * 28) {
+            this.fx.fire.explode(2, gy.x + (Math.random() - 0.5) * gy.r, gy.y - Math.random() * 18);
+            this.fx.spark.explode(2, gy.x + (Math.random() - 0.5) * gy.r * 0.7, gy.y - Math.random() * 24);
+          }
+        }
+      });
     }
   }
 
@@ -862,6 +903,24 @@ export class MatchScene extends Phaser.Scene {
         if (e.power > 250) cam.shake(70, 0.003);
         this.fx.dust.explode(4, e.x, e.y);
         break;
+      case 'bumper': {
+        if (!quiet) sfx.bumper();
+        this.fx.spark.explode(14, e.x, e.y - 4);
+        cam.shake(80, 0.004);
+        const node = this.bumperNodes.find((n) => Math.hypot(n.x - e.x, n.y - e.y) < 4);
+        if (node) {
+          this.tweens.killTweensOf(node.c);
+          node.c.setScale(1.38);
+          this.tweens.add({ targets: node.c, scale: 1, duration: 150, ease: 'Back.easeOut' });
+        }
+        break;
+      }
+      case 'geyser':
+        if (!quiet) sfx.geyser();
+        this.fx.fire.explode(14, e.x, e.y - 6);
+        this.fx.spark.explode(16, e.x, e.y - 12);
+        cam.shake(120, 0.005);
+        break;
       case 'bounce':
         if (!quiet) sfx.bounce(Math.min(0.4, e.power / 300));
         break;
@@ -904,10 +963,18 @@ export class MatchScene extends Phaser.Scene {
       case 'powerup': {
         if (!quiet) {
           sfx.powerup();
-          commentary.say(e.kind === 'fuoco' ? 'fire' : e.kind === 'turbo' ? 'turbo' : 'wall');
+          const callMap = { fuoco: 'fire', turbo: 'turbo', muro: 'wall', ghiaccio: 'ice', calamita: 'magnet', gigante: 'giant' } as const;
+          commentary.say(callMap[e.kind]);
         }
         this.fx.stars.explode(16, e.x, e.y);
-        const names = { fuoco: 'TIRO DI FUOCO', turbo: 'TURBO', muro: 'MURO IN PORTA' };
+        const names = {
+          fuoco: 'TIRO DI FUOCO',
+          turbo: 'TURBO',
+          muro: 'MURO IN PORTA',
+          ghiaccio: 'GHIACCIO',
+          calamita: 'CALAMITA',
+          gigante: 'PALLONE GIGANTE',
+        } as const;
         if (!demo) this.msg({ text: names[e.kind] + '!', sub: teamName(e.team), color: human === null || human === e.team ? '#5be37d' : '#ff9a5a' });
         break;
       }
@@ -1143,21 +1210,26 @@ export class MatchScene extends Phaser.Scene {
       else spr.setOrigin(0.5, 22 / FRAME);
       spr.setPosition(Math.round(p.x), Math.round(p.y + yOff + (rot !== 0 ? -6 : 0)));
       spr.setDepth(10 + p.y * 0.01);
+      if (sim.ice[p.team === 0 ? 1 : 0] > 0) spr.setTint(0x88eeff);
+      else spr.clearTint();
       shadow.setPosition(Math.round(p.x + 1), Math.round(p.y + 1));
       shadow.setScale(pose === 'slide' || pose === 'dive' ? 1.5 : 1, 1);
-      // scia con turbo o scatto
+      // scia con turbo, calamita o scatto
       if (p.sprinting && speed > 120 && Math.random() < dt * 14) this.fx.dust.explode(1, p.x - p.vx * 0.04, p.y);
       if (sim.turbo[p.team] > 0 && speed > 80 && Math.random() < dt * 20) this.fx.spark.explode(1, p.x, p.y - 8);
+      if (sim.magnet[p.team] > 0 && !p.isGK && Math.random() < dt * 9) this.fx.spark.explode(1, p.x, p.y - 6);
     }
 
     // palla
     const b = sim.ball;
     const by = b.y - b.z * Z_SCALE;
+    const giant = b.giant || (!!b.owner && sim.giant[b.owner.team] > 0);
     this.ball.setPosition(Math.round(b.x), Math.round(by));
     this.ball.setFrame(Math.floor(b.roll / 3) % 4);
-    this.ball.setScale(1 + Math.min(0.5, b.z / 90));
+    this.ball.setScale((giant ? 1.55 : 1) * (1 + Math.min(0.5, b.z / 90)));
     this.ball.setDepth(10 + b.y * 0.01 + 0.005);
     this.ballShadow.setPosition(Math.round(b.x + b.z * 0.12), Math.round(b.y + 1));
+    this.ballShadow.setScale(giant ? 1.55 : 1);
     this.ballShadow.setAlpha(Math.max(0.1, 0.35 - b.z / 200));
     if ((b.fire || b.superShot) && !b.owner) {
       this.fx.fire.emitParticleAt(b.x, by, 2);
@@ -1207,7 +1279,8 @@ export class MatchScene extends Phaser.Scene {
       let s = this.puSprites.get(pu.id);
       if (!s) {
         const glow = this.add.image(pu.x, pu.y - 10, 'glow').setBlendMode('ADD').setScale(0.8).setDepth(9);
-        glow.setTint(pu.kind === 'fuoco' ? 0xff7a1a : pu.kind === 'turbo' ? 0xffe03a : 0xff9a7a);
+        const puTint = { fuoco: 0xff7a1a, turbo: 0xffe03a, muro: 0xff9a7a, ghiaccio: 0x3fd0ff, calamita: 0xff4a8a, gigante: 0xffa020 } as const;
+        glow.setTint(puTint[pu.kind]);
         const shadow = this.add.image(pu.x, pu.y + 1, 'shadow').setAlpha(0.25).setScale(0.8).setDepth(3);
         const icon = this.add.image(pu.x, pu.y - 10, `pu_${pu.kind}`).setDepth(10 + pu.y * 0.01);
         s = { icon, glow, shadow };

@@ -18,6 +18,9 @@ export type CallKind =
   | 'fire'
   | 'turbo'
   | 'wall'
+  | 'ice'
+  | 'magnet'
+  | 'giant'
   | 'tackle'
   | 'rain'
   | 'fog'
@@ -53,6 +56,9 @@ const LINES: Record<CallKind, string[]> = {
   fire: ['Tiro di fuoco!'],
   turbo: ['Turbo!'],
   wall: ['Muro in porta!'],
+  ice: ['Ghiaccio in campo! Avversari congelati!'],
+  magnet: ['Calamita attiva! Attira il pallone!'],
+  giant: ['Pallone gigante! Attenti ai rimbalzi!'],
   tackle: ['Che contrasto!', 'Intervento deciso!'],
   rain: ['Si gioca sotto la pioggia. Il pallone frena sul bagnato!'],
   fog: ['Nebbia fitta stasera: si vede pochissimo!'],

@@ -68,6 +68,9 @@ export class HudScene extends Phaser.Scene {
     const cond = [
       cfg.pitch.slope ? 'PENDENZA' : '',
       cfg.pitch.waves ? 'ONDE' : '',
+      cfg.pitch.bumpers?.length ? 'FLIPPER' : '',
+      cfg.pitch.mud?.length ? 'FANGO' : '',
+      cfg.pitch.geysers?.length ? 'GEYSER' : '',
       cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '',
       cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '',
       cfg.mods?.alwaysFire ? 'FUOCO' : '',
@@ -297,6 +300,9 @@ export class HudScene extends Phaser.Scene {
       if (sim.fireShot[t]) drawChip(0xff7a1a, 1);
       if (sim.turbo[t] > 0) drawChip(0xffe03a, sim.turbo[t] / 8);
       if (sim.wall[t] > 0) drawChip(0xc4552e, sim.wall[t] / 9);
+      if (sim.ice[t] > 0) drawChip(0x6ae6ff, sim.ice[t] / 5);
+      if (sim.magnet[t] > 0) drawChip(0xff4a8a, sim.magnet[t] / 7);
+      if (sim.giant[t] > 0) drawChip(0xffa020, sim.giant[t] / 8);
     }
 
     // vento

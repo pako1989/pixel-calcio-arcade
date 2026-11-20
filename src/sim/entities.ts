@@ -81,6 +81,8 @@ export class Ball {
   spin = 0;
   fire = false;
   superShot = false;
+  /** Pallone ingrandito (power-up Pallone Gigante): più pesante e rimbalzante. */
+  giant = false;
   /** Il pallone è stato appena calciato verso la porta (per statistiche e parate). */
   isShot = false;
   /** Rotazione accumulata per l'animazione. */
@@ -100,7 +102,7 @@ export class Ball {
   }
 }
 
-export type PowerUpKind = 'fuoco' | 'turbo' | 'muro';
+export type PowerUpKind = 'fuoco' | 'turbo' | 'muro' | 'ghiaccio' | 'calamita' | 'gigante';
 
 export interface PowerUp {
   id: number;
@@ -119,6 +121,8 @@ export type SimEvent =
   | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1; idx?: number }
   | { type: 'post'; x: number; y: number }
   | { type: 'wall'; x: number; y: number; power: number }
+  | { type: 'bumper'; x: number; y: number; power: number }
+  | { type: 'geyser'; x: number; y: number }
   | { type: 'bounce'; x: number; y: number; power: number }
   | { type: 'tackle'; x: number; y: number; won: boolean; team: 0 | 1; idx?: number }
   | { type: 'slide'; x: number; y: number }

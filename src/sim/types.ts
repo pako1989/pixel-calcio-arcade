@@ -42,7 +42,18 @@ export interface TeamDef {
 
 export type Difficulty = 'facile' | 'normale' | 'difficile';
 
-export type PitchId = 'stadio' | 'spiaggia' | 'neve' | 'tetto' | 'quartiere' | 'piazza' | 'montagna' | 'molo';
+export type PitchId =
+  | 'stadio'
+  | 'spiaggia'
+  | 'neve'
+  | 'tetto'
+  | 'quartiere'
+  | 'piazza'
+  | 'montagna'
+  | 'molo'
+  | 'flipper'
+  | 'fango'
+  | 'vulcano';
 
 /** Ostacolo rotondo in campo (fontana, statua): la palla rimbalza, i giocatori ci girano intorno. */
 export interface Obstacle {
@@ -52,6 +63,31 @@ export interface Obstacle {
   r: number;
   /** Altezza: la palla più alta ci passa sopra. */
   h: number;
+}
+
+/** Respingente elastico stile flipper: rilancia la palla ad alta velocità. */
+export interface Bumper {
+  x: number;
+  y: number;
+  r: number;
+  boost: number;
+}
+
+/** Pozzanghera di fango ellittica: rallenta corsa e pallone rasoterra. */
+export interface MudZone {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+
+/** Geyser vulcanico periodico: erutta lanciando in aria la palla. */
+export interface Geyser {
+  x: number;
+  y: number;
+  r: number;
+  period: number;
+  phase: number;
 }
 
 /** Meteo della partita: cambia la fisica (pioggia) o la visuale (nebbia). */
@@ -74,6 +110,12 @@ export interface PitchDef {
   wind: boolean;
   /** Ostacoli in campo. */
   obstacles?: Obstacle[];
+  /** Respingenti da flipper in campo. */
+  bumpers?: Bumper[];
+  /** Zone di fango pesante. */
+  mud?: MudZone[];
+  /** Geyser periodici. */
+  geysers?: Geyser[];
   /** Pendenza: accelerazione della palla a terra (px/s²) verso il basso del campo. */
   slope?: number;
   /** Onde che ogni tanto spazzano il campo e spingono la palla. */

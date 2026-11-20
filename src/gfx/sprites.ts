@@ -453,6 +453,24 @@ export function makeCommonTextures(scene: Phaser.Scene) {
     ['bbbbbbbbbb', 'bbbbmbbbbm', 'mmmmmmmmmm', 'bbmbbbbmbb', 'bbmbbbbmbb', 'mmmmmmmmmm', 'bbbbmbbbbm', 'bbbbmbbbbm', 'mmmmmmmmmm', 'bbmbbbbmbb'],
     { b: 0xc4552e, m: 0xe9d8b5 },
   );
+  iconTex(
+    scene,
+    'pu_ghiaccio',
+    ['....cc....', '.c..cc..c.', '..ccwwcc..', '.ccwwwwcc.', 'ccwwccwwcc', 'ccwwccwwcc', '.ccwwwwcc.', '..ccwwcc..', '.c..cc..c.', '....cc....'],
+    { c: 0x3fd0ff, w: 0xe6fbff },
+  );
+  iconTex(
+    scene,
+    'pu_calamita',
+    ['..rr..bb..', '.rrrrbbbb.', '.rr....bb.', '.rr....bb.', '.rr....bb.', '.rr....bb.', '.ss....ss.', '.ss....ss.', '..s....s..', '..........'],
+    { r: 0xe8443a, b: 0x2f8be0, s: 0xd8dce8 },
+  );
+  iconTex(
+    scene,
+    'pu_gigante',
+    ['...oooo...', '.ooyyyyoo.', 'ooywwwwyoo', 'oywwyywwyo', 'oywybbywyo', 'oywybbywyo', 'oywwyywwyo', 'ooywwwwyoo', '.ooyyyyoo.', '...oooo...'],
+    { o: 0xff7a1a, y: 0xffd23f, w: 0xfff5d6, b: 0x2a2a35 },
+  );
 }
 
 export function teamTint(c: number): number {
