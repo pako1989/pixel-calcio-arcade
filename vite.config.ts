@@ -33,5 +33,7 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.ts'],
+    // i test di bilanciamento simulano molte partite: sui runner di GitHub servono più di 5 s
+    testTimeout: 60000,
   },
 });
