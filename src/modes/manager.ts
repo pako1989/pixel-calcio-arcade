@@ -124,6 +124,19 @@ export const CLUB_KITS: { colors: TeamDef['colors']; pattern: TeamDef['pattern']
 
 // ---------------------------------------------------------------- tipi
 
+export interface SponsorOffer {
+  name: string;
+  weekly: number;
+  bonus: number;
+  desc: string;
+}
+
+export const SPONSOR_OFFERS: SponsorOffer[] = [
+  { name: 'Birrificio Locale', weekly: 2800, bonus: 12000, desc: 'Sponsor storico del quartiere. Affidabile.' },
+  { name: 'Tech Arena', weekly: 5200, bonus: 28000, desc: 'Azienda tecnologica in forte crescita.' },
+  { name: 'Global Sports Corp', weekly: 8800, bonus: 55000, desc: 'Colosso globale dello sport. Richiede ambizione.' },
+];
+
 export interface MPlayer {
   id: number;
   name: string;
@@ -144,6 +157,8 @@ export interface MPlayer {
   apps: number;
   /** Settimane di stop per infortunio (0/assente = disponibile). */
   injured?: number;
+  loan?: boolean;
+  buyout?: number;
 }
 
 export interface MClub {
@@ -212,6 +227,8 @@ export interface ManagerState {
   /** Albo: piazzamento di ogni stagione. */
   history: { season: number; division: number; pos: number }[];
   titles: number;
+  sponsor: { name: string; weekly: number; bonus: number };
+  boardConfidence: number;
   /** Fine stagione appena avvenuta (da mostrare una volta). */
   seasonEnd?: SeasonEnd;
   /** Ultimo resoconto settimanale delle finanze. */
@@ -517,6 +534,8 @@ export function newManager(name: string, kit: number, difficulty: Difficulty, se
     news: [],
     history: [],
     titles: 0,
+    sponsor: SPONSOR_OFFERS[0],
+    boardConfidence: 75,
   };
   const used = new Set<string>();
   const roles: Role[] = ['GK', 'DEF', 'MID', 'MID', 'FWD', 'GK', 'DEF', 'MID', 'FWD'];
@@ -558,12 +577,28 @@ export function refreshMarket(st: ManagerState, rng = new Rng(st.seed + st.seaso
     const young = rng.chance(0.3);
     const age = young ? Math.floor(rng.range(16, 20)) : randomAge(rng);
     const lvl = young ? rng.range(lo - 0.6, lo + 0.2) : rng.range(lo - 0.2, hi + 0.5);
-    return newPlayer(rng, st.nextId++, role, lvl, age, used);
+    const p = newPlayer(rng, st.nextId++, role, lvl, age, used);
+    if (rng.chance(0.25)) {
+      p.loan = true;
+      p.buyout = Math.round((playerValue(p) * 1.15) / 500) * 500;
+    }
+    return p;
   });
 }
 
+export function renewContract(st: ManagerState, id: number): boolean {
+  const p = st.squad.find((x) => x.id === id);
+  if (!p) return false;
+  const cost = Math.round(p.salary * 4);
+  if (st.budget < cost) return false;
+  st.budget -= cost;
+  p.morale = Math.min(100, p.morale + 15);
+  st.news.unshift(`Rinnovato il contratto di ${p.name} (-${money(cost)}).`);
+  return true;
+}
+
 export function buyPrice(p: MPlayer): number {
-  return playerValue(p);
+  return p.loan && p.buyout ? p.buyout : playerValue(p);
 }
 
 export function canBuy(st: ManagerState, p: MPlayer): string | null {
@@ -582,6 +617,9 @@ export function buy(st: ManagerState, id: number): boolean {
   if (st.squad.some((q) => q.name === p.name)) p.name = `${p.name} J.`;
   p.number = 0;
   p.morale = 75;
+  if (p.loan) {
+    p.salary = Math.round(p.salary * 0.6);
+  }
   st.squad.push(p);
   assignNumbers(st);
   st.news.unshift(`Acquistato ${p.name} (${ROLE_LABEL[p.role]}) per ${money(buyPrice(p))}.`);
@@ -892,12 +930,14 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
   }
   const tired = starters(st).filter((p) => p.energy < 45);
 
+  st.boardConfidence = clamp(st.boardConfidence + (won ? 3 : lost ? -4 : 1), 10, 100);
+
   // tifosi e soldi
   st.fans = Math.round(st.fans * (won ? 1.05 : lost ? 0.98 : 1.01) + (won ? 8 : 0));
   const div = DIVISIONS[st.division];
   const tickets = home ? Math.min(st.fans, STADIUM_LEVELS[st.stadium].seats) * div.ticket : 0;
   const salaries = st.squad.reduce((t, p) => t + p.salary, 0);
-  const sponsor = div.sponsor;
+  const sponsor = st.sponsor.weekly;
   st.budget += tickets + sponsor - salaries;
   st.lastWeek = { tickets, sponsor, salaries };
 

@@ -11,6 +11,14 @@ export interface VersionEntry {
 
 export const CHANGELOG: VersionEntry[] = [
   {
+    version: 'v0.9.4',
+    items: [
+      'Carriera Allenatore Avanzata: scelta sponsor strategici e bonus',
+      'Calciomercato avanzato con mercato prestiti e riscatto',
+      'Fiducia della dirigenza (Board Confidence) e rinnovi contrattuali',
+    ],
+  },
+  {
     version: 'v0.9.3',
     items: [
       'Campionato Nazionale Giovanile con gironi all italiana e fase finale',
