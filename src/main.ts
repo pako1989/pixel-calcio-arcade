@@ -78,7 +78,37 @@ window.addEventListener('keydown', unlockAudio);
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+    checkStale();
   });
+  // un service worker nuovo ha preso il controllo: si ricarica una volta sola
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => reloadOnce());
+  }
+}
+
+function reloadOnce(): void {
+  try {
+    if (sessionStorage.getItem('pixel-calcio:agg')) return;
+    sessionStorage.setItem('pixel-calcio:agg', '1');
+  } catch {
+    return;
+  }
+  location.reload();
+}
+
+/** Se la pagina pubblicata ora usa un file del gioco diverso da quello in uso, questa è una versione vecchia: si svuota la cache e si ricarica. */
+function checkStale(): void {
+  fetch('./index.html', { cache: 'no-store' })
+    .then((r) => r.text())
+    .then(async (html) => {
+      const m = html.match(/assets\/game-[^"']+\.js/);
+      if (!m || document.querySelector(`script[src*="${m[0]}"]`)) return;
+      const regs = (await navigator.serviceWorker.getRegistrations()) ?? [];
+      await Promise.all(regs.map((r) => r.unregister()));
+      for (const k of (await window.caches?.keys()) ?? []) await caches.delete(k);
+      reloadOnce();
+    })
+    .catch(() => undefined);
 }
 
 (window as unknown as { __game: Phaser.Game }).__game = game;
