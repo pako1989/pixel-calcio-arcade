@@ -1,0 +1,23 @@
+{
+  "name": "pixel-calcio-arcade",
+  "version": "0.9.3",
+  "private": true,
+  "description": "Calcio arcade 2D in pixel art per telefono: 5 contro 5 contro la CPU.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.3.0",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  }
+}

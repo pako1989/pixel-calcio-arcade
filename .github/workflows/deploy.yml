@@ -1,0 +1,55 @@
+name: Pubblica su GitHub Pages
+
+# GitHub Pages serve la radice del branch main: questo workflow costruisce il gioco
+# e mette la build (index.html, assets/, sw.js, icone) nella radice di main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Copia la build nella radice
+        run: |
+          # i file della build precedente restano: chi ha ancora la pagina vecchia in
+          # cache (fino a 10 minuti su Pages) li trova e il gioco parte lo stesso
+          keep=$(grep -oE 'assets/[^"]+' index.html 2>/dev/null | sed 's#assets/##' || true)
+          mkdir -p assets
+          for f in assets/*; do
+            [ -e "$f" ] || continue
+            n=$(basename "$f")
+            if [ ! -e "dist/assets/$n" ] && ! printf '%s\n' $keep | grep -qxF "$n"; then rm -f "$f"; fi
+          done
+          rm -rf icons
+          cp -r dist/assets dist/icons .
+          cp dist/game.html index.html
+          cp dist/sw.js dist/manifest.webmanifest .
+          touch .nojekyll
+      - name: Salva la build su main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add -A index.html assets icons sw.js manifest.webmanifest .nojekyll
+          if git diff --cached --quiet; then
+            echo "Build già aggiornata"
+          else
+            git commit -m "Pubblica build ${GITHUB_SHA::7}"
+            git push
+          fi
