@@ -10,8 +10,10 @@ import { backToMenu } from './demo';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
 import { goFullscreen, isTouch } from '../ui/fullscreen';
+import { StellePanel, type StelleView } from './stelleUi';
+import type { StarRarity } from '../modes/leggendaStelle';
 
-type View = 'episodi' | 'campionato' | 'tecniche' | 'allenamento';
+type View = 'episodi' | 'campionato' | 'tecniche' | 'allenamento' | 'stelle';
 
 /** Il rivale (o il personaggio chiave) di ogni episodio, per la copertina. */
 const EP_FACE = ['tommaso', 'maestro', 'sandro', 'dario', 'raffo', 'paco', 'bram', 'nacho', 'erik', 'rafa'];
@@ -19,6 +21,8 @@ const EP_FACE = ['tommaso', 'maestro', 'sandro', 'dario', 'raffo', 'paco', 'bram
 interface HubData {
   celebrate?: number;
   championshipMatchFinished?: boolean;
+  /** Ritorno dal Torneo delle Stelle. */
+  stelle?: boolean;
 }
 
 /** Leggenda del Pallone: episodi della storia, libro delle tecniche, allenamento col Maestro. */
@@ -30,6 +34,8 @@ export class LeggendaScene extends Phaser.Scene {
   private train?: { kick: number; score: number; pos: number; dir: number; speed: number; running: boolean; results: number[] };
   private trainG?: Phaser.GameObjects.Graphics;
   private trainInfo?: Phaser.GameObjects.Text;
+  private startView: View = 'episodi';
+  private stelleState: { view: StelleView; page: number; filter: StarRarity | 'tutte' } = { view: 'squadra', page: 0, filter: 'tutte' };
 
   constructor() {
     super('leggenda');
@@ -37,7 +43,8 @@ export class LeggendaScene extends Phaser.Scene {
 
   init(d: HubData) {
     this.celebrate = d?.celebrate;
-    if (d?.championshipMatchFinished) this.view = 'campionato';
+    this.startView = d?.championshipMatchFinished ? 'campionato' : d?.stelle ? 'stelle' : 'episodi';
+    if (d?.stelle) this.stelleState.view = 'torneo';
   }
 
   create() {
@@ -47,7 +54,7 @@ export class LeggendaScene extends Phaser.Scene {
     const all = load();
     this.sv = all.leggenda = all.leggenda ?? newLeggenda();
     this.sel = Math.min(this.sv.cleared, EPISODES.length - 1);
-    this.view = 'episodi';
+    this.view = this.startView;
     this.train = undefined;
     music.play('leggenda');
     this.cameras.main.fadeIn(250, 10, 8, 20);
@@ -125,10 +132,10 @@ export class LeggendaScene extends Phaser.Scene {
     txt(this, W - 12, 14, `${this.sv.pts} PUNTI LEGGENDA`, 7, '#3fd0ff').setOrigin(1, 0.5);
     txt(this, W - 12, 28, `${coins} MONETE`, 6, '#ffd23f').setOrigin(1, 0.5);
     // schede
-    const tabs: [View, string][] = [['episodi', 'EPISODI'], ['campionato', 'CAMPIONATO'], ['tecniche', 'TECNICHE'], ['allenamento', 'ALLENAMENTO']];
-    const tw = Math.min(100, (W - 130) / 4);
+    const tabs: [View, string][] = [['episodi', 'EPISODI'], ['campionato', 'CAMPIONATO'], ['tecniche', 'TECNICHE'], ['allenamento', 'ALLENAMENTO'], ['stelle', 'STELLE']];
+    const tw = Math.min(96, (W - 86) / tabs.length - 6);
     tabs.forEach(([v, l], i) => {
-      const b = button(this, W / 2 - tw * 2 - 12 + i * (tw + 6) + 30, 62, tw, 20, l, () => {
+      const b = button(this, 74 + tw / 2 + i * (tw + 6), 62, tw, 20, l, () => {
         if (this.train?.running) return;
         this.view = v;
         this.train = undefined;
@@ -140,6 +147,7 @@ export class LeggendaScene extends Phaser.Scene {
     if (this.view === 'episodi') this.buildEpisodes();
     else if (this.view === 'campionato') this.buildChampionship();
     else if (this.view === 'tecniche') this.buildTechs();
+    else if (this.view === 'stelle') new StellePanel(this, this.sv, this.stelleState, () => this.build()).build();
     else this.buildTraining();
   }
 

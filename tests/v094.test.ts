@@ -3,9 +3,9 @@ import pkg from '../package.json';
 import { APP_VERSION, CHANGELOG, VERSION_TAG } from '../src/ui/version';
 import { newManager, renewContract } from '../src/modes/manager';
 
-describe('versione 0.9.4', () => {
-  it('sincronizza CHANGELOG e package.json sulla 0.9.4', () => {
-    expect(APP_VERSION).toBe('0.9.4');
+describe('versione 0.9.5', () => {
+  it('sincronizza CHANGELOG e package.json sulla 0.9.5', () => {
+    expect(APP_VERSION).toBe('0.9.5');
     expect(APP_VERSION).toBe(pkg.version);
     expect(CHANGELOG[0]?.version).toBe(VERSION_TAG);
   });

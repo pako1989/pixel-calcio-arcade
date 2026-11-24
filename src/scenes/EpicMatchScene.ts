@@ -17,6 +17,8 @@ import { checkTrophies, newTotals } from '../modes/trophies';
 import { owned as ownedStickers } from '../modes/album';
 import { levelOf, MAX_LEVEL } from '../modes/progress';
 import { backToScene } from './demo';
+import { lineupComplete, roundReward, STAR_ROUNDS, starKnown, starOpponent, starTeam, stelleOf, cardById, packById } from '../modes/leggendaStelle';
+import { starIntro } from './stelleUi';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
 import { commentary } from '../audio/commentary';
@@ -24,6 +26,8 @@ import { commentary } from '../audio/commentary';
 export interface EpicData {
   ep: number;
   championshipMatchId?: string;
+  /** Turno del Torneo delle Stelle (la tua squadra di carte). */
+  stelle?: number;
 }
 
 /** Metri -> pixel: il campo visto dall'alto, più grande dello schermo in tutte e due le direzioni. */
@@ -128,13 +132,32 @@ export class EpicMatchScene extends Phaser.Scene {
   init(d: EpicData) {
     this.epi = Math.max(0, Math.min(EPISODES.length - 1, d?.ep ?? 0));
     this.championshipMatchId = d?.championshipMatchId;
+    this.stelle = d?.stelle !== undefined && d.stelle >= 0 && d.stelle < STAR_ROUNDS.length ? d.stelle : undefined;
   }
+
+  private stelle?: number;
 
   create() {
     this.alive = true;
     this.ep = EPISODES[this.epi];
     const all = load();
     this.sv = all.leggenda = all.leggenda ?? newLeggenda();
+    const stelle = this.stelle !== undefined ? stelleOf(this.sv).st : undefined;
+    if (stelle && !lineupComplete(stelle)) this.stelle = undefined;
+    if (this.stelle !== undefined) {
+      // partita del Torneo delle Stelle: stesso stadio dell'episodio, niente copione
+      this.ep = {
+        ...this.ep,
+        objective: { kind: 'vinci' },
+        minutes: Math.max(this.ep.minutes, 36),
+        intro: starIntro(this.stelle),
+        win: [{ who: 'telecronista', text: 'Vince la Squadra delle Stelle! Che spettacolo di campioni!' }],
+        lose: [{ who: 'maestro', text: 'Perdere insegna. Potenzia le carte, cerca l\'intesa e riprova.' }],
+        script: [],
+        teaches: undefined,
+        injured: undefined,
+      };
+    }
     this.actors.clear();
     this.fired.clear();
     this.comments = [];
@@ -161,10 +184,12 @@ export class EpicMatchScene extends Phaser.Scene {
 
     const diff = all.settings.difficulty;
     const assist = diff === 'facile' ? 10 : diff === 'difficile' ? -2 : 4;
-    this.m = new FieldMatch(heroTeam(this.epi), rivalTeam(this.epi), {
+    const mine = stelle && this.stelle !== undefined ? starTeam(stelle) : heroTeam(this.epi);
+    const opp = stelle && this.stelle !== undefined ? starOpponent(this.stelle, stelle.lineup as string[]) : rivalTeam(this.epi);
+    this.m = new FieldMatch(mine, opp, {
       minutes: this.ep.minutes,
       assist,
-      known: [...this.sv.learned],
+      known: this.stelle !== undefined ? starKnown(mine) : [...this.sv.learned],
       injured: this.ep.injured,
       cpuPace: diff === 'facile' ? 0.88 : diff === 'difficile' ? 1.08 : 1,
     });
@@ -689,7 +714,7 @@ export class EpicMatchScene extends Phaser.Scene {
     c.add([this.scoreT, this.timeT]);
     this.radar = this.add.graphics();
     c.add(this.radar);
-    c.add(txt(this, 10, 10, `EP.${this.epi + 1}`, 6, '#8a8fb0').setOrigin(0, 0.5));
+    c.add(txt(this, 10, 10, this.stelle !== undefined ? `STELLE ${this.stelle + 1}` : `EP.${this.epi + 1}`, 6, '#8a8fb0').setOrigin(0, 0.5));
     this.exitBtn = txt(this, W - 8, 10, 'ESCI', 6, '#8a8fb0', { backgroundColor: '#22253a', padding: { x: 4, y: 3 } }).setOrigin(1, 0.5);
     this.exitBtn.setScrollFactor(0).setInteractive({ useHandCursor: true }).on('pointerup', () => {
       if (!this.exitArmed) {
@@ -1247,6 +1272,7 @@ export class EpicMatchScene extends Phaser.Scene {
   // ---------- fine ----------
 
   private async finish() {
+    if (this.stelle !== undefined) return this.finishStelle();
     const m = this.m;
     this.choice?.destroy();
     sfx.whistle(3, true);
@@ -1254,6 +1280,8 @@ export class EpicMatchScene extends Phaser.Scene {
     const ok = objectiveMet(this.ep.objective, m.score);
     const wasCleared = this.sv.cleared;
     const r = episodeReward(this.sv, this.epi, ok, { duelsWon: m.duelsWon, score: m.score, specialGoals: m.specialGoals });
+    // i rivali battuti si uniscono alla Squadra delle Stelle
+    const joined = stelleOf(this.sv).joined.map((id) => `${(CAST[id]?.name ?? cardById(id)?.base.name ?? id).toUpperCase()} SI UNISCE ALLE STELLE!`);
     const p = progressOf();
     p.coins += r.coins;
     // trofei (bacheca comune a tutto il gioco)
@@ -1273,7 +1301,7 @@ export class EpicMatchScene extends Phaser.Scene {
       sfx.fanfare();
       sfx.roar(1.2);
     } else sfx.sadJingle();
-    await this.resultPanel(ok, r, fresh.map((t) => t.name), bonus);
+    await this.resultPanel(ok, r, fresh.map((t) => t.name), bonus, joined);
     await new LgTalk(this, ok ? this.ep.win : this.ep.lose, 'full').play();
     if (!this.alive) return;
     const choice = ok ? 'hub' : await this.choose('Obiettivo non raggiunto', undefined, [
@@ -1299,7 +1327,43 @@ export class EpicMatchScene extends Phaser.Scene {
     });
   }
 
-  private resultPanel(ok: boolean, r: { coins: number; pts: number; first: boolean }, trophies: string[], bonus: number): Promise<void> {
+  /** Fine di una partita del Torneo delle Stelle: premi e ritorno alla schermata STELLE. */
+  private async finishStelle() {
+    const m = this.m;
+    const r = this.stelle!;
+    this.choice?.destroy();
+    sfx.whistle(3, true);
+    await this.banner('FISCHIO FINALE', '#ffffff', 1200);
+    const st = stelleOf(this.sv).st;
+    const ok = m.score[0] > m.score[1];
+    const rw = roundReward(this.sv, st, r, ok, m.score[0]);
+    this.sv.specialGoals += m.specialGoals;
+    progressOf().coins += rw.coins;
+    save();
+    if (ok) {
+      sfx.fanfare();
+      sfx.roar(1.2);
+    } else sfx.sadJingle();
+    const extra = [
+      ...(rw.pack ? [`PREMIO: ${packById(rw.pack).name}!`] : []),
+      ...(ok && rw.first ? [r >= STAR_ROUNDS.length - 1 ? 'TORNEO DELLE STELLE VINTO!' : 'NUOVO TURNO SBLOCCATO!'] : []),
+    ];
+    await this.resultPanel(ok, { coins: rw.coins, pts: rw.pts, first: false }, [], 0, extra, ok ? 'TURNO VINTO!' : 'SCONFITTA');
+    await new LgTalk(this, ok ? this.ep.win : this.ep.lose, 'full').play();
+    if (!this.alive) return;
+    const choice = ok ? 'hub' : await this.choose('Turno perso', undefined, [
+      { label: 'RIPROVA', value: 'retry', color: 0x2f9a50 },
+      { label: 'TORNA ALLE STELLE', value: 'hub', color: 0x3a3d55 },
+    ]);
+    if (choice === 'retry') {
+      this.cameras.main.fadeOut(250, 10, 8, 20);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart({ ep: this.epi, stelle: r }));
+      return;
+    }
+    backToScene(this, 'leggenda', { stelle: true });
+  }
+
+  private resultPanel(ok: boolean, r: { coins: number; pts: number; first: boolean }, trophies: string[], bonus: number, extra: string[] = [], head?: string): Promise<void> {
     return new Promise((res) => {
       const W = this.scale.width;
       const H = this.scale.height;
@@ -1311,6 +1375,7 @@ export class EpicMatchScene extends Phaser.Scene {
         `Punti Leggenda: +${r.pts}`,
         `Monete: +${r.coins + bonus}`,
         ...(r.first ? [this.epi >= EPISODES.length - 1 ? 'STORIA COMPLETATA!' : 'NUOVO EPISODIO SBLOCCATO!'] : []),
+        ...extra,
         ...trophies.map((t) => `TROFEO: ${t}`),
       ];
       const ph = 150 + rows.length * 15;
@@ -1319,7 +1384,7 @@ export class EpicMatchScene extends Phaser.Scene {
       const pw = Math.min(W - 40, 440);
       panel(g, W / 2 - pw / 2, y0, pw, ph, 0x1b1d2e, ok ? COLORS.accent : 0xff5a5a, 0.97);
       c.add(g);
-      c.add(shadowTxt(this, W / 2, y0 + 24, ok ? 'OBIETTIVO RAGGIUNTO!' : 'OBIETTIVO MANCATO', 12, ok ? '#5be37d' : '#ff5a5a', '#1a1222', 2).c);
+      c.add(shadowTxt(this, W / 2, y0 + 24, head ?? (ok ? 'OBIETTIVO RAGGIUNTO!' : 'OBIETTIVO MANCATO'), 12, ok ? '#5be37d' : '#ff5a5a', '#1a1222', 2).c);
       c.add(txt(this, W / 2, y0 + 50, `${a.name}  ${this.m.score[0]} - ${this.m.score[1]}  ${b.name}`, 7, '#ffffff'));
       const scorers = this.m.scorers.map((s) => `${this.m.player(s.by).name} ${Math.min(90, Math.floor((s.time / this.m.duration) * 90))}'`).join('   ');
       if (scorers) c.add(txt(this, W / 2, y0 + 66, scorers, 6, '#8a8fb0', { wordWrap: { width: pw - 30 }, align: 'center' }));
