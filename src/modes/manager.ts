@@ -137,6 +137,35 @@ export const SPONSOR_OFFERS: SponsorOffer[] = [
   { name: 'Global Sports Corp', weekly: 8800, bonus: 55000, desc: 'Colosso globale dello sport. Richiede ambizione.' },
 ];
 
+/** Incasso settimanale dello sponsor: la base della lega moltiplicata per l'offerta scelta (Birrificio = 1x). */
+export function sponsorWeekly(st: ManagerState): number {
+  return Math.round((DIVISIONS[st.division].sponsor * (st.sponsor?.weekly ?? SPONSOR_OFFERS[0].weekly)) / SPONSOR_OFFERS[0].weekly / 50) * 50;
+}
+
+/** Perché lo sponsor non si può firmare adesso (null = si può). Una firma a stagione; i più ricchi chiedono una lega più alta. */
+export function canSignSponsor(st: ManagerState, idx: number): string | null {
+  const o = SPONSOR_OFFERS[idx];
+  if (!o) return 'Offerta non valida';
+  if (st.sponsor?.name === o.name) return 'IN CORSO';
+  if (st.sponsorSeason === st.season) return 'UNO A STAGIONE';
+  if (idx > st.division) return `SERVE ${DIVISIONS[Math.min(idx, 3)].short.toUpperCase()}`;
+  return null;
+}
+
+export function signSponsor(st: ManagerState, idx: number): boolean {
+  if (canSignSponsor(st, idx)) return false;
+  const o = SPONSOR_OFFERS[idx];
+  st.sponsor = { name: o.name, weekly: o.weekly, bonus: o.bonus };
+  st.sponsorSeason = st.season;
+  st.budget += o.bonus;
+  st.news.unshift(`Nuovo sponsor: ${o.name}! Bonus firma +${money(o.bonus)}.`);
+  return true;
+}
+
+export function boardLabel(c: number): string {
+  return c >= 80 ? 'FIDUCIA TOTALE' : c >= 55 ? 'FIDUCIA SOLIDA' : c >= 30 ? 'IN BILICO' : 'A RISCHIO';
+}
+
 export interface MPlayer {
   id: number;
   name: string;
@@ -228,6 +257,8 @@ export interface ManagerState {
   history: { season: number; division: number; pos: number }[];
   titles: number;
   sponsor: { name: string; weekly: number; bonus: number };
+  /** Stagione dell'ultima firma di uno sponsor (una a stagione). */
+  sponsorSeason?: number;
   boardConfidence: number;
   /** Fine stagione appena avvenuta (da mostrare una volta). */
   seasonEnd?: SeasonEnd;
@@ -586,10 +617,15 @@ export function refreshMarket(st: ManagerState, rng = new Rng(st.seed + st.seaso
   });
 }
 
+/** Costo del rinnovo: 4 stipendi, 20% in meno se la dirigenza ha piena fiducia. */
+export function renewCost(st: ManagerState, p: MPlayer): number {
+  return Math.round(p.salary * 4 * (st.boardConfidence >= 80 ? 0.8 : 1));
+}
+
 export function renewContract(st: ManagerState, id: number): boolean {
   const p = st.squad.find((x) => x.id === id);
   if (!p) return false;
-  const cost = Math.round(p.salary * 4);
+  const cost = renewCost(st, p);
   if (st.budget < cost) return false;
   st.budget -= cost;
   p.morale = Math.min(100, p.morale + 15);
@@ -937,7 +973,7 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
   const div = DIVISIONS[st.division];
   const tickets = home ? Math.min(st.fans, STADIUM_LEVELS[st.stadium].seats) * div.ticket : 0;
   const salaries = st.squad.reduce((t, p) => t + p.salary, 0);
-  const sponsor = st.sponsor.weekly;
+  const sponsor = sponsorWeekly(st);
   st.budget += tickets + sponsor - salaries;
   st.lastWeek = { tickets, sponsor, salaries };
 
@@ -1080,7 +1116,7 @@ export function weeklyBalance(st: ManagerState): { salaries: number; sponsor: nu
   const div = DIVISIONS[st.division];
   return {
     salaries: st.squad.reduce((t, p) => t + p.salary, 0),
-    sponsor: div.sponsor,
+    sponsor: sponsorWeekly(st),
     tickets: Math.min(st.fans, STADIUM_LEVELS[st.stadium].seats) * div.ticket,
   };
 }
@@ -1421,5 +1457,8 @@ export function ensureManager(st: ManagerState): ManagerState {
     }
   }
   if (!st.objective) st.objective = makeObjective(st);
+  // salvataggi di prima della 0.9.4
+  if (!st.sponsor) st.sponsor = SPONSOR_OFFERS[0];
+  if (st.boardConfidence === undefined) st.boardConfidence = 75;
   return st;
 }

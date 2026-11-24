@@ -13,13 +13,14 @@ import {
   FORMATION_ORDER, FORMATIONS, matchConditions, matchPitch, ME, minuteOf, money, myTeamDef, newManager,
   opponentOf, playerOvr, playerValue, potOvr, ROLE_LABEL, sell, sellPrice, SIM_DURATION, simulateMyMatch, STADIUM_LEVELS,
   STAT_KEYS, STAT_LABEL, swapPlayers, table, teamRating, TRAINING_LEVELS, TRAINING_ORDER, TRAININGS, upgrade, upgradeCost,
-  weeklyBalance, type ManagerState, type MPlayer,
+  weeklyBalance, boardLabel, canSignSponsor, renewContract, renewCost, signSponsor, sponsorWeekly, SPONSOR_OFFERS,
+  type ManagerState, type MPlayer,
   applyMatch, CUP_ROUNDS, cupTeams, ensureManager, nextMatch, resolveEvent, type MatchApplied,
 } from '../modes/manager';
 import { WEATHER_INFO } from '../data/weather';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
-type Tab = 'club' | 'rosa' | 'mercato' | 'allena' | 'classifica' | 'societa';
+type Tab = 'club' | 'rosa' | 'mercato' | 'allena' | 'classifica' | 'societa' | 'dirigenza';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'club', label: 'CLUB' },
   { id: 'rosa', label: 'ROSA' },
@@ -27,6 +28,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'allena', label: 'ALLENA' },
   { id: 'classifica', label: 'CLASSIFICA' },
   { id: 'societa', label: 'SOCIETÀ' },
+  { id: 'dirigenza', label: 'DIRIGENZA' },
 ];
 
 /** Esito di una partita simulata, mostrato con la "cronaca" animata. */
@@ -127,6 +129,9 @@ export class ManagerScene extends Phaser.Scene {
         break;
       case 'societa':
         this.buildSociety(st, W, H);
+        break;
+      case 'dirigenza':
+        this.buildBoard(st, W, H);
         break;
     }
     this.buildFooter(st, W, H);
@@ -375,6 +380,7 @@ export class ManagerScene extends Phaser.Scene {
     txt(this, x + 194 - off + 30, cy, `${o}`, 8, this.ovrColor(o)).setOrigin(0, 0.5);
     if (opts.price !== undefined) {
       txt(this, x + w - 6, cy, money(opts.price), 6, opts.dim ? '#ff9a9a' : '#ffd23f').setOrigin(1, 0.5);
+      if (p.loan) txt(this, x + w - 74, cy, 'PREST.', 6, '#3fd0ff').setOrigin(1, 0.5);
     } else {
       // energia e morale (o infortunio)
       const ex = x + w - 56;
@@ -498,6 +504,7 @@ export class ManagerScene extends Phaser.Scene {
     txt(this, rx + 8, yy, `STIPENDIO ${money(p.salary)}/sett.`, 6, '#d8dcf0').setOrigin(0, 0.5);
     yy += 12;
     txt(this, rx + 8, yy, `VALORE ${money(playerValue(p))}`, 6, '#d8dcf0').setOrigin(0, 0.5);
+    if (market && p.loan) txt(this, rx + 8, yy + 12, 'PRESTITO: riscatto, stipendio -40%', 6, '#3fd0ff').setOrigin(0, 0.5);
     const by = Math.max(yy + 22, this.scale.height - 66);
     if (market) {
       const why = canBuy(st, p);
@@ -586,12 +593,14 @@ export class ManagerScene extends Phaser.Scene {
         'I giovani costano di più ma',
         'crescono in fretta (POT).',
         '',
-        'Per vendere: ROSA, tocca un',
-        'giocatore e premi VENDI.',
+        'PREST. = in prestito: il prezzo',
+        'è il riscatto, stipendio -40%.',
+        'Vendi dalla ROSA, rinnova da',
+        'DIRIGENZA.',
         '',
         `Budget: ${money(st.budget)}`,
       ];
-      lines.forEach((l, i) => txt(this, rx + rw / 2, top + 40 + i * 14, l, 6, i === 7 ? '#ffd23f' : '#d8dcf0'));
+      lines.forEach((l, i) => txt(this, rx + rw / 2, top + 40 + i * 14, l, 6, l.startsWith('Budget') ? '#ffd23f' : '#d8dcf0'));
       return;
     }
     this.playerDetail(g, st, p, rx, top + 10, rw, true);
@@ -766,6 +775,50 @@ export class ManagerScene extends Phaser.Scene {
       txt(this, rx + rw / 2, y, `${f.gh ?? '-'} - ${f.ga ?? '-'}`, 8, '#ffffff');
       txt(this, rx + rw - 18, y, a.short, 6, '#ffffff').setOrigin(1, 0.5);
       g.fillStyle(a.colors.shirt).fillRect(rx + rw - 14, y - 4, 4, 8);
+    });
+  }
+
+  // ------------------------------------------------------------ DIRIGENZA
+  private buildBoard(st: ManagerState, W: number, H: number) {
+    const g = this.add.graphics();
+    const top = 56;
+    const lw = Math.min(W * 0.5, 300);
+    panel(g, 8, top, lw, H - top - 44, 0x1b1d2e, 0x2e3250, 0.95);
+    txt(this, 8 + lw / 2, top + 12, 'FIDUCIA DELLA DIRIGENZA', 6, '#ffd23f');
+    const c = st.boardConfidence;
+    this.bar(g, 18, top + 24, lw - 20, 8, c / 100, c >= 55 ? COLORS.good : c >= 30 ? COLORS.accent : COLORS.bad);
+    txt(this, 18, top + 42, `${boardLabel(c)} (${c})`, 6, '#ffffff').setOrigin(0, 0.5);
+    txt(this, 18, top + 55, 'Vittoria +3 · pari +1 · sconfitta -4', 6, '#8a8fb0').setOrigin(0, 0.5);
+    txt(this, 18, top + 67, 'Da 80: rinnovi contratto -20%', 6, '#8a8fb0').setOrigin(0, 0.5);
+    txt(this, 8 + lw / 2, top + 88, `SPONSOR: ${st.sponsor.name.toUpperCase()}`, 6, '#ffd23f');
+    txt(this, 8 + lw / 2, top + 100, `+${money(sponsorWeekly(st))} a settimana`, 6, '#5be37d');
+    SPONSOR_OFFERS.forEach((o, i) => {
+      const y = top + 120 + i * 40;
+      const why = canSignSponsor(st, i);
+      const rate = Math.round((o.weekly / SPONSOR_OFFERS[0].weekly) * 100);
+      txt(this, 18, y, o.name.toUpperCase().slice(0, 18), 6, '#ffffff').setOrigin(0, 0.5);
+      txt(this, 18, y + 11, `${rate}% incasso · bonus ${money(o.bonus)}`, 6, '#8a8fb0').setOrigin(0, 0.5);
+      const b = button(this, 8 + lw - 52, y + 6, 88, 22, why ?? 'FIRMA', () => {
+        sfx.fanfare();
+        this.commit((s) => signSponsor(s, i));
+      }, { size: 6, color: COLORS.good, textColor: '#1a1222' });
+      b.setEnabled(!why);
+    });
+
+    const rx = 16 + lw;
+    const rw = W - rx - 8;
+    panel(g, rx, top, rw, H - top - 44, 0x1b1d2e, 0x2e3250, 0.95);
+    txt(this, rx + rw / 2, top + 12, 'RINNOVA CONTRATTO (+15 MORALE)', 6, '#ffd23f');
+    st.squad.forEach((p, i) => {
+      const y = top + 34 + i * 21;
+      txt(this, rx + 8, y, p.name.toUpperCase().slice(0, 11), 6, '#ffffff').setOrigin(0, 0.5);
+      txt(this, rx + 98, y, p.morale >= 70 ? ':)' : p.morale >= 40 ? ':|' : ':(', 6, p.morale >= 70 ? '#5be37d' : p.morale >= 40 ? '#d8dcf0' : '#ff9a9a').setOrigin(0, 0.5);
+      const cost = renewCost(st, p);
+      const b = button(this, rx + rw - 46, y, 84, 17, `+ ${money(cost)}`, () => {
+        sfx.select();
+        this.commit((s) => renewContract(s, p.id));
+      }, { size: 6, color: 0x2f6fd0 });
+      b.setEnabled(st.budget >= cost && p.morale < 100);
     });
   }
 
