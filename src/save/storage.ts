@@ -34,6 +34,8 @@ export interface SaveData {
     night: string;
     /** Falli, cartellini e infortuni in partita. */
     fouls: boolean;
+    /** Supermosse dei giocatori (attive di serie). */
+    specials?: boolean;
     /** Modulo tattico in Partita veloce. */
     formation?: FormationId;
   };

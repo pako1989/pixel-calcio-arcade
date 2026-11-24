@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SPECIALS, SPECIAL_TREE } from '../sim/specials';
 import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
 import { load, progressOf, save } from '../save/storage';
 import { TEAMS } from '../data/teams';
@@ -151,6 +152,11 @@ export class ClubScene extends Phaser.Scene {
         g.fillStyle(0xffd23f).fillRect(bx + 1, y + 3, bw - 2, 4);
         txt(this, bx + bw + 4, y + 5, 'MAX', 6, '#ffd23f').setOrigin(0, 0.5);
       }
+      // supermosse: una per livello 1, 3, 5 (i ruoli con meno mosse le hanno tutte al livello 3)
+      const tree = SPECIAL_TREE[pd.role];
+      const tier = lv >= 5 ? 3 : lv >= 3 ? 2 : 1;
+      const mv = tree.map((id, k) => (k < tier ? SPECIALS[id].short : `LV${k === 1 ? 3 : 5} ${SPECIALS[id].short}`));
+      txt(this, x0 + 44, y + 13, 'SUPER: ' + mv.join(' · '), 5, '#ff7ab8').setOrigin(0, 0.5);
       // abilità
       const sx = x0 + pw - 6 - 160;
       SKILLS[pd.role].forEach((s, j) => {

@@ -33,7 +33,7 @@ export class SettingsScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x0a0816, 0.82).setOrigin(0).setInteractive();
     const g = this.add.graphics();
     const pw = 380;
-    const ph = 300;
+    const ph = 330;
     const px = W / 2 - pw / 2;
     const py = H / 2 - ph / 2 - 4;
     panel(g, px, py, pw, ph, 0x1b1d2e, 0x2e3250, 0.97);
@@ -96,6 +96,20 @@ export class SettingsScene extends Phaser.Scene {
       fb.push(b);
     });
     txt(this, W / 2, y + 15, 'Scivolate fallose: gialli, rossi (30 s fuori) e infortuni', 6, '#8a8fb0');
+    y += 36;
+
+    // supermosse stile anime
+    txt(this, px + 24, y, 'SUPERMOSSE', 6, '#d8dcf0').setOrigin(0, 0.5);
+    const sb: Button[] = [];
+    (['SÌ', 'NO'] as const).forEach((l, i) => {
+      const b = button(this, px + 196 + i * 62, y, 56, 20, l, () => {
+        save((d) => (d.settings.specials = i === 0));
+        sb.forEach((x, j) => x.setSelected(j === i));
+      }, { size: 6 });
+      b.setSelected(i === 0 ? s.specials !== false : s.specials === false);
+      sb.push(b);
+    });
+    txt(this, W / 2, y + 15, 'Tasto SUPER: tiri speciali, combo e parate a barra piena', 6, '#8a8fb0');
 
     button(this, W / 2, py + ph - 22, 140, 26, 'FATTO', () => this.scene.stop(), { color: 0x2f8be0 });
   }

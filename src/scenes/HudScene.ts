@@ -6,9 +6,10 @@ import { load, save } from '../save/storage';
 import { sfx } from '../audio/sfx';
 import { backToMenu, backToScene } from './demo';
 import { MODES } from '../modes/modes';
+import { SPECIALS, pickSpecial, specialsOf } from '../sim/specials';
 
 interface TouchButton {
-  id: 'shoot' | 'pass' | 'sprint';
+  id: 'shoot' | 'pass' | 'sprint' | 'special';
   x: number;
   y: number;
   r: number;
@@ -93,6 +94,7 @@ export class HudScene extends Phaser.Scene {
         pointer: null,
       });
       this.buttons.push(mk('shoot', 'TIRA', 0xe8443a), mk('pass', 'PASSA', 0x2f8be0), mk('sprint', 'SCATTO', 0xe0a020));
+      if (this.match.launch.config.specials !== false) this.buttons.push(mk('special', 'SUPER', 0xff3fa4));
     }
     this.layout();
 
@@ -102,6 +104,7 @@ export class HudScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.onUp, this);
     this.scale.on('resize', this.layout, this);
     this.match.events.on('msg', this.showMsg, this);
+    this.match.events.on('cutin', this.showCutIn, this);
     this.voteT = undefined;
     if (this.match.launch.spotlight !== undefined) {
       this.voteT = txt(this, this.scale.width - 42, 18, 'VOTO 6', 6, '#ffffff', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } }).setOrigin(1, 0.5);
@@ -117,6 +120,7 @@ export class HudScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.scale.off('resize', this.layout, this);
       this.match.events.off('msg', this.showMsg, this);
+      this.match.events.off('cutin', this.showCutIn, this);
       this.input.off('pointerdown', this.onDown, this);
       this.input.off('pointermove', this.onMove, this);
       this.input.off('pointerup', this.onUp, this);
@@ -155,6 +159,7 @@ export class HudScene extends Phaser.Scene {
       shoot: [W - 54, H - 56, 30],
       pass: [W - 122, H - 34, 24],
       sprint: [W - 110, H - 100, 21],
+      special: [W - 46, H - 124, 22],
     };
     for (const b of this.buttons) {
       const [x, y, r] = pos[b.id];
@@ -239,6 +244,7 @@ export class HudScene extends Phaser.Scene {
     if (id === 'shoot') c.tShoot = v;
     if (id === 'pass') c.tPass = v;
     if (id === 'sprint') c.tSprint = v;
+    if (id === 'special') c.tSpecial = v;
     if (v && navigator.vibrate) navigator.vibrate(8);
   }
 
@@ -336,6 +342,22 @@ export class HudScene extends Phaser.Scene {
         cg.lineStyle(2, volley && b.id === 'shoot' ? 0xffd23f : 0xffffff, pressed ? 0.95 : 0.55).strokeCircle(b.x, b.y, r);
         if (b.id === 'shoot') b.label.setText(owns ? 'TIRA' : volley === 'rovesciata' ? 'ROVES.' : volley === 'volo' ? 'AL VOLO' : 'SCIVOLA');
         if (b.id === 'pass') b.label.setText(owns ? 'PASSA' : sim.locked ? 'CHIEDI' : teamHas ? 'PASSA' : 'CAMBIA');
+        if (b.id === 'special' && h) {
+          // supermossa: anello di energia, lampeggia quando è pronta e utile
+          const full = h.energy >= 1;
+          const move = pickSpecial(sim, h);
+          const name = move ? SPECIALS[move].short : (specialsOf(sim, h)[0] ? SPECIALS[specialsOf(sim, h)[0]].short : 'SUPER');
+          b.label.setText(full ? name : 'SUPER').setFontSize(name.length > 6 ? 5 : 6);
+          cg.lineStyle(3, 0x1a1222, 0.9).strokeCircle(b.x, b.y, r + 4);
+          cg.lineStyle(3, full ? 0xffd23f : 0x3fd0ff, 1);
+          cg.beginPath();
+          cg.arc(b.x, b.y, r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.02, h.energy), false);
+          cg.strokePath();
+          if (full && move && Math.floor(this.time.now / 140) % 2 === 0) {
+            cg.fillStyle(0xffffff, 0.35).fillCircle(b.x, b.y, r);
+          }
+          if (!full) cg.fillStyle(0x000000, 0.35).fillCircle(b.x, b.y, r);
+        }
       }
       // anello di carica sul tasto TIRA
       if (sim.charging) {
@@ -386,16 +408,42 @@ export class HudScene extends Phaser.Scene {
     });
   }
 
+  /** Taglio anime: banda colorata con il nome della mossa e di chi la fa. */
+  private showCutIn(m: { name: string; who: string; color: string; mine: boolean }) {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const c = this.add.container(0, 0).setDepth(100);
+    const y = H * 0.36;
+    const band = this.add.rectangle(W / 2, y, W, 56, 0x0d0a1a, 0.88);
+    const stripeA = this.add.rectangle(W / 2, y - 30, W, 4, Phaser.Display.Color.HexStringToColor(m.color).color);
+    const stripeB = this.add.rectangle(W / 2, y + 30, W, 4, Phaser.Display.Color.HexStringToColor(m.color).color);
+    c.add([band, stripeA, stripeB]);
+    // linee di velocità
+    const g = this.add.graphics();
+    for (let i = 0; i < 14; i++) {
+      const ly = y - 24 + Math.random() * 48;
+      const lx = Math.random() * W;
+      g.lineStyle(1, 0xffffff, 0.25).lineBetween(lx, ly, lx + 40 + Math.random() * 80, ly);
+    }
+    c.add(g);
+    const who = txt(this, W / 2, y - 14, m.who.toUpperCase(), 7, '#ffffff').setShadow(1, 1, '#1a1222', 0, true, true);
+    const name = shadowTxt(this, W / 2, y + 8, m.name, 14, m.color, '#1a1222', 3).c;
+    c.add([who, name]);
+    c.x = -W;
+    this.tweens.add({ targets: c, x: 0, duration: 160, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: c, x: W, delay: 950, duration: 200, ease: 'Cubic.easeIn', onComplete: () => c.destroy() });
+  }
+
   private showHelp() {
     const W = this.scale.width;
     const H = this.scale.height;
     const c = this.add.container(0, 0);
     const g = this.add.graphics();
-    panel(g, W / 2 - 170, H / 2 - 62, 340, 112, 0x1b1d2e, 0x2e3250, 0.94);
+    panel(g, W / 2 - 170, H / 2 - 62, 340, 126, 0x1b1d2e, 0x2e3250, 0.94);
     c.add(g);
     const lines = this.touch
-      ? ['COME SI GIOCA', '', 'Joystick a sinistra: muoviti', 'TIRA: tieni premuto per caricare', 'PASSA: passaggio verso il joystick', 'Senza palla: SCIVOLA e CAMBIA', 'SCATTO: corri più veloce']
-      : ['COME SI GIOCA', '', 'Frecce/WASD: muoviti', 'J o X: tira (tieni premuto)', 'K o Z: passa / cambia', 'Senza palla J: scivolata', 'L o Shift: scatto  -  Esc: pausa'];
+      ? ['COME SI GIOCA', '', 'Joystick a sinistra: muoviti', 'TIRA: tieni premuto per caricare', 'PASSA: passaggio verso il joystick', 'Senza palla: SCIVOLA e CAMBIA', 'SCATTO: corri più veloce', 'SUPER: supermossa a barra piena']
+      : ['COME SI GIOCA', '', 'Frecce/WASD: muoviti', 'J o X: tira (tieni premuto)', 'K o Z: passa / cambia', 'Senza palla J: scivolata', 'L o Shift: scatto  -  E o V: SUPERMOSSA  -  Esc: pausa'];
     lines.forEach((l, i) => c.add(txt(this, W / 2, H / 2 - 50 + i * 14, l, i === 0 ? 8 : 6, i === 0 ? '#ffd23f' : '#ffffff')));
     this.help = c;
     this.time.delayedCall(5200, () => {

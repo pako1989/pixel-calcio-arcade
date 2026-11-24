@@ -24,6 +24,10 @@ interface PSprite {
   shadow: Phaser.GameObjects.Image;
 }
 
+/** Colori e nomi delle supermosse in volo. */
+const SP_COLORS: Record<string, number> = { fulmine: 0xffe03a, cometa: 0xff8a3a, gemello: 0xb06aff, arcobaleno: 0xff5aa8, combo: 0xffffff };
+const SP_NAMES: Record<string, string> = { fulmine: 'TIRO FULMINE', cometa: 'TIRO COMETA', gemello: 'TIRO GEMELLO' };
+
 export interface HudMessage {
   text: string;
   sub?: string;
@@ -67,6 +71,8 @@ export class MatchScene extends Phaser.Scene {
   ctrl = new Controls();
   private ps: PSprite[] = [];
   private ball!: Phaser.GameObjects.Sprite;
+  /** Secondo pallone del Tiro Gemello. */
+  private ballGhost!: Phaser.GameObjects.Sprite;
   private ballShadow!: Phaser.GameObjects.Image;
   private marker!: Phaser.GameObjects.Image;
   private ring!: Phaser.GameObjects.Image;
@@ -180,6 +186,7 @@ export class MatchScene extends Phaser.Scene {
     this.rival = false;
     this.ballSkin = 'classico';
     this.celebration = 'salto';
+    data = { ...data, config: { ...data.config, specials: !data.demo && load().settings.specials !== false } };
     if (data.demo || data.config.humanTeam !== 0) return data;
     const cfg = { ...data.config, fouls: load().settings.fouls };
     const p = progressOf();
@@ -271,6 +278,7 @@ export class MatchScene extends Phaser.Scene {
     }
     this.ballShadow = this.add.image(0, 0, 'ballShadow').setAlpha(0.35).setDepth(3);
     this.ball = this.add.sprite(0, 0, 'ball', 0).setOrigin(0.5, 0.75);
+    this.ballGhost = this.add.sprite(0, 0, 'ball', 0).setOrigin(0.5, 0.75).setVisible(false).setAlpha(0.85);
 
     this.ring = this.add.image(0, 0, 'ring').setTint(0xffd23f).setAlpha(0.9).setDepth(3.5);
     this.passRing = this.add.image(0, 0, 'ring').setTint(0xffffff).setAlpha(0.45).setDepth(3.5);
@@ -446,6 +454,7 @@ export class MatchScene extends Phaser.Scene {
       shoot: K.J, shoot2: K.X, shoot3: K.SPACE,
       pass: K.K, pass2: K.Z,
       sprint: K.L, sprint2: K.SHIFT, sprint3: K.C,
+      special: K.E, special2: K.V,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
 
     this.scale.on('resize', this.onResize, this);
@@ -619,6 +628,7 @@ export class MatchScene extends Phaser.Scene {
     c.shoot = c.tShoot || k.shoot.isDown || k.shoot2.isDown || k.shoot3.isDown;
     c.pass = c.tPass || k.pass.isDown || k.pass2.isDown;
     c.sprint = c.tSprint || k.sprint.isDown || k.sprint2.isDown || k.sprint3.isDown;
+    c.special = c.tSpecial || k.special.isDown || k.special2.isDown;
   }
 
   // ---------- replay ----------
@@ -934,7 +944,7 @@ export class MatchScene extends Phaser.Scene {
         }
         if (e.superShot) {
           cam.flash(120, 255, 240, 200);
-          if (!demo) this.msg({ text: 'SUPER TIRO!', color: '#ffd23f' });
+          if (!demo && !e.special) this.msg({ text: 'SUPER TIRO!', color: '#ffd23f' });
         }
         this.excite = Math.max(this.excite, 0.6);
         break;
@@ -950,7 +960,9 @@ export class MatchScene extends Phaser.Scene {
               ? '★ ROVESCIATA! ★'
               : e.volley === 'volo'
                 ? '★ TIRO AL VOLO! ★'
-                : e.superGoal
+                : e.special
+                  ? e.special === 'combo' ? '★ TIRO COMBINATO! ★' : '★ ' + (SP_NAMES[e.special] ?? 'SUPERMOSSA') + '! ★'
+                  : e.superGoal
                   ? '★ SUPER TIRO! ★'
                   : e.long
                     ? '★ DA LONTANO! ★'
@@ -1105,6 +1117,36 @@ export class MatchScene extends Phaser.Scene {
       case 'superReady':
         if (!quiet && e.team === human) sfx.superReady();
         if (!demo && e.team === human) this.msg({ text: 'SUPER PRONTO!', sub: 'Tiro caricato al massimo', color: '#ffd23f' });
+        break;
+      case 'special': {
+        if (demo) break;
+        const col = '#' + e.color.toString(16).padStart(6, '0');
+        const mine = e.team === human;
+        sfx.superShot();
+        this.hitStop = 0.32;
+        this.slowT = 0.7;
+        cam.shake(480, 0.016);
+        cam.flash(260, (e.color >> 16) & 255, (e.color >> 8) & 255, e.color & 255);
+        this.fx.spark.explode(40, e.x, e.y - 6);
+        this.fx.stars.explode(18, e.x, e.y - 12);
+        this.tweens.add({ targets: cam, zoom: this.baseZoom * 1.22, duration: 260, yoyo: true, hold: 500, ease: 'Sine.easeOut' });
+        const ring = this.add.circle(e.x, e.y, 8, e.color, 0.25).setStrokeStyle(3, e.color).setDepth(60);
+        this.tweens.add({ targets: ring, scale: e.id === 'tsunami' || e.id === 'muro' ? 9 : 5, alpha: 0, duration: 650, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+        this.events.emit('cutin', { name: e.name, who: e.who, color: col, mine });
+        this.excite = 1;
+        if (navigator.vibrate) navigator.vibrate([30, 30, 90]);
+        break;
+      }
+      case 'specialReady':
+        if (demo || e.team !== human || e.idx !== this.sim.humanIdx) break;
+        sfx.superReady();
+        this.msg({ text: 'SUPERMOSSA PRONTA!', sub: e.name, color: '#ff7ab8', ms: 900 });
+        break;
+      case 'combo':
+        if (demo) break;
+        this.fx.stars.explode(14, e.x, e.y - 12);
+        cam.shake(200, 0.008);
+        this.msg({ text: 'COMBO!', sub: 'Tiro combinato', color: '#ff7ab8', ms: 900 });
         break;
       case 'switch':
         break;
@@ -1378,7 +1420,25 @@ export class MatchScene extends Phaser.Scene {
     this.ballShadow.setPosition(Math.round(b.x + b.z * 0.12), Math.round(b.y + 1));
     this.ballShadow.setScale(giant ? 1.55 : 1);
     this.ballShadow.setAlpha(Math.max(0.1, 0.35 - b.z / 200));
-    if ((b.fire || b.superShot) && !b.owner) {
+    this.ballGhost.setVisible(false);
+    if (b.special && !b.owner) {
+      const col = SP_COLORS[b.special.id] ?? 0xffffff;
+      this.fx.spark.emitParticleAt(b.x, by, 2);
+      if (b.special.id === 'arcobaleno') this.ball.setTint(Phaser.Display.Color.HSVToRGB((t * 1.5) % 1, 0.6, 1).color);
+      else this.ball.setTint(col);
+      if (b.special.id === 'gemello') {
+        // il secondo pallone oscilla accanto al primo
+        const off = Math.sin(t * 22) * 7;
+        this.ballGhost
+          .setVisible(true)
+          .setPosition(Math.round(b.x), Math.round(by + off))
+          .setFrame((Math.floor(b.roll / 3) + 2) % 4)
+          .setScale(this.ball.scaleX)
+          .setDepth(this.ball.depth + 0.001)
+          .setTint(col);
+      }
+      if (b.special.id === 'fulmine' || b.special.id === 'combo') this.fx.fire.emitParticleAt(b.x, by, 1);
+    } else if ((b.fire || b.superShot) && !b.owner) {
       this.fx.fire.emitParticleAt(b.x, by, 2);
       this.ball.setTint(b.superShot ? 0xfff0a0 : 0xffb070);
     } else if (b.owner && sim.fireShot[b.owner.team]) {
@@ -1426,6 +1486,15 @@ export class MatchScene extends Phaser.Scene {
         this.chargeG.fillStyle(0x1a1222).fillRect(x - 1, y - 1, w + 2, 5);
         this.chargeG.fillStyle(0x3a3d55).fillRect(x, y, w, 3);
         this.chargeG.fillStyle(col).fillRect(x, y, Math.round(w * c), 3);
+      } else if (sim.specialsOn && !h.isGK) {
+        // energia della supermossa sotto i piedi del giocatore controllato
+        const w = 18;
+        const x = Math.round(h.x - w / 2);
+        const y = Math.round(h.y + 9);
+        const full = h.energy >= 1;
+        this.chargeG.fillStyle(0x1a1222, 0.85).fillRect(x - 1, y - 1, w + 2, 4);
+        const pulse = Math.floor(t * 8) % 2 === 0;
+        this.chargeG.fillStyle(full ? (pulse ? 0xffd23f : 0xff3fa4) : 0x3fd0ff).fillRect(x, y, Math.round(w * h.energy), 2);
       }
     }
 

@@ -8,6 +8,7 @@ import type { Player } from './entities';
 import type { MatchSim } from './match';
 import { clamp, dist, distToSegment, len, norm, type Vec } from './math';
 import type { FormationId } from './types';
+import { aiSpecial } from './specials';
 
 const FORMATIONS: Record<FormationId, Record<number, [number, number]>> = {
   '1-2-1': {
@@ -346,6 +347,7 @@ function carrierThink(sim: MatchSim, p: Player) {
 
 /** Ogni frame: muove verso il bersaglio e decide i contrasti. */
 export function decideAiActions(sim: MatchSim, p: Player, dt: number) {
+  if (p.energy >= 1 && aiSpecial(sim, p, dt)) return;
   const dx = p.tx - p.x;
   const dy = p.ty - p.y;
   const d = len(dx, dy);

@@ -16,7 +16,10 @@ export type Objective =
   | { kind: 'longGoal' }
   | { kind: 'tricks'; n: number }
   | { kind: 'volleyGoal'; n?: number }
-  | { kind: 'bicycleGoal' };
+  | { kind: 'bicycleGoal' }
+  | { kind: 'special'; n: number }
+  | { kind: 'specialGoal'; n?: number }
+  | { kind: 'combo' };
 
 export interface MissionDef {
   id: string;
@@ -58,6 +61,24 @@ export const MISSIONS: MissionDef[] = [
     id: 'super', title: 'SUPER BOMBER', brief: 'Riempi la barra SUPER con passaggi e contrasti, poi carica il tiro al massimo.',
     team: 'lupi', opp: 'gabbiani', pitch: 'stadio', difficulty: 'facile', duration: 180, powerUps: false, goldenGoal: false,
     goals: [{ kind: 'superGoal', n: 1 }, { kind: 'notLose' }],
+  },
+  {
+    id: 'fulmine', title: 'PRIMO FULMINE', brief: 'Passaggi e contrasti caricano la tua supermossa: a barra piena premi SUPER col pallone e segna col Tiro Fulmine!',
+    team: 'rondini', opp: 'aquile', pitch: 'stadio', difficulty: 'facile', duration: 150, powerUps: false, goldenGoal: false,
+    mods: { startEnergy: 0.7, specialMult: 1.5 }, reward: 50,
+    goals: [{ kind: 'specialGoal' }, { kind: 'notLose' }],
+  },
+  {
+    id: 'arcobaleno', title: 'COMBO ARCOBALENO', brief: 'Il centrocampista lancia l\'Arcobaleno, l\'attaccante calcia subito: tiro combinato! Fanne uno e non perdere.',
+    team: 'tigri', opp: 'biscioni', pitch: 'stadio', difficulty: 'normale', duration: 180, powerUps: false, goldenGoal: false,
+    mods: { startEnergy: 1, specialMult: 2 }, reward: 65,
+    goals: [{ kind: 'combo' }, { kind: 'notLose' }],
+  },
+  {
+    id: 'muro_pietra', title: 'MURO E MANO DI PIETRA', brief: 'Difensori e portiere hanno le loro mosse: scatena 3 supermosse e chiudi la porta ai Draghi.',
+    team: 'gabbiani', opp: 'draghi', pitch: 'stadio', difficulty: 'difficile', duration: 180, powerUps: false, goldenGoal: true,
+    mods: { startEnergy: 0.6, specialMult: 1.5 }, reward: 90,
+    goals: [{ kind: 'special', n: 3 }, { kind: 'clean' }],
   },
   {
     id: 'sabbia', title: 'SABBIA NEGLI SCARPINI', brief: 'In spiaggia la palla si ferma subito. Vinci con almeno 2 gol di scarto.',
@@ -193,6 +214,9 @@ export function objectiveText(o: Objective): string {
     case 'tricks': return `Fai almeno ${o.n} giocate di stile`;
     case 'volleyGoal': return (o.n ?? 1) > 1 ? `Segna ${o.n} gol al volo` : 'Segna un gol al volo o in rovesciata';
     case 'bicycleGoal': return 'Segna un gol in rovesciata';
+    case 'special': return o.n > 1 ? `Scatena ${o.n} supermosse` : 'Scatena una supermossa';
+    case 'specialGoal': return (o.n ?? 1) > 1 ? `Segna ${o.n} gol con una supermossa` : 'Segna con una supermossa';
+    case 'combo': return 'Fai un tiro combinato (dopo Arcobaleno o Tornado)';
   }
 }
 
@@ -215,6 +239,9 @@ export function checkObjective(o: Objective, out: MatchOutcome): boolean {
     case 'tricks': return t.tricks[0] >= o.n;
     case 'volleyGoal': return (t.volleyGoals?.[0] ?? 0) >= (o.n ?? 1);
     case 'bicycleGoal': return (t.bicycleGoals?.[0] ?? 0) >= 1;
+    case 'special': return (t.specials?.[0] ?? 0) >= o.n;
+    case 'specialGoal': return (t.specialGoals?.[0] ?? 0) >= (o.n ?? 1);
+    case 'combo': return (t.combos?.[0] ?? 0) >= 1;
   }
 }
 

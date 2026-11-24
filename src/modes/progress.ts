@@ -142,7 +142,7 @@ export function grownPlayer(pd: PlayerDef, xp: number): PlayerDef {
   if (sk.includes('roccia')) st.tackle += 0.1;
   if (sk.includes('riflessi')) st.keeping += 0.08;
   if (sk.includes('gattone')) st.keeping += 0.08;
-  return { ...pd, stats: st, skills: sk };
+  return { ...pd, stats: st, skills: sk, specialTier: lv >= 5 ? 3 : lv >= 3 ? 2 : 1 };
 }
 
 export function grownTeam(t: TeamDef, p: ProgressSave | undefined): TeamDef {
