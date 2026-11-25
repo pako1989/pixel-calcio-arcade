@@ -23,6 +23,8 @@ export interface PlayerDef {
   stats: PlayerStats;
   /** Abilità sbloccate con la crescita (es. 'giro', 'motore'). */
   skills?: string[];
+  /** Livello delle supermosse sbloccate (1..3): più alto, più mosse. Altrimenti dipende dalle stelle della squadra. */
+  specialTier?: 1 | 2 | 3;
   /** Aspetto: indici nelle palette di pelle e capelli, stile capelli. */
   look: { skin: number; hair: number; hairStyle: number };
 }
@@ -149,6 +151,8 @@ export interface MatchConfig {
   night?: boolean;
   /** Modificatori arcade di regola per Sopravvivenza e Missioni speciali. */
   mods?: MatchMods;
+  /** Supermosse dei giocatori (predefinito: attive; false = spente). */
+  specials?: boolean;
   /** Modulo tattico delle squadre (predefinito: 1-2-1). */
   formation?: FormationId;
   awayFormation?: FormationId;
@@ -166,6 +170,10 @@ export interface MatchMods {
   alwaysFire?: boolean;
   /** I power-up compaiono con frequenza doppia. */
   fastPowerUps?: boolean;
+  /** Moltiplicatore carica dell'energia delle supermosse (es. 2 = si ricaricano al doppio). */
+  specialMult?: number;
+  /** Energia supermosse con cui parte la squadra umana (0..1). */
+  startEnergy?: number;
   /** Secondi iniziali di Muro davanti alla porta della squadra umana. */
   startWall?: number;
   /** Secondi iniziali di Turbo per la squadra umana. */

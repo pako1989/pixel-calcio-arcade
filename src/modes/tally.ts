@@ -24,6 +24,12 @@ export interface MatchTally {
   volleyGoals?: [number, number];
   /** Gol in rovesciata acrobatica. */
   bicycleGoals?: [number, number];
+  /** Supermosse scatenate. */
+  specials?: [number, number];
+  /** Gol segnati con una supermossa (Fulmine, Cometa, Gemello o tiro combinato). */
+  specialGoals?: [number, number];
+  /** Tiri combinati scagliati (dopo Arcobaleno o Tornado). */
+  combos?: [number, number];
   /** Numeri di ogni giocatore (per indice nella squadra), per la pagella. */
   players: [PlayerTally[], PlayerTally[]];
 }
@@ -59,6 +65,9 @@ export function newTally(): MatchTally {
     longGoals: [0, 0],
     volleyGoals: [0, 0],
     bicycleGoals: [0, 0],
+    specials: [0, 0],
+    specialGoals: [0, 0],
+    combos: [0, 0],
     players: [[], []],
   };
 }
@@ -66,7 +75,7 @@ export function newTally(): MatchTally {
 /** Aggiorna i conteggi con un evento della simulazione. */
 export class TallyTracker {
   readonly t = newTally();
-  private lastShot: { team: 0 | 1; superShot: boolean; fire: boolean } | null = null;
+  private lastShot: { team: 0 | 1; superShot: boolean; fire: boolean; special: boolean } | null = null;
   private lastPass: { team: 0 | 1; idx: number } | null = null;
 
   private pl(team: 0 | 1, idx: number | undefined): PlayerTally {
@@ -81,7 +90,13 @@ export class TallyTracker {
     switch (e.type) {
       case 'shot':
         this.pl(e.team, e.idx).shots++;
-        this.lastShot = { team: e.team, superShot: e.superShot, fire: e.fire };
+        this.lastShot = { team: e.team, superShot: e.superShot && !e.special, fire: e.fire, special: !!e.special };
+        break;
+      case 'special':
+        if (t.specials) t.specials[e.team]++;
+        break;
+      case 'combo':
+        if (t.combos) t.combos[e.team]++;
         break;
       case 'pass':
         this.pl(e.team, e.idx).passes++;
@@ -143,6 +158,7 @@ export class TallyTracker {
         if (!e.own && s && s.team === e.team) {
           if (s.superShot) t.superGoals[e.team]++;
           if (s.fire) t.fireGoals[e.team]++;
+          if ((s.special || e.special === 'combo') && t.specialGoals) t.specialGoals[e.team]++;
         }
         this.lastShot = null;
         break;

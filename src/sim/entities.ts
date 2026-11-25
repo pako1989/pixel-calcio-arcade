@@ -44,6 +44,13 @@ export class Player {
   injured = false;
   /** Avversario che sta per essere saltato (per il dribbling "di stile"). */
   dribCand = -1;
+  /** Energia della supermossa (0..1): a 1 si può scatenare. */
+  energy = 0;
+  /** Secondi rimasti di una supermossa in corso (tornado, tsunami...). */
+  spT = 0;
+  spKind = '';
+  /** Finestra per il tiro combinato dopo un passaggio o dribbling speciale. */
+  comboT = 0;
 
   constructor(
     public readonly id: number,
@@ -94,6 +101,8 @@ export class Ball {
   volley: 'volo' | 'rovesciata' | null = null;
   /** Destinatario di un passaggio in corso. */
   passTarget: Player | null = null;
+  /** Supermossa in volo (fulmine, cometa...): `t` secondi dal calcio. */
+  special: { id: string; t: number } | null = null;
 
   get speed(): number {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
@@ -117,9 +126,9 @@ export interface PowerUp {
 
 export type SimEvent =
   | { type: 'kick'; x: number; y: number; power: number; team: 0 | 1 }
-  | { type: 'shot'; x: number; y: number; power: number; team: 0 | 1; superShot: boolean; fire: boolean; idx?: number; volley?: 'volo' | 'rovesciata' }
+  | { type: 'shot'; x: number; y: number; power: number; team: 0 | 1; superShot: boolean; fire: boolean; idx?: number; volley?: 'volo' | 'rovesciata'; special?: string }
   | { type: 'pass'; x: number; y: number; team: 0 | 1; idx?: number }
-  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number; volley?: 'volo' | 'rovesciata' | null; banked?: boolean; long?: boolean; superGoal?: boolean }
+  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number; volley?: 'volo' | 'rovesciata' | null; banked?: boolean; long?: boolean; superGoal?: boolean; special?: string }
   | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1; idx?: number }
   | { type: 'post'; x: number; y: number }
   | { type: 'wall'; x: number; y: number; power: number }
@@ -133,6 +142,9 @@ export type SimEvent =
   | { type: 'powerup'; kind: PowerUpKind; team: 0 | 1; x: number; y: number }
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }
   | { type: 'superReady'; team: 0 | 1 }
+  | { type: 'special'; id: string; name: string; team: 0 | 1; idx: number; pid: number; who: string; x: number; y: number; color: number }
+  | { type: 'specialReady'; team: 0 | 1; idx: number; pid: number; who: string; name: string }
+  | { type: 'combo'; team: 0 | 1; idx: number; x: number; y: number }
   | { type: 'switch'; id: number }
   | { type: 'call'; id: number; x: number; y: number }
   | { type: 'wave'; dir: 1 | -1 }

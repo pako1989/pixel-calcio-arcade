@@ -313,6 +313,8 @@ export function heroDef(c: CareerState, maxLevel = MAX_LEVEL): PlayerDef {
     role: 'FWD',
     stats: { speed: lv('speed') + 0.02, shot: lv('shot') + 0.04, pass: lv('pass'), tackle: lv('tackle'), control: lv('control'), keeping: 0.6 },
     look: c.hero.look,
+    // le supermosse crescono con gli attributi: Fulmine, poi Cometa, poi Gemello
+    specialTier: Math.max(...Object.values(c.attrs)) >= 5 ? 3 : Math.max(...Object.values(c.attrs)) >= 3 ? 2 : 1,
   };
 }
 

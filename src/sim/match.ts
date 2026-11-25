@@ -3,6 +3,7 @@ import { clamp, dist, len, norm, Rng, turnTowards, type Vec } from './math';
 import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef } from './types';
 import { aiThink, aiGoalkeeper, chooseHumanPassTarget, decideAiActions } from './ai';
 import { applyWeather } from '../data/weather';
+import { tryStoneHand, updateSpecials, useSpecial, specialsOf, SPECIALS } from './specials';
 
 export const GOAL_DEPTH = 22;
 export const CROSSBAR = 28;
@@ -17,6 +18,8 @@ export interface HumanInput {
   shoot: boolean;
   pass: boolean;
   sprint: boolean;
+  /** Tasto SUPER: scatena la supermossa del giocatore controllato. */
+  special?: boolean;
 }
 
 export const NO_INPUT: HumanInput = { mx: 0, my: 0, shoot: false, pass: false, sprint: false };
@@ -77,6 +80,9 @@ export class MatchSim {
   charging = false;
   private prevShoot = false;
   private prevPass = false;
+  private prevSpecial = false;
+  /** Supermosse usate per squadra (per missioni e statistiche). */
+  specialsUsed: [number, number] = [0, 0];
   private switchCd = 0;
   /** Secondi in cui la richiesta di palla del giocatore resta valida. */
   callT = 0;
@@ -137,6 +143,9 @@ export class MatchSim {
     if (cfg.mods?.startTurbo) this.turbo[0] = cfg.mods.startTurbo;
     if (cfg.mods?.alwaysFire) this.fireShot = [true, true];
     if (cfg.mods?.fastPowerUps) this.powerUpT = 5;
+    if (cfg.humanTeam !== null && cfg.mods?.startEnergy) {
+      for (const p of this.teams[cfg.humanTeam]) if (!p.isGK) p.energy = cfg.mods.startEnergy;
+    }
     this.setupKickoff();
     this.events.push({ type: 'whistle', kind: 'start' });
   }
@@ -251,7 +260,8 @@ export class MatchSim {
       volley: own ? null : b.volley,
       banked: isBanked,
       long: isLong,
-      superGoal: b.superShot,
+      superGoal: b.superShot && !b.special,
+      special: b.special && b.special.id !== 'arcobaleno' ? b.special.id : undefined,
     });
     this.tunnelCand = null;
     if (!own && scorerP && b.shotFrom) {
@@ -398,6 +408,7 @@ export class MatchSim {
     this.updateWaves(dt);
     this.updateGeysers(dt);
     this.updatePowerUps(dt);
+    updateSpecials(this, dt);
     if (this.callT > 0) this.callT -= dt;
 
     // decisioni
@@ -457,6 +468,14 @@ export class MatchSim {
     const shootPressed = input.shoot && !this.prevShoot;
     const shootReleased = !input.shoot && this.prevShoot;
     const passPressed = input.pass && !this.prevPass;
+    const specialPressed = !!input.special && !this.prevSpecial;
+    this.prevSpecial = !!input.special;
+    if (specialPressed && h.energy >= 1 && !this.charging) {
+      if (useSpecial(this, h)) {
+        this.charge = 0;
+        return;
+      }
+    }
 
     if (owns) {
       if (shootPressed) {
@@ -608,6 +627,7 @@ export class MatchSim {
     b.giant = this.giant[p.team] > 0;
     b.shotFrom = null;
     b.banked = false;
+    b.special = null;
     p.kickCd = 0.32;
     p.holdT = 0;
     p.facing = dir;
@@ -749,11 +769,20 @@ export class MatchSim {
       spin = side * Math.sign(gx - p.x) * 260;
       dir -= Math.sign(spin) * 0.12;
     }
+    // tiro combinato: subito dopo un passaggio Arcobaleno o un Tornado
+    const combo = p.comboT > 0 && this.specialsOn;
+    if (combo) {
+      speed *= 1.22;
+      dir += (toGoal - dir) * 0.25;
+      p.comboT = 0;
+      this.events.push({ type: 'combo', team, idx: p.idx, x: p.x, y: p.y });
+    }
     this.kickBall(p, dir, speed, vz, spin);
     const b = this.ball;
     b.shotFrom = { x: p.x, y: p.y };
     b.fire = fire;
-    b.superShot = superShot;
+    b.superShot = superShot || combo;
+    if (combo) b.special = { id: 'combo', t: 0 };
     b.isShot = true;
     this.stats.shots[team]++;
     this.events.push({ type: 'shot', x: p.x, y: p.y, power, team, superShot, fire, idx: p.idx });
@@ -780,6 +809,27 @@ export class MatchSim {
     const mult = this.cfg.mods?.superMult ?? 1;
     this.superBar[team] = Math.min(1, before + amount * mult);
     if (before < 1 && this.superBar[team] >= 1) this.events.push({ type: 'superReady', team });
+  }
+
+  get specialsOn(): boolean {
+    return this.cfg.specials !== false;
+  }
+
+  /** Carica l'energia della supermossa di un giocatore. */
+  addEnergy(p: Player, amount: number) {
+    if (!this.specialsOn || p.out > 0) return;
+    let mult = this.cfg.mods?.specialMult ?? 1;
+    // la CPU si carica più o meno in fretta a seconda della difficoltà
+    if (this.humanTeam !== p.team && this.humanTeam !== null) {
+      mult *= this.cfg.difficulty === 'facile' ? 0.6 : this.cfg.difficulty === 'difficile' ? 1.15 : 0.9;
+    }
+    const before = p.energy;
+    p.energy = Math.min(1, before + amount * mult);
+    if (before < 1 && p.energy >= 1 && !p.isGK) {
+      const sp = specialsOf(this, p);
+      const best = sp[0] ? SPECIALS[sp[0]].name : '';
+      this.events.push({ type: 'specialReady', team: p.team, idx: p.idx, pid: p.id, who: p.def.name, name: best });
+    }
   }
 
   /** Restituisce true se il punto (x, y) è dentro una pozza di fango. */
@@ -814,6 +864,7 @@ export class MatchSim {
     if (this.inMud(p.x, p.y)) s *= 0.62;
     if (p.isGK) s *= 1.05;
     if (p.injured) s *= 0.86;
+    if (p.spKind === 'tornado' && p.spT > 0) s *= 1.45;
     if (this.cfg.mods?.speedMult) s *= this.cfg.mods.speedMult;
     return s;
   }
@@ -951,6 +1002,7 @@ export class MatchSim {
     if (p.stateT > 0.4) return;
     const owner = b.owner;
     if (owner && owner.team !== p.team && !(owner.isGK && this.inOwnBox(owner.team, owner.x, owner.y))) {
+      if (owner.spKind === 'tornado' && owner.spT > 0) return;
       if (dist(p, b) < 11 || dist(p, owner) < 12) {
         const ratio = p.def.stats.tackle / (owner.def.stats.control + 0.2);
         const won = this.rng.chance(clamp(0.55 + ratio * 0.3, 0.4, 0.95));
@@ -979,6 +1031,7 @@ export class MatchSim {
           owner.pickupCd = 0.6;
           this.stats.tackles[p.team]++;
           this.addSuper(p.team, 0.14);
+          this.addEnergy(p, 0.2);
         }
         p.stateT = Math.max(p.stateT, 0.4);
       }
@@ -1004,6 +1057,7 @@ export class MatchSim {
     const owner = b.owner;
     if (!owner) return;
     if (owner.isGK && this.inOwnBox(owner.team, owner.x, owner.y)) return;
+    if (owner.spKind === 'tornado' && owner.spT > 0) return;
     for (const p of this.teams[owner.team === 0 ? 1 : 0]) {
       if (!p.canAct || p.pickupCd > 0) continue;
       if (p.isGK && this.inOwnBox(p.team, b.x, b.y)) continue; // il portiere usa keeperContact in area
@@ -1019,6 +1073,7 @@ export class MatchSim {
         this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team, idx: p.idx });
         this.stats.tackles[p.team]++;
         this.addSuper(p.team, 0.1);
+        this.addEnergy(p, 0.16);
         // vicino alla linea di porta: niente autogol girando all'indietro, spazza o ruota verso fuori
         if (deep && !this.isHuman(p) && this.toTeamX(p.team, b.x) < 0.1 && Math.abs(b.y - this.H / 2) < this.pitch.goalWidth * 0.7) {
           const dir = this.safeClearDir(p.team, b.x, b.y) + this.rng.range(-0.28, 0.28);
@@ -1068,6 +1123,7 @@ export class MatchSim {
   updateBallPhysics(dt: number) {
     const b = this.ball;
     if (b.owner) {
+      b.special = null;
       this.syncOwnedBall();
       // la palla non esce dal campo mentre si dribbla
       b.x = clamp(b.x, BALL_R, this.W - BALL_R);
@@ -1085,6 +1141,20 @@ export class MatchSim {
 
   private ballStep(dt: number) {
     const b = this.ball;
+    // supermosse in volo
+    if (b.special) {
+      b.special.t += dt;
+      if (b.special.t > 2.2 || (!b.superShot && b.special.id !== 'arcobaleno')) b.special = null;
+      else if (b.special.id === 'fulmine') {
+        // zigzag: accelerazione laterale che cambia verso ogni 0.15 s
+        const s = b.speed;
+        if (s > 1) {
+          const k = Math.floor(b.special.t / 0.15) % 2 ? 1 : -1;
+          b.vx += (-b.vy / s) * 1500 * k * dt;
+          b.vy += (b.vx / s) * 1500 * k * dt;
+        }
+      }
+    }
     // effetto
     if (b.spin !== 0) {
       const s = b.speed;
@@ -1417,7 +1487,10 @@ export class MatchSim {
       return;
     }
     const prev = b.lastTouch;
-    if (prev && prev !== p && prev.team === p.team && b.passTarget) this.addSuper(p.team, 0.08);
+    if (prev && prev !== p && prev.team === p.team && b.passTarget) {
+      this.addSuper(p.team, 0.08);
+      this.addEnergy(prev, 0.12);
+    }
     // tunnel riuscito: la palla è passata tra le gambe e la riprende la stessa squadra
     const tc = this.tunnelCand;
     this.tunnelCand = null;
@@ -1499,8 +1572,15 @@ export class MatchSim {
     const kp = gk.def.stats.keeping * this.diff[gk.team].keeper;
     if (shotFromOpp && s > 200) {
       // probabilità di parare
+      // Mano di Pietra: con energia piena il portiere ferma da solo il tiro pericoloso
+      if ((b.superShot || b.fire || s > 380) && tryStoneHand(this, gk)) {
+        this.keeperCatch(gk);
+        this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team, idx: gk.idx });
+        return;
+      }
       let p = clamp(1.05 - (s - 200) / 900, 0.35, 0.95) * kp;
       if (b.superShot) p *= 0.45;
+      if (b.special?.id === 'gemello') p *= 0.7;
       if (b.fire) p *= 0.6;
       if (b.giant) p *= 0.72;
       if (!this.rng.chance(clamp(p, 0.1, 0.97))) {
@@ -1510,8 +1590,10 @@ export class MatchSim {
       const canCatch = !b.fire && !b.superShot && !b.giant && s < 330 * kp;
       if (canCatch) {
         this.keeperCatch(gk);
+        this.addEnergy(gk, 0.35);
         this.events.push({ type: 'save', x: b.x, y: b.y, catch: true, team: gk.team, idx: gk.idx });
       } else {
+        this.addEnergy(gk, 0.3);
         // respinta sempre verso l'esterno dell'area, mai verso la porta
         const a = this.safeClearDir(gk.team, b.x, b.y) + this.rng.range(-0.36, 0.36);
         const ns = s * this.rng.range(0.32, 0.5);
@@ -1565,6 +1647,7 @@ export class MatchSim {
     this.stylePoints[team] += pts;
     this.style[team] += pts * 0.12;
     this.events.push({ type: 'trick', kind, team, x, y, name, idx: by.idx });
+    this.addEnergy(by, kind === 'dribbling' || kind === 'tunnel' ? 0.2 : 0.12);
     if (this.style[team] >= 1) {
       this.style[team] = 0;
       this.addSuper(team, 0.5);
