@@ -11,6 +11,15 @@ export interface VersionEntry {
 
 export const CHANGELOG: VersionEntry[] = [
   {
+    version: 'v0.9.5',
+    items: [
+      'Leggenda del Pallone: nuova scheda STELLE con 76 carte dei personaggi',
+      'I rivali battuti nella storia si uniscono alla tua Squadra delle Stelle',
+      'Buste, doppioni che fanno salire di livello e sbloccano le tecniche',
+      'Intesa tra le coppie della storia e Torneo delle Stelle in 9 turni',
+    ],
+  },
+  {
     version: 'v0.9.4',
     items: [
       'Carriera Allenatore Avanzata: scelta sponsor strategici e bonus',

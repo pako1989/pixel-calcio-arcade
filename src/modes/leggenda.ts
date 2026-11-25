@@ -1,5 +1,6 @@
 import { Rng } from '../sim/math';
 import type { Role, TeamDef } from '../sim/types';
+import type { StelleSave } from './leggendaStelle';
 
 /**
  * Leggenda del Pallone: calcio in stile anime sportivo, a turni.
@@ -248,6 +249,8 @@ export interface LeggendaSave {
   /** Gol segnati con le tecniche speciali (per i trofei). */
   specialGoals: number;
   championship?: ChampionshipState;
+  /** Squadra delle Stelle: carte dei personaggi, squadra e Torneo delle Stelle. */
+  stelle?: StelleSave;
 }
 
 export function newLeggenda(): LeggendaSave {

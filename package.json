@@ -1,6 +1,6 @@
 {
   "name": "pixel-calcio-arcade",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "description": "Calcio arcade 2D in pixel art per telefono: 5 contro 5 contro la CPU.",
   "type": "module",
