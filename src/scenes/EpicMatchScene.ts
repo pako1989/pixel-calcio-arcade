@@ -4,13 +4,14 @@ import { asPlayerDef, asTeamDef, portrait } from '../gfx/animeArt';
 import { frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
 import { hex } from '../gfx/px';
 import {
-  TECHS, episodeReward, objectiveMet, objectiveText, recordChampionshipMatch,
+  TECHS, bonusOf, bonusText, claimBonus, episodeReward, objectiveMet, objectiveText, recordChampionshipMatch,
   type AttackAction, type DefenseAction, type DefKind, type Encounter, type KeeperAction, type LeggendaSave,
   type LgPlayer, type ShotInfo, type Side, type Step, newLeggenda,
 } from '../modes/leggenda';
 import { CY, FIELD_L, FIELD_W, FieldMatch, type FieldEvent } from '../modes/leggendaField';
 import { EPISODES, RUN_LINES, CAST, heroTeam, rivalTeam, type Episode, type LgLine, type Trigger } from '../modes/leggendaStory';
 import { LgTalk } from './lgTalk';
+import { pickEvent, type EventFx } from '../modes/leggendaEventi';
 import { duelFx, fxSpeed, keeperFx, pop, shotFx, type Who } from './epicFx';
 import { load, progressOf, save } from '../save/storage';
 import { checkTrophies, newTotals } from '../modes/trophies';
@@ -961,13 +962,41 @@ export class EpicMatchScene extends Phaser.Scene {
     return this.choose(info, `Tiro ${desc} in arrivo!`, opts);
   }
 
+  // ---------- imprevisto prima del fischio ----------
+
+  /** Prima di alcune partite succede qualcosa nello spogliatoio: si sceglie tra due vantaggi con un prezzo. */
+  private async preEvent() {
+    const ev = pickEvent(this.epi, Math.random, this.sv.lastEvent);
+    if (!ev) return;
+    this.sv.lastEvent = ev.id;
+    await new LgTalk(this, ev.intro, 'full').play();
+    if (!this.alive) return;
+    const ch = await this.choose(ev.title, 'SCEGLI', ev.choices.map((c) => ({ label: c.label, sub: c.sub, value: c, color: 0x2f6fd0 })));
+    this.choice?.destroy();
+    this.applyFx(ch.fx);
+    await new LgTalk(this, ch.after, 'full').play();
+  }
+
+  private applyFx(fx: EventFx) {
+    const m = this.m;
+    if (fx.assist) m.opts.assist += fx.assist;
+    for (const p of m.teams[0].players) {
+      const f = (fx.team ?? 1) * (p.id === 'nico' ? fx.nico ?? 1 : 1);
+      if (f === 1) continue;
+      m.maxEnergy[p.id] = Math.round(m.maxEnergy[p.id] * f);
+      m.energy[p.id] = Math.min(m.maxEnergy[p.id], Math.round(m.energy[p.id] * f));
+    }
+  }
+
   // ---------- la partita ----------
 
   private async run() {
     await this.wait(300);
     await new LgTalk(this, this.ep.intro, 'full').play();
     if (!this.alive) return;
+    if (this.stelle === undefined && !this.championshipMatchId) await this.preEvent();
     await this.banner(`OBIETTIVO: ${objectiveText(this.ep.objective).toUpperCase()}`, '#ffd23f', 1600);
+    if (this.stelle === undefined && !this.championshipMatchId) await this.banner(`BONUS: ${bonusText(bonusOf(this.epi)).toUpperCase()}`, '#3fd0ff', 1300);
     if (this.epi === 0 || !this.sv.cleared) {
       await this.say([
         { who: 'maestro', text: 'Muovi Nico col joystick a sinistra. Quando un avversario ti viene addosso, si ferma tutto: scegli dribbling, passaggio, tiro o una tecnica.' },
@@ -1295,13 +1324,16 @@ export class EpicMatchScene extends Phaser.Scene {
     });
     let bonus = 0;
     for (const t of fresh) bonus += t.reward;
+    // obiettivo bonus dell'episodio
+    const bg = claimBonus(this.sv, this.epi, ok, { duelsWon: m.duelsWon, score: m.score, specialGoals: m.specialGoals });
+    if (bg) bonus += bg.coins;
     p.coins += bonus;
     save();
     if (ok) {
       sfx.fanfare();
       sfx.roar(1.2);
     } else sfx.sadJingle();
-    await this.resultPanel(ok, r, fresh.map((t) => t.name), bonus, joined);
+    await this.resultPanel(ok, r, fresh.map((t) => t.name), bonus, [...(bg ? [`BONUS: ${bonusText(bonusOf(this.epi)).toUpperCase()}!`, `+${bg.coins} MONETE  +${bg.pts} PL`] : []), ...joined]);
     await new LgTalk(this, ok ? this.ep.win : this.ep.lose, 'full').play();
     if (!this.alive) return;
     const choice = ok ? 'hub' : await this.choose('Obiettivo non raggiunto', undefined, [

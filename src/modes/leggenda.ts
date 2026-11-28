@@ -91,6 +91,8 @@ export const TECHS: Record<string, Technique> = {
   acciaio: { id: 'acciaio', name: 'MANI D\'ACCIAIO', kind: 'parata', power: 18, cost: 14, color: 0xc0c8d8, desc: 'Presa sicura sui tiri potenti.', unlock: { ep: 1 } },
   rondine: { id: 'rondine', name: 'TUFFO DELLA RONDINE', kind: 'parata', power: 30, cost: 22, color: 0x3fd0ff, desc: 'Tuffo lunghissimo da palo a palo.', unlock: { ep: 5, pts: 100 } },
   muraglia: { id: 'muraglia', name: 'MURAGLIA UMANA', kind: 'blocco', power: 22, cost: 12, color: 0xc4552e, desc: 'Gigi si lancia davanti al pallone.', unlock: { ep: 3, pts: 60 } },
+  nova: { id: 'nova', name: 'TIRO NOVA', kind: 'tiro', power: 56, cost: 44, range: 70, color: 0xfff0a0, desc: 'Una stella che esplode: il colpo dell\'ultimo anno.', unlock: { ep: 11, pts: 260 } },
+  bastione: { id: 'bastione', name: 'BASTIONE DI FERRO', kind: 'parata', power: 36, cost: 24, color: 0x9aa8c8, desc: 'Tommaso diventa una porta blindata.', unlock: { ep: 10, pts: 220 } },
   tuono: { id: 'tuono', name: 'TIRO TUONO', kind: 'tiro', power: 30, cost: 26, range: 45, color: 0xffe03a, desc: 'Un fulmine dal destro di Sandro.', unlock: { ep: 5 } },
   // --- degli avversari ---
   gattonero: { id: 'gattonero', name: 'PARATA DEL GATTO NERO', kind: 'parata', power: 24, cost: 18, color: 0x8a6aff, desc: '' },
@@ -103,16 +105,21 @@ export const TECHS: Record<string, Technique> = {
   ghiaccio: { id: 'ghiaccio', name: 'MURO DI GHIACCIO', kind: 'parata', power: 28, cost: 20, color: 0x8fd8ff, desc: '' },
   colibri: { id: 'colibri', name: 'DANZA DEL COLIBRÌ', kind: 'dribbling', power: 30, cost: 12, color: 0x5be37d, desc: '' },
   solare: { id: 'solare', name: 'TIRO SOLARE', kind: 'tiro', power: 38, cost: 28, range: 45, color: 0xffb21e, desc: '' },
+  zero: { id: 'zero', name: 'TIRO ZERO ASSOLUTO', kind: 'tiro', power: 44, cost: 28, range: 50, color: 0xbfe4ff, desc: '' },
+  specchio: { id: 'specchio', name: 'PARATA A SPECCHIO', kind: 'parata', power: 34, cost: 20, color: 0xc8d0e0, desc: '' },
+  ancora: { id: 'ancora', name: 'TIRO DELL\'ANCORA', kind: 'tiro', power: 40, cost: 26, range: 45, color: 0x3a5a9a, desc: '' },
+  canto: { id: 'canto', name: 'CANTO DELLA SIRENA', kind: 'dribbling', power: 34, cost: 14, color: 0x3fd0ff, desc: '' },
+  vuoto: { id: 'vuoto', name: 'TIRO DEL VUOTO', kind: 'tiro', power: 50, cost: 30, range: 60, color: 0xff5a5a, desc: '' },
   tucano: { id: 'tucano', name: 'ALA DEL TUCANO', kind: 'parata', power: 30, cost: 20, color: 0xffd23f, desc: '' },
 };
 
 /** Le tecniche della tua squadra, nell'ordine in cui compaiono nel libro delle tecniche. */
-export const MY_TECHS = ['gabbiano', 'acciaio', 'vortice', 'muraglia', 'mezzaluna', 'passoluna', 'cometa', 'tuono', 'rondine', 'eclissi', 'tempesta', 'aurora'];
+export const MY_TECHS = ['gabbiano', 'acciaio', 'vortice', 'muraglia', 'mezzaluna', 'passoluna', 'cometa', 'tuono', 'rondine', 'eclissi', 'tempesta', 'aurora', 'bastione', 'nova'];
 
 /** Chi usa la tecnica (nella tua squadra). */
 export const TECH_OWNER: Record<string, string> = {
   gabbiano: 'nico', vortice: 'nico', cometa: 'nico', mezzaluna: 'nico', eclissi: 'nico', tempesta: 'nico', aurora: 'nico',
-  passoluna: 'dario', acciaio: 'tommaso', rondine: 'tommaso', muraglia: 'gigi', tuono: 'sandro',
+  passoluna: 'dario', acciaio: 'tommaso', rondine: 'tommaso', bastione: 'tommaso', nova: 'nico', muraglia: 'gigi', tuono: 'sandro',
 };
 
 // ---------- salvataggio & campionato ----------
@@ -251,6 +258,10 @@ export interface LeggendaSave {
   championship?: ChampionshipState;
   /** Squadra delle Stelle: carte dei personaggi, squadra e Torneo delle Stelle. */
   stelle?: StelleSave;
+  /** Episodi in cui hai già preso il premio dell'obiettivo bonus. */
+  bonus?: number[];
+  /** Ultimo imprevisto prima di una partita (per non ripeterlo). */
+  lastEvent?: string;
 }
 
 export function newLeggenda(): LeggendaSave {
@@ -843,4 +854,70 @@ export function episodeReward(s: LeggendaSave, ep: number, ok: boolean, m: { due
   s.specialGoals += m.specialGoals;
   if (first) s.cleared = ep + 1;
   return { coins, pts, first };
+}
+
+// ---------- obiettivi bonus ----------
+
+/** Una sfida in più per ogni episodio, con un premio da prendere una volta sola. */
+export type BonusGoal =
+  | { kind: 'imbattuto' }
+  | { kind: 'gol'; n: number }
+  | { kind: 'scarto'; n: number }
+  | { kind: 'tecniche'; n: number }
+  | { kind: 'duelli'; n: number };
+
+export const BONUS_GOALS: BonusGoal[] = [
+  { kind: 'duelli', n: 4 },
+  { kind: 'imbattuto' },
+  { kind: 'gol', n: 2 },
+  { kind: 'tecniche', n: 1 },
+  { kind: 'scarto', n: 2 },
+  { kind: 'duelli', n: 8 },
+  { kind: 'imbattuto' },
+  { kind: 'gol', n: 3 },
+  { kind: 'tecniche', n: 2 },
+  { kind: 'scarto', n: 2 },
+  { kind: 'imbattuto' },
+  { kind: 'gol', n: 3 },
+  { kind: 'tecniche', n: 2 },
+  { kind: 'scarto', n: 2 },
+];
+
+export function bonusOf(ep: number): BonusGoal {
+  return BONUS_GOALS[Math.max(0, Math.min(BONUS_GOALS.length - 1, ep))];
+}
+
+export function bonusText(b: BonusGoal): string {
+  switch (b.kind) {
+    case 'imbattuto': return 'Non subire gol';
+    case 'gol': return `Segna ${b.n} gol`;
+    case 'scarto': return `Vinci con ${b.n} gol di scarto`;
+    case 'tecniche': return b.n === 1 ? 'Segna con una tecnica speciale' : `Segna ${b.n} gol con tecniche speciali`;
+    case 'duelli': return `Vinci ${b.n} duelli`;
+  }
+}
+
+export function bonusMet(b: BonusGoal, m: { duelsWon: number; score: [number, number]; specialGoals: number }): boolean {
+  switch (b.kind) {
+    case 'imbattuto': return m.score[1] === 0;
+    case 'gol': return m.score[0] >= b.n;
+    case 'scarto': return m.score[0] - m.score[1] >= b.n;
+    case 'tecniche': return m.specialGoals >= b.n;
+    case 'duelli': return m.duelsWon >= b.n;
+  }
+}
+
+export interface BonusReward {
+  coins: number;
+  pts: number;
+}
+
+/** Premio del bonus: solo se hai vinto l'obiettivo, lo hai raggiunto, e non l'avevi già preso. */
+export function claimBonus(s: LeggendaSave, ep: number, ok: boolean, m: { duelsWon: number; score: [number, number]; specialGoals: number }): BonusReward | null {
+  const got = (s.bonus = s.bonus ?? []);
+  if (!ok || got.includes(ep) || !bonusMet(bonusOf(ep), m)) return null;
+  got.push(ep);
+  const r = { coins: 60 + ep * 6, pts: 30 };
+  s.pts += r.pts;
+  return r;
 }
