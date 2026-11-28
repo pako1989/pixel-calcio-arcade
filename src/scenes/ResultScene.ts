@@ -155,19 +155,24 @@ export class ResultScene extends Phaser.Scene {
     const c = this.add.container(0, 0).setDepth(8);
     const g = this.add.graphics();
     c.add(g);
-    panel(g, W / 2 - 170, 62, 340, 210, 0x241a36, 0x4a3a6a, 0.98);
-    c.add(txt(this, W / 2, 76, `PAGELLA · ${team.name.toUpperCase()}`, 8, '#ffd23f'));
+    // con 11 giocatori la pagella diventa compatta: una riga ciascuno, senza note
+    const compact = mine.length > 6;
+    const rowH = compact ? 19 : 28;
+    const top = compact ? 8 : 62;
+    const ph = compact ? 40 + mine.length * rowH + 30 : 210;
+    panel(g, W / 2 - 170, top, 340, ph, 0x241a36, 0x4a3a6a, 0.98);
+    c.add(txt(this, W / 2, top + 14, `PAGELLA · ${team.name.toUpperCase()}`, 8, '#ffd23f'));
     const role = { GK: 'POR', DEF: 'DIF', MID: 'CEN', FWD: 'ATT' } as const;
     mine.forEach((r, i) => {
-      const y = 100 + i * 28;
-      g.fillStyle(i % 2 ? 0x2a2040 : 0x30254a).fillRect(W / 2 - 160, y - 12, 320, 25);
-      c.add(txt(this, W / 2 - 152, y - 4, `${role[r.role]} ${r.name}`, 6, '#ffffff').setOrigin(0, 0.5));
-      c.add(txt(this, W / 2 - 152, y + 6, r.note || '-', 6, '#8a8fb0').setOrigin(0, 0.5));
+      const y = top + 38 + i * rowH;
+      g.fillStyle(i % 2 ? 0x2a2040 : 0x30254a).fillRect(W / 2 - 160, y - rowH / 2 - 1, 320, rowH - 3);
+      c.add(txt(this, W / 2 - 152, compact ? y : y - 4, `${role[r.role]} ${r.name}`, 6, '#ffffff').setOrigin(0, 0.5));
+      if (!compact) c.add(txt(this, W / 2 - 152, y + 6, r.note || '-', 6, '#8a8fb0').setOrigin(0, 0.5));
       const col = r.vote >= 7.5 ? '#5be37d' : r.vote >= 6 ? '#ffffff' : '#ff9a9a';
-      c.add(txt(this, W / 2 + 150, y, r.vote.toFixed(1).replace('.0', ''), 12, col).setOrigin(1, 0.5));
+      c.add(txt(this, W / 2 + 150, y, r.vote.toFixed(1).replace('.0', ''), compact ? 8 : 12, col).setOrigin(1, 0.5));
       if (best.team === side && best.idx === r.idx) c.add(txt(this, W / 2 + 84, y, 'MVP', 6, '#1a1222', { backgroundColor: '#ffd23f', padding: { x: 3, y: 2 } }));
     });
-    if (best.team !== side) c.add(txt(this, W / 2, 252, `Migliore in campo: ${best.name} (${best.vote}), avversario`, 6, '#d8dcf0'));
+    if (best.team !== side) c.add(txt(this, W / 2, compact ? top + ph - 12 : 252, `Migliore in campo: ${best.name} (${best.vote}), avversario`, 6, '#d8dcf0'));
     c.setAlpha(0);
     this.tweens.add({ targets: c, alpha: 1, duration: 150 });
     return c;

@@ -25,6 +25,7 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 ## Modalità
 
 - **Partita veloce**: scegli squadre, campo, difficoltà e durata.
+- **Partita grande (11 contro 11)**: nella Partita veloce, nella riga 5V5 | 11V11 scegli uno dei moduli a 11 (4-4-2, 4-3-3, 3-5-2). Campo ingrandito (si gioca sui campi senza ostacoli, gli altri ripiegano sullo Stadio), squadre da 11 con i tuoi titolari più sei giocatori in base alla forza della squadra, un radar in alto con tutti i giocatori, intervallo con cambi e pagella compatta. Esperienza e crescita restano quelle dei titolari.
 - **Torneo**: la Coppa Pixel a 8 squadre, quarti, semifinale e finale. Un campo diverso a ogni turno, la finale allo Stadio. Le coppe vinte restano in bacheca.
 - **Missioni**: 12 sfide con obiettivi speciali (rimonta da 0-2, gol col super tiro, porta inviolata, gol lampo...). Si sbloccano un po' alla volta.
 - **Duello a carte**: modalità a turni da 2 minuti. Ogni giocatore della squadra è una carta con DRIBBLING e DIFESA e un costo in energia; schieri fino a 4 carte (entrano in campo al turno dopo), a fine turno attaccano: dribbling maggiore salta il difensore, uguale si annulla, minore viene fermato. Campo avversario vuoto = gol, vince chi fa 2 round. Vittorie e serie salvate, monete in premio.

@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { TEAMS } from '../data/teams';
-import { PITCHES, PITCH_ORDER } from '../data/pitches';
+import { TEAMS, expandTeam } from '../data/teams';
+import { PITCHES, PITCH_ORDER, BIG_PITCHES, bigPitch } from '../data/pitches';
 import { arrow, button, COLORS, panel, shadowTxt, txt, type Button } from '../ui/ui';
 import { load, save } from '../save/storage';
 import { makePlayerSheet, frameIndex } from '../gfx/sprites';
-import type { Difficulty, FormationId, PitchId, TeamDef } from '../sim/types';
+import { FORMATIONS_11, FORMATIONS_5, type Difficulty, type FormationId, type PitchId, type TeamDef } from '../sim/types';
 import type { MatchLaunch } from '../modes/modes';
 import { fixKits, backToMenu } from './demo';
 import { sfx } from '../audio/sfx';
@@ -13,7 +13,7 @@ import type { PenaltyData } from './PenaltyScene';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
 const DURS = [120, 150, 180, 300];
-const FORMATIONS: FormationId[] = ['1-2-1', '1-1-2', '2-1-1'];
+const FORMATIONS: FormationId[] = FORMATIONS_5;
 const WEATHER_OPTS = ['sereno', 'pioggia', 'nebbia', 'caso'] as const;
 const TIME_OPTS = ['giorno', 'notte', 'caso'] as const;
 
@@ -25,6 +25,9 @@ export class SetupScene extends Phaser.Scene {
   private dur = 150;
   private pu = true;
   private formation: FormationId = '1-2-1';
+  /** Partita grande: 11 contro 11 su campo ingrandito. */
+  private big = false;
+  private formation11: FormationId = '4-4-2';
   private weather: (typeof WEATHER_OPTS)[number] = 'sereno';
   private night: (typeof TIME_OPTS)[number] = 'giorno';
   /** Sfida ai rigori invece della partita. */
@@ -50,6 +53,8 @@ export class SetupScene extends Phaser.Scene {
     this.dur = DURS.includes(s.duration) ? s.duration : 150;
     this.pu = s.powerUps;
     this.formation = FORMATIONS.includes(s.formation as FormationId) ? (s.formation as FormationId) : '1-2-1';
+    this.big = !!s.bigFormat;
+    this.formation11 = FORMATIONS_11.includes(s.formation11 as FormationId) ? (s.formation11 as FormationId) : '4-4-2';
     this.cameras.main.fadeIn(200, 10, 8, 20);
     this.build();
     this.scale.on('resize', this.rebuild, this);
@@ -120,7 +125,8 @@ export class SetupScene extends Phaser.Scene {
     const g = this.add.graphics();
     panel(g, W / 2 - 200, 142, 400, 42, 0x1b1d2e, 0x2e3250, 0.92);
     txt(this, W / 2, 153, 'CAMPO: ' + p.name.toUpperCase(), 8, '#3fd0ff');
-    txt(this, W / 2, 170, p.rule, 6, '#d8dcf0', { wordWrap: { width: 330 }, align: 'center' });
+    const bigOk = BIG_PITCHES.includes(p.id);
+    txt(this, W / 2, 170, this.big && !bigOk ? '11 contro 11: qui si gioca allo Stadio Arcade grande' : p.rule, 6, this.big && !bigOk ? '#ffb347' : '#d8dcf0', { wordWrap: { width: 330 }, align: 'center' });
     arrow(this, W / 2 - 184, 163, -1, () => {
       this.pitch = (this.pitch - 1 + PITCH_ORDER.length) % PITCH_ORDER.length;
       sfx.select();
@@ -133,9 +139,9 @@ export class SetupScene extends Phaser.Scene {
     });
 
     // opzioni
-    const row = (y: number, label: string, items: string[], sel: number, onPick: (i: number) => void) => {
+    const row = (y: number, label: string, items: string[], sel: number, onPick: (i: number) => void, total = 300) => {
       txt(this, W / 2 - 150, y, label, 6, '#8a8fb0').setOrigin(1, 0.5);
-      const bw = Math.min(84, 300 / items.length - 6);
+      const bw = Math.min(84, total / items.length - 6);
       const bs: Button[] = [];
       items.forEach((it, i) => {
         const b = button(this, W / 2 - 140 + bw / 2 + i * (bw + 6), y, bw, 18, it, () => {
@@ -149,7 +155,15 @@ export class SetupScene extends Phaser.Scene {
     row(198, 'CPU', ['FACILE', 'NORMALE', 'DIFFICILE'], DIFFS.indexOf(this.diff), (i) => (this.diff = DIFFS[i]));
     row(220, 'DURATA', DURS.map((d) => `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`), DURS.indexOf(this.dur), (i) => (this.dur = DURS[i]));
     row(242, 'POWER-UP', ['SÌ', 'NO'], this.pu ? 0 : 1, (i) => (this.pu = i === 0));
-    row(264, 'MODULO', FORMATIONS, FORMATIONS.indexOf(this.formation), (i) => (this.formation = FORMATIONS[i]));
+    // 5 contro 5 (3 moduli) oppure 11 contro 11 (3 moduli): è la stessa riga, i primi tre sono il 5v5
+    const mods = [...FORMATIONS, ...FORMATIONS_11];
+    const msel = this.big ? 3 + FORMATIONS_11.indexOf(this.formation11) : FORMATIONS.indexOf(this.formation);
+    row(264, '5V5 | 11V11', [...FORMATIONS, ...FORMATIONS_11.map((f) => '11:' + f)], msel, (i) => {
+      this.big = i >= 3;
+      if (this.big) this.formation11 = mods[i];
+      else this.formation = mods[i];
+      this.rebuild();
+    }, 372);
     row(286, 'METEO', ['SERENO', 'PIOGGIA', 'NEBBIA', 'A CASO'], WEATHER_OPTS.indexOf(this.weather), (i) => (this.weather = WEATHER_OPTS[i]));
     if (alwaysNight(p.id)) txt(this, W / 2 - 140, 308, 'ORA: sempre di notte su questo campo', 6, '#8a8fb0').setOrigin(0, 0.5);
     else row(308, 'ORA', ['GIORNO', 'NOTTE', 'A CASO'], TIME_OPTS.indexOf(this.night), (i) => (this.night = TIME_OPTS[i]));
@@ -196,17 +210,21 @@ export class SetupScene extends Phaser.Scene {
   }
 
   private start() {
-    const home = TEAMS[this.home];
-    const away = fixKits(home, TEAMS[this.away]);
-    const pitch = PITCHES[PITCH_ORDER[this.pitch]];
+    const big = this.big;
+    const home = big ? expandTeam(TEAMS[this.home]) : TEAMS[this.home];
+    const away = fixKits(home, big ? expandTeam(TEAMS[this.away]) : TEAMS[this.away]);
+    const chosen = PITCHES[PITCH_ORDER[this.pitch]];
+    const pitch = big ? bigPitch(BIG_PITCHES.includes(chosen.id) ? chosen : PITCHES.stadio) : chosen;
     save((d) => {
       d.settings.homeTeam = home.id;
       d.settings.awayTeam = TEAMS[this.away].id;
-      d.settings.pitch = pitch.id;
+      d.settings.pitch = chosen.id;
       d.settings.difficulty = this.diff;
       d.settings.duration = this.dur;
       d.settings.powerUps = this.pu;
       d.settings.formation = this.formation;
+      d.settings.bigFormat = this.big;
+      d.settings.formation11 = this.formation11;
       d.settings.weather = this.weather;
       d.settings.night = this.night;
     });
@@ -223,7 +241,7 @@ export class SetupScene extends Phaser.Scene {
         difficulty: this.diff,
         durationSec: this.dur,
         powerUps: this.pu,
-        formation: this.formation,
+        formation: big ? this.formation11 : this.formation,
         goldenGoal: true,
         halftime: load().settings.halftime !== false,
         humanTeam: 0,

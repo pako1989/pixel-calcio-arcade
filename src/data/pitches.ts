@@ -148,3 +148,18 @@ export const PITCH_ORDER: PitchId[] = [
   'fango',
   'vulcano',
 ];
+
+/** Campi che si possono ingrandire per l'11 contro 11 (senza ostacoli, respingenti o zone speciali). */
+export const BIG_PITCHES: PitchId[] = ['stadio', 'spiaggia', 'neve', 'tetto', 'montagna', 'molo'];
+
+/** Versione "grande" di un campo per l'11 contro 11: più lungo, porte più larghe, giocatori un po' più rapidi. */
+export function bigPitch(p: PitchDef): PitchDef {
+  return {
+    ...p,
+    width: 1400,
+    height: 800,
+    goalWidth: 128,
+    playerSpeed: p.playerSpeed * 1.1,
+    name: p.name + ' grande',
+  };
+}

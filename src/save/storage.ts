@@ -41,6 +41,9 @@ export interface SaveData {
     halftime?: boolean;
     /** Modulo tattico in Partita veloce. */
     formation?: FormationId;
+    /** Partita veloce a 11 contro 11 e relativo modulo. */
+    bigFormat?: boolean;
+    formation11?: FormationId;
   };
   record: { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number };
   /** Diventa un mito (storia). */

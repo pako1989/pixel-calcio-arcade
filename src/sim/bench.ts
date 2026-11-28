@@ -17,10 +17,10 @@ const NOMI = [
   'Cattaneo', 'Valentini', 'Mazza', 'Guerra', 'Piras', 'Coppola', 'Donati', 'Farina', 'Bernardi', 'Cirillo',
 ];
 
-const SLOTS: { role: Role; number: number; from: number[] }[] = [
-  { role: 'DEF', number: 4, from: [1] },
-  { role: 'MID', number: 10, from: [2, 3] },
-  { role: 'FWD', number: 11, from: [4] },
+const SLOTS: { role: Role; number: number }[] = [
+  { role: 'DEF', number: 12 },
+  { role: 'MID', number: 14 },
+  { role: 'FWD', number: 17 },
 ];
 
 const KEYS: (keyof PlayerStats)[] = ['speed', 'shot', 'pass', 'tackle', 'control', 'keeping'];
@@ -29,7 +29,7 @@ export function makeBench(team: TeamDef, seed: number): Reserve[] {
   const rng = new Rng(seed);
   const used = new Set(team.players.map((p) => p.name));
   return SLOTS.map((slot) => {
-    const src = slot.from.map((i) => team.players[i]).filter(Boolean);
+    const src = team.players.filter((p) => p.role === slot.role);
     const stats = {} as PlayerStats;
     for (const k of KEYS) {
       const avg = src.reduce((a, p) => a + p.stats[k], 0) / Math.max(1, src.length);
