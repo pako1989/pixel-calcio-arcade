@@ -12,6 +12,10 @@ import type { Difficulty, MatchResult, PitchId, PlayerDef, PlayerStats, Role, Te
 import { FAMOUS_EU, FAMOUS_IT, FAMOUS_PROV, makePlayers, type TeamSeed } from '../data/teams';
 import { PITCHES } from '../data/pitches';
 import { randomConditions } from '../data/weather';
+import {
+  STAFF_MAX, coachBoost, injuryRiskMult, injuryShorten, newStaff, potentialStars, prospectCount, recoveryBonus,
+  scoutMarketBonus, staffHireCost, staffWage, totalStaffWages, type Staff, type StaffRole,
+} from './managerStaff';
 
 // ---------------------------------------------------------------- costanti
 
@@ -218,6 +222,27 @@ export interface TableRow {
   pts: number;
 }
 
+/** Premi di fine stagione del club. */
+export interface SeasonAward {
+  season: number;
+  champion: string;
+  /** Capocannoniere della rosa. */
+  topScorer?: { name: string; goals: number };
+  /** Giocatore dell'anno. */
+  mvp?: { name: string; goals: number };
+  /** Giovane dell'anno (fino a 21 anni). */
+  young?: { name: string; ovr: number };
+}
+
+/** Provini del vivaio in attesa di essere promossi in prima squadra. */
+export interface Academy {
+  /** Stagione in cui sono arrivati. */
+  season: number;
+  prospects: MPlayer[];
+  /** Promozioni già fatte in questa stagione (la prima è gratis). */
+  promoted: number;
+}
+
 export interface SeasonEnd {
   season: number;
   division: number;
@@ -226,6 +251,9 @@ export interface SeasonEnd {
   prize: number;
   retired: string[];
   youth: string[];
+  awards?: SeasonAward;
+  /** Provini in attesa nel vivaio. */
+  prospects?: number;
   /** Obiettivo del presidente. */
   objective?: { label: string; met: boolean; bonus: number };
 }
@@ -272,6 +300,14 @@ export interface ManagerState {
   objective?: { pos: number; label: string };
   /** Evento della settimana in attesa di una scelta. */
   event?: ManagerEvent;
+  /** Staff tecnico (livello 0..3 per ruolo). */
+  staff?: Staff;
+  /** Vivaio: provini della stagione. */
+  academy?: Academy;
+  /** Premi delle stagioni passate. */
+  awards?: SeasonAward[];
+  /** Ultima partita di campionato (per il giornale). */
+  lastResult?: { week: number; home: boolean; my: number; opp: number; oppName: string };
 }
 
 export interface CupMatch {
@@ -567,6 +603,8 @@ export function newManager(name: string, kit: number, difficulty: Difficulty, se
     titles: 0,
     sponsor: SPONSOR_OFFERS[0],
     boardConfidence: 75,
+    staff: newStaff(),
+    awards: [],
   };
   const used = new Set<string>();
   const roles: Role[] = ['GK', 'DEF', 'MID', 'MID', 'FWD', 'GK', 'DEF', 'MID', 'FWD'];
@@ -607,7 +645,8 @@ export function refreshMarket(st: ManagerState, rng = new Rng(st.seed + st.seaso
   st.market = roles.map((role) => {
     const young = rng.chance(0.3);
     const age = young ? Math.floor(rng.range(16, 20)) : randomAge(rng);
-    const lvl = young ? rng.range(lo - 0.6, lo + 0.2) : rng.range(lo - 0.2, hi + 0.5);
+    const scout = scoutMarketBonus(st.staff?.osservatore ?? 0);
+    const lvl = (young ? rng.range(lo - 0.6, lo + 0.2) : rng.range(lo - 0.2, hi + 0.5)) + scout;
     const p = newPlayer(rng, st.nextId++, role, lvl, age, used);
     if (rng.chance(0.25)) {
       p.loan = true;
@@ -934,11 +973,12 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
 
   // allenamento della settimana
   const tr = TRAININGS[st.training];
-  const boost = 1 + st.trainingCenter * 0.3;
+  const boost = 1 + st.trainingCenter * 0.3 + coachBoost(st.staff?.allenatore ?? 0);
+  const recovery = recoveryBonus(st.staff?.preparatore ?? 0);
   let improved: MPlayer | null = null;
   let bestGain = 0;
   for (const p of st.squad) {
-    p.energy += 20;
+    p.energy += 20 + recovery;
     if (st.training === 'riposo') {
       p.energy += 14;
       p.morale += 4;
@@ -972,12 +1012,13 @@ export function applyManagerResult(st: ManagerState, myGoals: number, oppGoals: 
   st.fans = Math.round(st.fans * (won ? 1.05 : lost ? 0.98 : 1.01) + (won ? 8 : 0));
   const div = DIVISIONS[st.division];
   const tickets = home ? Math.min(st.fans, STADIUM_LEVELS[st.stadium].seats) * div.ticket : 0;
-  const salaries = st.squad.reduce((t, p) => t + p.salary, 0);
+  const salaries = payroll(st);
   const sponsor = sponsorWeekly(st);
   st.budget += tickets + sponsor - salaries;
   st.lastWeek = { tickets, sponsor, salaries };
 
   const oppName = clubOf(st, oppId).name;
+  st.lastResult = { week: st.week, home, my: myGoals, opp: oppGoals, oppName };
   st.news.unshift(`G${st.week + 1}: ${home ? `${st.club.name} ${myGoals}-${oppGoals} ${oppName}` : `${oppName} ${oppGoals}-${myGoals} ${st.club.name}`}`);
   st.news.unshift(...notes);
   if (tired.length) notes.push(`Stanchi: ${tired.map((p) => p.name).join(', ')}. Fai turnover o riposo.`);
@@ -1002,9 +1043,9 @@ function playersAfterMatch(st: ManagerState, won: boolean, lost: boolean, scorer
       p.energy -= cost;
       p.morale += 3;
       // chi è stanco si fa male più facilmente
-      const risk = p.energy < 40 ? 0.09 : p.energy < 60 ? 0.045 : 0.025;
+      const risk = (p.energy < 40 ? 0.09 : p.energy < 60 ? 0.045 : 0.025) * injuryRiskMult(st.staff?.medico ?? 0);
       if (!p.injured && rng.chance(risk)) {
-        p.injured = 1 + Math.floor(rng.next() * 3);
+        p.injured = Math.max(1, 1 + Math.floor(rng.next() * 3) - injuryShorten(st.staff?.medico ?? 0));
         notes.unshift(`Infortunio! ${p.name} starà fuori ${p.injured} ${p.injured === 1 ? 'settimana' : 'settimane'}.`);
       }
     } else {
@@ -1045,6 +1086,8 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
     for (const p of st.squad) p.morale += met ? 10 : -10;
   }
   st.history.push({ season: st.season, division: div, pos });
+  const awards = seasonAwards(st);
+  (st.awards ??= []).push(awards);
   if (pos === 1) st.titles++;
   if ((outcome === 'campione' || outcome === 'promosso') && div < TOP_DIVISION) st.division++;
   else if (outcome === 'retrocesso') st.division--;
@@ -1071,20 +1114,29 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
     p.apps = 0;
     p.salary = Math.max(p.salary, salaryFor(playerOvr(p)));
   }
-  // vivaio: un giovane ogni anno, e altri se la rosa è troppo corta
+  // vivaio: arrivano dei provini; se la rosa è corta i migliori vengono promossi da soli
   const youth: string[] = [];
   const used = new Set(st.squad.map((p) => p.name));
-  const want = Math.max(1, MIN_SQUAD + 1 - st.squad.length);
-  for (let i = 0; i < want && st.squad.length < MAX_SQUAD; i++) {
-    const hasGK = st.squad.some((p) => p.role === 'GK');
+  const prospects: MPlayer[] = [];
+  const nProspects = prospectCount(st.staff?.osservatore ?? 0);
+  for (let i = 0; i < nProspects; i++) {
+    const hasGK = st.squad.some((p) => p.role === 'GK') || prospects.some((p) => p.role === 'GK');
     const role: Role = !hasGK ? 'GK' : rng.pick(['DEF', 'MID', 'FWD'] as Role[]);
-    const p = newPlayer(rng, st.nextId++, role, DIV_LEVEL[st.division][0] - 0.4 + st.trainingCenter * 0.25, 16, used);
-    p.pot = round3(Math.min(1.2, p.pot + st.trainingCenter * 0.03));
+    const p = newPlayer(rng, st.nextId++, role, DIV_LEVEL[st.division][0] - 0.4 + st.trainingCenter * 0.25, Math.floor(rng.range(15, 18)), used);
+    p.pot = round3(Math.min(1.2, p.pot + st.trainingCenter * 0.03 + (rng.chance(0.2) ? 0.08 : 0)));
+    prospects.push(p);
+  }
+  prospects.sort((a, b) => b.pot - a.pot);
+  let promoted = 0;
+  while (st.squad.length < MIN_SQUAD + 1 && st.squad.length < MAX_SQUAD && prospects.length) {
+    const p = prospects.shift()!;
     st.squad.push(p);
     youth.push(p.name);
+    promoted++;
   }
+  st.academy = { season: st.season + 1, prospects, promoted };
   assignNumbers(st);
-  const se: SeasonEnd = { season: st.season, division: div, pos, outcome, prize, retired, youth, objective };
+  const se: SeasonEnd = { season: st.season, division: div, pos, outcome, prize, retired, youth, awards, prospects: prospects.length, objective };
   st.season++;
   setupLeague(st);
   refreshMarket(st, rng);
@@ -1092,6 +1144,123 @@ export function endSeason(st: ManagerState, rng = new Rng(st.seed + st.season * 
   st.seasonEnd = se;
   st.news.unshift(`Inizia la stagione ${st.season} in ${DIVISIONS[st.division].name}.`);
   return se;
+}
+
+// ---------------------------------------------------------------- premi, vivaio, staff, giornale
+
+/** Premi del club a fine stagione (prima di azzerare gol e presenze). */
+function seasonAwards(st: ManagerState): SeasonAward {
+  const champ = clubOf(st, table(st)[0].id).name;
+  const aw: SeasonAward = { season: st.season, champion: champ };
+  const scorers = [...st.squad].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals);
+  if (scorers[0]) aw.topScorer = { name: scorers[0].name, goals: scorers[0].goals };
+  const score = (p: MPlayer) => p.goals * 3 + p.apps + playerOvr(p) / 10;
+  const mvp = [...st.squad].filter((p) => p.apps > 0).sort((a, b) => score(b) - score(a))[0];
+  if (mvp) {
+    aw.mvp = { name: mvp.name, goals: mvp.goals };
+    mvp.morale = Math.min(100, mvp.morale + 15);
+  }
+  const young = [...st.squad].filter((p) => p.age <= 21 && p.apps > 0).sort((a, b) => playerOvr(b) - playerOvr(a))[0];
+  if (young) aw.young = { name: young.name, ovr: playerOvr(young) };
+  if (aw.mvp) st.news.unshift(`Giocatore dell'anno: ${aw.mvp.name}!`);
+  return aw;
+}
+
+/** Costo per promuovere un provino: il primo della stagione è gratis. */
+export function promoteCost(st: ManagerState, p: MPlayer): number {
+  return (st.academy?.promoted ?? 0) === 0 ? 0 : Math.round((p.salary * 6) / 50) * 50;
+}
+
+/** Perché un provino non si può promuovere adesso (null = si può). */
+export function canPromote(st: ManagerState, id: number): string | null {
+  const p = st.academy?.prospects.find((x) => x.id === id);
+  if (!p) return 'Non c\'è più';
+  if (st.squad.length >= MAX_SQUAD) return 'ROSA PIENA';
+  if (st.budget < promoteCost(st, p)) return 'SOLDI';
+  return null;
+}
+
+export function promoteProspect(st: ManagerState, id: number): boolean {
+  if (canPromote(st, id)) return false;
+  const ac = st.academy!;
+  const p = ac.prospects.find((x) => x.id === id)!;
+  st.budget -= promoteCost(st, p);
+  ac.prospects.splice(ac.prospects.indexOf(p), 1);
+  ac.promoted++;
+  st.squad.push(p);
+  assignNumbers(st);
+  st.news.unshift(`Dal vivaio in prima squadra: ${p.name} (${p.age} anni)!`);
+  return true;
+}
+
+/** Livello successivo dello staff (null se è già al massimo) e quanto costa. */
+export function staffUpgrade(st: ManagerState, role: StaffRole): { level: number; cost: number; wage: number } | null {
+  const lvl = (st.staff?.[role] ?? 0) + 1;
+  if (lvl > STAFF_MAX) return null;
+  const base = DIVISIONS[st.division].sponsor;
+  return { level: lvl, cost: staffHireCost(lvl, base), wage: staffWage(lvl, base) };
+}
+
+export function hireStaff(st: ManagerState, role: StaffRole): boolean {
+  const up = staffUpgrade(st, role);
+  if (!up || st.budget < up.cost) return false;
+  st.staff ??= newStaff();
+  st.budget -= up.cost;
+  st.staff[role] = up.level;
+  st.news.unshift(`Staff: ${role} al livello ${up.level}.`);
+  return true;
+}
+
+/** Licenzia uno staff (nessun rimborso): per non restare con stipendi che pesano. */
+export function dismissStaff(st: ManagerState, role: StaffRole): boolean {
+  if (!st.staff || !st.staff[role]) return false;
+  st.staff[role] = 0;
+  return true;
+}
+
+/** Stelle di potenziale di un giocatore (per mostrarle nella UI). */
+export const stars = (p: MPlayer) => potentialStars(p.pot);
+
+export interface Gazzetta {
+  headline: string;
+  sub: string;
+  items: { tag: string; text: string }[];
+}
+
+/** Prima pagina del giornale del club, costruita dallo stato della stagione. */
+export function gazzetta(st: ManagerState): Gazzetta {
+  const items: Gazzetta['items'] = [];
+  const r = st.lastResult;
+  let headline = `${st.club.name.toUpperCase()}: ${st.week === 0 ? 'SI PARTE!' : 'LA STAGIONE CONTINUA'}`;
+  let sub = st.objective ? `Il presidente chiede: ${st.objective.label.toLowerCase()}.` : 'Tutti gli occhi sul campo.';
+  if (r) {
+    const diff = r.my - r.opp;
+    const score = `${r.my}-${r.opp}`;
+    headline = diff >= 3 ? `TRIONFO! ${r.oppName.toUpperCase()} TRAVOLTO ${score}`
+      : diff > 0 ? `COLPO ${score} CONTRO ${r.oppName.toUpperCase()}`
+      : diff === 0 ? `PARI ${score}: ${r.oppName.toUpperCase()} RESISTE`
+      : diff <= -3 ? `CROLLO ${score} CON ${r.oppName.toUpperCase()}: TIFOSI FURIOSI`
+      : `SCONFITTA ${score} CON ${r.oppName.toUpperCase()}`;
+    sub = `Giornata ${r.week + 1}, ${r.home ? 'in casa' : 'in trasferta'}.`;
+  }
+  const t = table(st);
+  const pos = t.findIndex((x) => x.id === ME) + 1;
+  if (st.week > 0) {
+    const leader = clubOf(st, t[0].id).name;
+    items.push({ tag: 'CLASSIFICA', text: pos === 1 ? 'Siete in vetta! La città sogna.' : `${pos}° posto, in testa c'è ${leader} (${t[0].pts} punti).` });
+  }
+  const bestMkt = [...st.market].sort((a, b) => playerOvr(b) - playerOvr(a))[0];
+  if (bestMkt) items.push({ tag: 'MERCATO', text: `Si parla di ${bestMkt.name} (${ROLE_LABEL[bestMkt.role]}, ${bestMkt.age} anni, forza ${playerOvr(bestMkt)}): costa ${money(buyPrice(bestMkt))}.` });
+  const hot = [...st.squad].sort((a, b) => b.goals - a.goals)[0];
+  if (hot && hot.goals > 0) items.push({ tag: 'BOMBER', text: `${hot.name} è in gran forma: ${hot.goals} gol in stagione.` });
+  const hurt = st.squad.filter((p) => p.injured);
+  if (hurt.length) items.push({ tag: 'INFERMERIA', text: `${hurt.map((p) => p.name).join(', ')} fuori per infortunio.` });
+  const prom = st.academy?.prospects.length ?? 0;
+  if (prom) items.push({ tag: 'VIVAIO', text: `${prom} provini aspettano una chance: guarda la scheda STAFF.` });
+  const aw = st.awards?.[st.awards.length - 1];
+  if (aw) items.push({ tag: `PREMI ${aw.season}`, text: [aw.topScorer ? `Capocannoniere ${aw.topScorer.name} (${aw.topScorer.goals})` : '', aw.mvp ? `giocatore dell'anno ${aw.mvp.name}` : '', aw.young ? `giovane ${aw.young.name}` : ''].filter(Boolean).join(', ') + '.' });
+  items.push({ tag: 'PRESIDENTE', text: `${boardLabel(st.boardConfidence)}${st.boardConfidence < 30 ? ': serve una vittoria, subito' : ''}.` });
+  return { headline, sub, items: items.slice(0, 6) };
 }
 
 // ---------------------------------------------------------------- strutture
@@ -1112,10 +1281,15 @@ export function upgrade(st: ManagerState, what: 'stadium' | 'training'): boolean
   return true;
 }
 
+/** Stipendi settimanali: giocatori più staff tecnico. */
+export function payroll(st: ManagerState): number {
+  return st.squad.reduce((t, p) => t + p.salary, 0) + totalStaffWages(st.staff, DIVISIONS[st.division].sponsor);
+}
+
 export function weeklyBalance(st: ManagerState): { salaries: number; sponsor: number; tickets: number } {
   const div = DIVISIONS[st.division];
   return {
-    salaries: st.squad.reduce((t, p) => t + p.salary, 0),
+    salaries: payroll(st),
     sponsor: sponsorWeekly(st),
     tickets: Math.min(st.fans, STADIUM_LEVELS[st.stadium].seats) * div.ticket,
   };
@@ -1460,5 +1634,7 @@ export function ensureManager(st: ManagerState): ManagerState {
   // salvataggi di prima della 0.9.4
   if (!st.sponsor) st.sponsor = SPONSOR_OFFERS[0];
   if (st.boardConfidence === undefined) st.boardConfidence = 75;
+  if (!st.staff) st.staff = newStaff();
+  if (!st.awards) st.awards = [];
   return st;
 }
