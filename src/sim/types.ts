@@ -38,13 +38,19 @@ export interface TeamDef {
   /** Disegno della maglia. */
   pattern: 'plain' | 'stripes' | 'hoops' | 'half' | 'sash';
   players: PlayerDef[];
+  /** Solo squadre da 11: per ogni giocatore l'indice che aveva nella rosa da 5 (-1 = nato per l'11 contro 11). Serve a crescita ed esperienza. */
+  core?: number[];
   /** Forza complessiva 1–5 (stelle). */
   stars: number;
 }
 
 export type Difficulty = 'facile' | 'normale' | 'difficile';
 
-export type FormationId = '1-2-1' | '1-1-2' | '2-1-1';
+/** Moduli del 5 contro 5 e dell'11 contro 11 (Partita grande). */
+export type FormationId = '1-2-1' | '1-1-2' | '2-1-1' | '4-4-2' | '4-3-3' | '3-5-2';
+
+export const FORMATIONS_5: FormationId[] = ['1-2-1', '1-1-2', '2-1-1'];
+export const FORMATIONS_11: FormationId[] = ['4-4-2', '4-3-3', '3-5-2'];
 
 export type PitchId =
   | 'stadio'

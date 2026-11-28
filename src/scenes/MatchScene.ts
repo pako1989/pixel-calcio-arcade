@@ -457,7 +457,8 @@ export class MatchScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(-MARGIN + 20, -MARGIN + 10, W + MARGIN * 2 - 40, H + MARGIN * 2 - 20);
     cam.setRoundPixels(true);
-    cam.setZoom(this.launch.demo ? 1 : 1.3);
+    // nella Partita grande (11 contro 11) si inquadra più campo
+    cam.setZoom(this.launch.demo ? 1 : sim.teamSize > 5 ? 0.95 : 1.3);
     this.baseZoom = cam.zoom;
     this.camPt = { x: W / 2, y: H / 2 };
     cam.centerOn(W / 2, H / 2);

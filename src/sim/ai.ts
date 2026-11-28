@@ -7,10 +7,30 @@
 import type { Player } from './entities';
 import type { MatchSim } from './match';
 import { clamp, dist, distToSegment, len, norm, type Vec } from './math';
-import type { FormationId } from './types';
+import { FORMATIONS_11, FORMATIONS_5, type FormationId } from './types';
 import { aiSpecial } from './specials';
 
+/**
+ * Posizioni di base (0 = propria porta, 1 = porta avversaria; y 0..1) per ogni modulo.
+ * Nell'11 contro 11 l'ordine in rosa è: 0 portiere, 1-4 difensori, 5-8 centrocampisti, 9-10 attaccanti;
+ * i moduli spostano qualcuno di ruolo (l'ala del 4-3-3, il terzino a tutta fascia del 3-5-2).
+ */
 const FORMATIONS: Record<FormationId, Record<number, [number, number]>> = {
+  '4-4-2': {
+    1: [0.17, 0.14], 2: [0.15, 0.38], 3: [0.15, 0.62], 4: [0.17, 0.86],
+    5: [0.4, 0.12], 6: [0.38, 0.38], 7: [0.38, 0.62], 8: [0.4, 0.88],
+    9: [0.66, 0.36], 10: [0.66, 0.64],
+  },
+  '4-3-3': {
+    1: [0.17, 0.14], 2: [0.15, 0.38], 3: [0.15, 0.62], 4: [0.17, 0.86],
+    5: [0.38, 0.3], 6: [0.34, 0.5], 7: [0.38, 0.7], 8: [0.66, 0.14],
+    9: [0.7, 0.5], 10: [0.66, 0.86],
+  },
+  '3-5-2': {
+    1: [0.15, 0.26], 2: [0.13, 0.5], 3: [0.15, 0.74], 4: [0.4, 0.08],
+    5: [0.4, 0.3], 6: [0.34, 0.5], 7: [0.4, 0.7], 8: [0.4, 0.92],
+    9: [0.66, 0.36], 10: [0.66, 0.64],
+  },
   '1-2-1': {
     1: [0.2, 0.5],
     2: [0.4, 0.26],
@@ -38,8 +58,16 @@ const ROLE_X: Record<string, [number, number]> = {
   GK: [0, 0.2],
 };
 
+/** Il modulo da usare: se quello scelto non è della taglia della squadra si ripiega sul predefinito. */
+function formationOf(sim: MatchSim, team: 0 | 1): FormationId {
+  const f = team === 0 ? sim.cfg.formation : sim.cfg.awayFormation;
+  const big = sim.teamSize > 5;
+  const list = big ? FORMATIONS_11 : FORMATIONS_5;
+  return f && list.includes(f) ? f : list[0];
+}
+
 export function homePos(sim: MatchSim, p: Player, attacking: boolean): Vec {
-  const fId = (p.team === 0 ? sim.cfg.formation : sim.cfg.awayFormation) ?? '1-2-1';
+  const fId = formationOf(sim, p.team);
   const [bx, by] = FORMATIONS[fId][p.idx] ?? [0.4, 0.5];
   const b = sim.ball;
   const bnx = sim.toTeamX(p.team, b.x);
@@ -124,7 +152,7 @@ function nearestOpp(sim: MatchSim, pt: Vec, team: 0 | 1): { p: Player | null; d:
 function passScore(sim: MatchSim, from: Player, to: Player): number {
   if (to === from || to.out > 0) return -Infinity;
   const d = dist(from, to);
-  if (d < 40 || d > 420) return -Infinity;
+  if (d < 40 || d > 420 * sim.S) return -Infinity;
   if (!isPassSafe(sim, from, to, from.team)) return -Infinity;
   const progress = sim.toTeamX(from.team, to.x) - sim.toTeamX(from.team, from.x);
   const open = Math.min(1, nearestOpp(sim, to, from.team).d / 90);
@@ -389,7 +417,7 @@ function carrierThink(sim: MatchSim, p: Player) {
   }
   if (p.holdT > 0.15) {
     // tiro?
-    const range = 250 * p.def.stats.shot;
+    const range = 250 * p.def.stats.shot * (1 + (sim.S - 1) * 0.7);
     let blocked = false;
     for (const o of opp) {
       if (o.isGK) continue;
@@ -574,7 +602,7 @@ export function aiGoalkeeper(sim: MatchSim, gk: Player, dt: number) {
       const gxDist = Math.abs(b.x - gx);
       const inDangerZone =
         sim.inOwnBox(team, b.x, b.y) ||
-        (gxDist < 130 && Math.abs(b.y - sim.H / 2) < sim.pitch.goalWidth * 0.9);
+        (gxDist < 130 * sim.S && Math.abs(b.y - sim.H / 2) < sim.pitch.goalWidth * 0.9);
       const hasCover = sim.teams[team].some(
         (m) => !m.isGK && m.out <= 0 && Math.abs(m.x - gx) < gxDist - 4 && Math.abs(m.y - b.y) < 42,
       );
@@ -594,7 +622,8 @@ export function aiGoalkeeper(sim: MatchSim, gk: Player, dt: number) {
     }
   }
   // limiti: resta vicino alla porta
-  target.x = dir > 0 ? clamp(target.x, gx + 4, gx + 102) : clamp(target.x, gx - 102, gx - 4);
+  const reach = 102 * sim.S;
+  target.x = dir > 0 ? clamp(target.x, gx + 4, gx + reach) : clamp(target.x, gx - reach, gx - 4);
   const dx = target.x - gk.x;
   const dy = target.y - gk.y;
   const d = len(dx, dy);

@@ -149,6 +149,33 @@ export class HudScene extends Phaser.Scene {
     if (!load().settings.tutorialSeen) this.showHelp();
   }
 
+  /** Radar dell'11 contro 11: il campo è più grande dello schermo, quindi un riquadro mostra tutti i giocatori e la palla. */
+  private drawRadar(g: Phaser.GameObjects.Graphics) {
+    const sim = this.match.sim;
+    if (sim.teamSize <= 5 || this.halftime) return;
+    const W = this.scale.width;
+    const rw = 96;
+    const rh = Math.round((rw * sim.H) / sim.W);
+    const x = Math.round(W / 2 - rw / 2);
+    const y = 52;
+    g.fillStyle(0x0a0816, 0.55).fillRect(x - 2, y - 2, rw + 4, rh + 4);
+    g.fillStyle(0x2a7a3a, 0.55).fillRect(x, y, rw, rh);
+    g.fillStyle(0xffffff, 0.35).fillRect(x + rw / 2, y, 1, rh);
+    // vista della telecamera
+    const v = this.match.cameras.main.worldView;
+    const kx = rw / sim.W;
+    const ky = rh / sim.H;
+    g.lineStyle(1, 0xffffff, 0.6).strokeRect(x + Math.max(0, v.x) * kx, y + Math.max(0, v.y) * ky, Math.min(v.width, sim.W) * kx, Math.min(v.height, sim.H) * ky);
+    const cfg = this.match.launch.config;
+    for (const p of sim.players) {
+      const h = sim.isHuman(p);
+      g.fillStyle(h ? 0xffd23f : p.team === 0 ? cfg.home.colors.shirt : cfg.away.colors.shirt, 1);
+      const s = h ? 4 : 2;
+      g.fillRect(Math.round(x + p.x * kx - s / 2), Math.round(y + p.y * ky - s / 2), s, s);
+    }
+    g.fillStyle(0xffffff, 1).fillRect(Math.round(x + sim.ball.x * kx - 1), Math.round(y + sim.ball.y * ky - 1), 3, 3);
+  }
+
   /** Mostra la schermata dell'intervallo quando la simulazione si ferma a metà partita. */
   private syncHalftime() {
     const sim = this.match.sim;
@@ -282,6 +309,7 @@ export class HudScene extends Phaser.Scene {
     const g = this.g;
     g.clear();
     this.syncHalftime();
+    this.drawRadar(g);
     // tabellone
     panel(g, W / 2 - 92, 4, 184, 22, 0x1b1d2e, 0x2e3250, 0.92);
     g.fillStyle(cfg.home.colors.shirt).fillRect(W / 2 - 88, 8, 6, 14);

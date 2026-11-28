@@ -149,3 +149,43 @@ export function awayKit(t: TeamDef): TeamDef {
 export function makeTeam(s: TeamSeed, seed: number): TeamDef {
   return { ...s, players: makePlayers(seed, s.stars) };
 }
+
+/** Formato dell'11 contro 11: ordine in rosa 0 portiere, 1-4 difensori, 5-8 centrocampisti, 9-10 attaccanti. */
+const BIG_ROLES: Role[] = ['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'FWD', 'FWD'];
+const BIG_NUMBERS = [1, 2, 3, 4, 5, 6, 8, 7, 10, 9, 11];
+
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * Porta una squadra da 5 a 11 giocatori: i cinque titolari restano (con le loro statistiche,
+ * abilità e crescita) e gli altri sei nascono dalla forza (stelle) della squadra.
+ */
+export function expandTeam(team: TeamDef): TeamDef {
+  if (team.players.length >= 11) return team;
+  const rng = new Rng(hashStr(team.id) + 77);
+  const pool = new Map<Role, PlayerDef[]>();
+  for (const p of team.players) pool.set(p.role, [...(pool.get(p.role) ?? []), p]);
+  const used = new Set(team.players.map((p) => p.name));
+  const core: number[] = [];
+  const players = BIG_ROLES.map((role, i) => {
+    const mine = pool.get(role);
+    const base = mine?.shift();
+    core.push(base ? team.players.indexOf(base) : -1);
+    if (base) return { ...base, number: BIG_NUMBERS[i] };
+    let name = rng.pick(NOMI);
+    for (let g = 0; used.has(name) && g < 40; g++) name = rng.pick(NOMI);
+    used.add(name);
+    return {
+      name,
+      number: BIG_NUMBERS[i],
+      role,
+      stats: makeStats(rng, role, Math.max(1, team.stars)),
+      look: { skin: Math.floor(rng.next() * 5), hair: Math.floor(rng.next() * 6), hairStyle: Math.floor(rng.next() * 4) },
+    };
+  });
+  return { ...team, players, core };
+}

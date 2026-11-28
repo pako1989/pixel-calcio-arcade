@@ -148,7 +148,13 @@ export function grownPlayer(pd: PlayerDef, xp: number): PlayerDef {
 export function grownTeam(t: TeamDef, p: ProgressSave | undefined): TeamDef {
   const xp = p?.xp[t.id];
   if (!xp) return t;
-  return { ...t, players: t.players.map((pd, i) => grownPlayer(pd, xp[i] ?? 0)) };
+  return {
+    ...t,
+    players: t.players.map((pd, i) => {
+      const slot = t.core ? t.core[i] : i;
+      return slot < 0 ? pd : grownPlayer(pd, xp[slot] ?? 0);
+    }),
+  };
 }
 
 export interface LevelUp {
@@ -159,9 +165,11 @@ export interface LevelUp {
 
 /** Aggiunge esperienza ai giocatori di una squadra (quanta per ciascuno lo dice `gain`). */
 export function addXp(p: ProgressSave, team: TeamDef, gain: (pd: PlayerDef, i: number) => number): LevelUp[] {
-  const xp = (p.xp[team.id] = p.xp[team.id] ?? team.players.map(() => 0));
+  const xp = (p.xp[team.id] = p.xp[team.id] ?? (team.core ? team.core.filter((c) => c >= 0) : team.players).map(() => 0));
   const ups: LevelUp[] = [];
-  team.players.forEach((pd, i) => {
+  team.players.forEach((pd, pi) => {
+    const i = team.core ? team.core[pi] : pi;
+    if (i < 0) return;
     const g = gain(pd, i);
     if (g <= 0) return;
     const before = levelOf(xp[i] ?? 0);

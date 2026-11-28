@@ -83,6 +83,14 @@ export interface FreeKick {
 /** Distanza massima dalla porta per una punizione da calciare in porta. */
 export const FREEKICK_RANGE = 300;
 
+/** Posizioni di calcio d'inizio (propria metà) dell'11 contro 11: portiere, 4 difensori, 4 centrocampisti, 2 attaccanti. */
+const KO11: [number, number][] = [
+  [0.03, 0.5],
+  [0.17, 0.14], [0.15, 0.38], [0.15, 0.62], [0.17, 0.86],
+  [0.32, 0.12], [0.3, 0.38], [0.3, 0.62], [0.32, 0.88],
+  [0.4, 0.3], [0.46, 0.5],
+];
+
 export class MatchSim {
   readonly pitch: PitchDef;
   readonly W: number;
@@ -113,6 +121,9 @@ export class MatchSim {
   events: SimEvent[] = [];
   /** Indice (in teams[humanTeam]) del giocatore controllato. */
   humanIdx = 4;
+  /** Giocatori per squadra (5 o 11) e fattore di scala del campo rispetto a quello standard. */
+  readonly teamSize: number;
+  readonly S: number;
   readonly humanTeam: 0 | 1 | null;
   charge = 0;
   charging = false;
@@ -184,6 +195,9 @@ export class MatchSim {
         this.teams[ti].push(p);
       });
     });
+    this.teamSize = cfg.home.players.length;
+    this.S = cfg.pitch.width / 840;
+    this.humanIdx = this.teamSize - 1;
     this.kickoffTeam = this.rng.chance(0.5) ? 0 : 1;
     this.initialKick = this.kickoffTeam;
     const bseed = (cfg.seed ?? 1) * 31 + 7;
@@ -230,7 +244,7 @@ export class MatchSim {
   }
   inOwnBox(team: 0 | 1, x: number, y: number): boolean {
     const gx = this.ownGoalX(team);
-    return Math.abs(x - gx) < 90 && y > this.goalTop - 50 && y < this.goalBottom + 50;
+    return Math.abs(x - gx) < 90 * this.S && y > this.goalTop - 50 * this.S && y < this.goalBottom + 50 * this.S;
   }
 
   /** Direzione sicura di rinvio/spazzata lontano dalla propria porta. */
@@ -262,7 +276,7 @@ export class MatchSim {
       [0.44, 0.5],
     ];
     for (const p of this.players) {
-      const [nx, ny] = KO[p.idx];
+      const [nx, ny] = (this.teamSize > 5 ? KO11 : KO)[p.idx];
       p.x = this.fromTeamX(p.team, nx);
       p.y = ny * this.H;
       p.vx = p.vy = 0;
@@ -274,12 +288,12 @@ export class MatchSim {
       p.tx = p.x;
       p.ty = p.y;
     }
-    const kicker = this.teams[this.kickoffTeam][4];
+    const kicker = this.teams[this.kickoffTeam][this.teamSize - 1];
     kicker.x = this.W / 2 - this.dirOf(this.kickoffTeam) * 9;
     kicker.y = this.H / 2;
     b.owner = kicker;
     b.lastTouch = kicker;
-    if (this.humanTeam !== null) this.humanIdx = this.cfg.lockHuman ?? 4;
+    if (this.humanTeam !== null) this.humanIdx = this.cfg.lockHuman ?? this.teamSize - 1;
     this.callT = 0;
     this.charge = 0;
     this.charging = false;
@@ -2109,7 +2123,7 @@ export class MatchSim {
     }
     // vicino alla porta: punizione da calciare
     const gx = this.oppGoalX(victim.team);
-    if (Math.abs(gx - victim.x) < FREEKICK_RANGE && Math.abs(victim.y - this.H / 2) < 190 && Math.abs(gx - victim.x) > 70) {
+    if (Math.abs(gx - victim.x) < FREEKICK_RANGE * this.S && Math.abs(victim.y - this.H / 2) < 190 && Math.abs(gx - victim.x) > 70) {
       this.setupFreeKick(victim, by.team);
     }
   }
