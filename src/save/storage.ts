@@ -37,6 +37,8 @@ export interface SaveData {
     fouls: boolean;
     /** Supermosse dei giocatori (attive di serie). */
     specials?: boolean;
+    /** Intervallo con cambi a metà partita (attivo di serie). */
+    halftime?: boolean;
     /** Modulo tattico in Partita veloce. */
     formation?: FormationId;
   };
