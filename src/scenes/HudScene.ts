@@ -154,10 +154,11 @@ export class HudScene extends Phaser.Scene {
     const sim = this.match.sim;
     if (sim.teamSize <= 5 || this.halftime) return;
     const W = this.scale.width;
-    const rw = 96;
+    const rw = 80;
     const rh = Math.round((rw * sim.H) / sim.W);
+    // in basso al centro, tra joystick e pulsanti: in alto copriva il campo
     const x = Math.round(W / 2 - rw / 2);
-    const y = 52;
+    const y = Math.round(this.scale.height - rh - (this.goalT ? 26 : 8));
     g.fillStyle(0x0a0816, 0.55).fillRect(x - 2, y - 2, rw + 4, rh + 4);
     g.fillStyle(0x2a7a3a, 0.55).fillRect(x, y, rw, rh);
     g.fillStyle(0xffffff, 0.35).fillRect(x + rw / 2, y, 1, rh);
