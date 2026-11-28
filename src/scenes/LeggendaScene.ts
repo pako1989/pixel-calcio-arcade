@@ -3,7 +3,7 @@ import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
 import { load, progressOf, save } from '../save/storage';
 import { portrait } from '../gfx/animeArt';
 import { hex } from '../gfx/px';
-import { canLearn, knows, learn, MY_TECHS, newLeggenda, objectiveText, TECH_OWNER, TECHS, TRAIN_FULL, trainingReward, newChampionshipState, recordChampionshipMatch, type LeggendaSave } from '../modes/leggenda';
+import { bonusOf, bonusText, canLearn, knows, learn, MY_TECHS, newLeggenda, objectiveText, TECH_OWNER, TECHS, TRAIN_FULL, trainingReward, newChampionshipState, recordChampionshipMatch, type LeggendaSave } from '../modes/leggenda';
 import { CAST, EPISODES } from '../modes/leggendaStory';
 import { today } from '../modes/daily';
 import { backToMenu } from './demo';
@@ -16,7 +16,7 @@ import type { StarRarity } from '../modes/leggendaStelle';
 type View = 'episodi' | 'campionato' | 'tecniche' | 'allenamento' | 'stelle';
 
 /** Il rivale (o il personaggio chiave) di ogni episodio, per la copertina. */
-const EP_FACE = ['tommaso', 'maestro', 'sandro', 'dario', 'raffo', 'paco', 'bram', 'nacho', 'erik', 'rafa'];
+const EP_FACE = ['tommaso', 'maestro', 'sandro', 'dario', 'raffo', 'paco', 'bram', 'nacho', 'erik', 'rafa', 'leo', 'papa', 'sira', 'axel'];
 
 interface HubData {
   celebrate?: number;
@@ -270,20 +270,21 @@ export class LeggendaScene extends Phaser.Scene {
     const lw = Math.min(250, W * 0.42);
     const g = this.add.graphics();
     panel(g, 10, 80, lw, 270, 0x1b1d2e, 0x2e3250, 0.92);
+    const rowH = Math.min(26, 244 / (EPISODES.length - 1));
     EPISODES.forEach((e, i) => {
-      const y = 94 + i * 26;
+      const y = 94 + i * rowH;
       const done = i < this.sv.cleared;
       const open = i <= this.sv.cleared;
       const sel = i === this.sel;
-      if (sel) g.fillStyle(COLORS.accent, 0.25).fillRect(14, y - 11, lw - 8, 22);
-      g.fillStyle(done ? 0x5be37d : open ? COLORS.accent : 0x3a3d55).fillCircle(28, y, 9);
+      if (sel) g.fillStyle(COLORS.accent, 0.25).fillRect(14, y - rowH / 2, lw - 8, rowH - 1);
+      g.fillStyle(done ? 0x5be37d : open ? COLORS.accent : 0x3a3d55).fillCircle(28, y, 8);
       txt(this, 28, y, open ? String(i + 1) : '?', 6, open ? '#1a1222' : '#8a8fb0');
       txt(this, 44, y, open ? e.title : '???', 6, open ? (sel ? '#ffd23f' : '#ffffff') : '#5a5f80').setOrigin(0, 0.5);
       if (done) {
         // segno di spunta disegnato a pixel
         g.fillStyle(0x5be37d).fillRect(lw - 8, y, 2, 2).fillRect(lw - 6, y + 2, 2, 2).fillRect(lw - 4, y, 2, 2).fillRect(lw - 2, y - 2, 2, 2).fillRect(lw, y - 4, 2, 2);
       }
-      const z = this.add.zone(10 + lw / 2, y, lw, 24).setInteractive({ useHandCursor: true });
+      const z = this.add.zone(10 + lw / 2, y, lw, rowH).setInteractive({ useHandCursor: true });
       z.on('pointerup', () => {
         sfx.click();
         this.sel = i;
@@ -314,7 +315,8 @@ export class LeggendaScene extends Phaser.Scene {
     shadowTxt(this, cx, fy - 50, 'VS', 12, '#ffd23f', '#a0381e', 2);
     txt(this, cx, fy + 12, e.place, 6, '#c8cce8');
     txt(this, cx, fy + 30, `OBIETTIVO: ${objectiveText(e.objective).toUpperCase()}`, 6, '#ffffff');
-    txt(this, cx, fy + 44, i >= 5 ? 'Mondiali giovanili' : i >= 1 ? 'Campionato regionale' : 'Partitella', 6, '#8a8fb0');
+    const got = (this.sv.bonus ?? []).includes(i);
+    txt(this, cx, fy + 44, `BONUS: ${bonusText(bonusOf(i)).toUpperCase()}${got ? '  (FATTO)' : ''}`, 6, got ? '#5be37d' : '#3fd0ff', { wordWrap: { width: pw - 16 }, align: 'center' });
     const done = i < this.sv.cleared;
     button(this, cx, fy + 70, Math.min(200, pw - 40), 26, done ? 'RIGIOCA' : 'GIOCA', () => this.play(i), { color: done ? 0x2f6fd0 : 0xe85a1a, size: 8 });
     if (i === 0 && this.sv.cleared === 0) {
@@ -335,7 +337,7 @@ export class LeggendaScene extends Phaser.Scene {
     sfx.fanfare();
     const c = this.add.container(0, 0).setDepth(100);
     c.add(this.add.rectangle(0, H / 2 - 30, W, 60, 0x0d0a1a, 0.9).setOrigin(0));
-    const text = ep >= EPISODES.length - 1 ? 'CAMPIONI DEL MONDO!' : `EPISODIO ${ep + 1} SUPERATO!`;
+    const text = ep >= EPISODES.length - 1 ? 'OLTRE L\'ALBA!' : ep === 9 ? 'CAMPIONI DEL MONDO!' : `EPISODIO ${ep + 1} SUPERATO!`;
     const t = shadowTxt(this, W / 2, H / 2, text, 14, '#ffd23f', '#a0381e', 2);
     c.add(t.c);
     const em = this.add.particles(0, 0, 'confetti', {
@@ -361,7 +363,7 @@ export class LeggendaScene extends Phaser.Scene {
     panel(g, 10, 80, W - 20, 272, 0x1b1d2e, 0x2e3250, 0.94);
     const cols = 2;
     const cw = (W - 36) / cols;
-    const ch = 41;
+    const ch = 36;
     MY_TECHS.forEach((id, i) => {
       const t = TECHS[id];
       const x = 18 + (i % cols) * (cw + 4);

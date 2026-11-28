@@ -1,7 +1,7 @@
 import { Rng } from '../sim/math';
 import type { Role } from '../sim/types';
 import { TECHS, type LeggendaSave, type LgPlayer, type LgTeam } from './leggenda';
-import { CAST, heroTeam, rivalTeam } from './leggendaStory';
+import { CAST, EPISODES, heroTeam, rivalTeam } from './leggendaStory';
 
 /**
  * Squadra delle Stelle (Leggenda del Pallone): i personaggi della storia diventano
@@ -30,7 +30,7 @@ export interface StarCard {
 }
 
 /** Il protagonista e i rivali più forti, i più rari da trovare. */
-const LEGENDS = ['nico', 'dario', 'rafa', 'nacho', 'erik'];
+const LEGENDS = ['nico', 'dario', 'rafa', 'nacho', 'erik', 'leo', 'axel'];
 /** Personaggi con un nome nella storia ma senza tecniche. */
 const NAMED = ['pippo', 'bea', 'edo', 'valli', 'spina', 'even'];
 
@@ -50,7 +50,7 @@ function build(): StarCard[] {
     }
   };
   // i tuoi compagni, nell'ordine in cui arrivano nella storia
-  for (let ep = 0; ep <= 9; ep++) {
+  for (let ep = 0; ep < EPISODES.length; ep++) {
     add(heroTeam(ep), ep);
     add(rivalTeam(ep), ep);
   }
@@ -80,6 +80,10 @@ export const RECRUITS: Record<number, string[]> = {
   7: ['nacho'],
   8: ['erik', 'even'],
   9: ['rafa'],
+  10: ['leo', 'oscar'],
+  11: ['papa'],
+  12: ['sira'],
+  13: ['axel'],
 };
 
 /** Si parte con i Ragazzi del Porto: sette carte per una squadra completa. */

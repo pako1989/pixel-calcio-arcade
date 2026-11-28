@@ -42,6 +42,11 @@ export const CAST: Record<string, Character> = {
   erik: { name: 'Erik Lund', face: F(0, 0xf0eedc, 'ciuffo', 0x8fd8ff), shirt: 0xc8202a },
   even: { name: 'Even Lund', face: F(0, 0xf0eedc, 'ciuffo', 0x8fd8ff, { brows: 'calmo' }), shirt: 0xc8202a },
   rafa: { name: 'Rafa Lima', face: F(3, 0x151515, 'ricci', 0x5a3a20, { band: 0x3fae5a }), shirt: 0xffd23f },
+  leo: { name: 'Leo Zero', face: F(0, 0xbfe4ff, 'corti', 0x8fd8ff), shirt: 0x1c1c26 },
+  kane: { name: 'Direttor Kane', face: F(1, 0x2a2a34, 'brizzolati', 0x3a3a48, { glasses: true, brows: 'calmo' }), shirt: 0x14141c },
+  oscar: { name: 'Oscar Specchio', face: F(2, 0x151515, 'rasati', 0x5a3a20, { brows: 'calmo' }), shirt: 0x1c1c26 },
+  sira: { name: 'Sira Mar', face: F(1, 0x1a3a5a, 'raccolti', 0x3fd0ff, { band: 0x3fd0ff }), shirt: 0x1f9ac8 },
+  axel: { name: 'Axel Kane', face: F(0, 0x1c1c26, 'punte', 0xff5a5a), shirt: 0x14141c },
   telecronista: { name: 'Telecronista', face: F(1, 0x5c3a20, 'corti', 0x5a3a20, { glasses: true, brows: 'calmo' }), shirt: 0x7a1a2a },
 };
 
@@ -78,9 +83,9 @@ const T = (id: string, name: string, short: string, shirt: number, shirt2: numbe
 
 /** La squadra di Nico, che cresce episodio dopo episodio. */
 export function heroTeam(ep: number): LgTeam {
-  const g = Math.min(ep, 9) * 0.22;
+  const g = Math.min(ep, 13) * 0.2;
   const r = (v: number) => Math.round((v + g) * 10) / 10;
-  const nico = P('nico', 'Nico', 10, 'FWD', [r(7), r(6.5), r(7), 4, 4, 2], 110 + ep * 6, ['gabbiano', 'vortice', 'cometa', 'mezzaluna', 'eclissi', 'tempesta', 'aurora']);
+  const nico = P('nico', 'Nico', 10, 'FWD', [r(7), r(6.5), r(7), 4, 4, 2], 110 + ep * 6, ['gabbiano', 'vortice', 'cometa', 'mezzaluna', 'eclissi', 'tempesta', 'aurora', ...(ep >= 10 ? ['nova'] : [])]);
   if (ep === 0) {
     return T('porto', 'Ragazzi del Porto', 'POR', 0xf2f2f2, 0x3fd0ff, 0x1f3a6a, 0x5be37d, 'hoops', [
       extra('gaspare', 'Gaspare', 1, 'GK', 5, 3),
@@ -92,7 +97,7 @@ export function heroTeam(ep: number): LgTeam {
       nico,
     ]);
   }
-  const tommaso = P('tommaso', 'Tommaso', 1, 'GK', [3, 5, 3, 4, 6, r(8)], 110 + ep * 4, ['acciaio', 'rondine']);
+  const tommaso = P('tommaso', 'Tommaso', 1, 'GK', [3, 5, 3, 4, 6, r(8)], 110 + ep * 4, ep >= 10 ? ['acciaio', 'rondine', 'bastione'] : ['acciaio', 'rondine']);
   const gigi = P('gigi', 'Gigi', 5, 'DEF', [4, 5, 4, r(7), r(7.5), 2], 110, ['muraglia']);
   const dario = P('dario', 'Dario', 11, 'MID', [r(7.5), r(8), r(6), 5, 4, 2], 100 + ep * 5, ['passoluna']);
   if (ep <= 4) {
@@ -103,6 +108,19 @@ export function heroTeam(ep: number): LgTeam {
       ep >= 3 ? dario : P('pippo', 'Pippo', 8, 'MID', [5.5, 6, 5, 5, 4, 1], 90),
       P('bea', 'Bea', 7, 'MID', [6.5, 6.5, 5.5, 5, 4, 1], 100),
       extra('ugo', 'Ugo', 9, 'FWD', 6, 2),
+      nico,
+    ]);
+  }
+  if (ep >= 10) {
+    // tre anni dopo: la squadra è cresciuta (e dal ritorno di Leo ha anche lui)
+    const mid2 = ep >= 12 ? P('leo', 'Leo', 8, 'MID', [r(8), r(8), r(7.5), 5, 4, 2], 130, ['zero']) : extra('spina', 'Spina', 8, 'MID', 8.6, 9);
+    return T('italia18', 'Italia U18', 'I18', AZZ, 0xffffff, 0x1f3a6a, 0x3a3a48, 'sash', [
+      tommaso,
+      gigi,
+      extra('valli', 'Valli', 3, 'DEF', 8.6, 6),
+      dario,
+      mid2,
+      P('sandro', 'Sandro', 9, 'FWD', [r(6.5), 5.5, r(8.5), 5, 4, 2], 125, ['tuono']),
       nico,
     ]);
   }
@@ -170,6 +188,32 @@ function rivals(ep: number): LgTeam {
       ]);
     case 8:
       return norway();
+    case 10:
+      return T('zenith', 'Accademia Zenith', 'ZEN', 0x1c1c26, 0xc8d0e0, 0x1c1c26, 0xff5a5a, 'stripes', [
+        P('oscar', 'Oscar Specchio', 1, 'GK', [3, 5, 3, 5, 7, 9], 150, ['specchio']),
+        extra('ze2', 'Quarz', 2, 'DEF', 9.1, 5), extra('ze3', 'Basalto', 3, 'DEF', 9.1, 8),
+        extra('ze6', 'Cobalto', 6, 'MID', 9.1, 3), extra('ze8', 'Argento', 8, 'MID', 9.1, 10),
+        extra('ze9', 'Platino', 9, 'FWD', 9.1, 1), P('leo', 'Leo Zero', 10, 'FWD', [8.8, 7.8, 8.8, 4, 4, 1], 135, ['zero']),
+      ]);
+    case 11:
+      return T('glorie', 'Vecchie Glorie del Porto', 'VGP', 0x1f3a6a, 0xf2f2f2, 0xf2f2f2, 0xffb21e, 'hoops', [
+        extra('vg1', 'Zio Berto', 1, 'GK', 9.4, 6), extra('vg2', 'Capitan Remo', 2, 'DEF', 9.6, 2), extra('vg3', 'Nostromo', 3, 'DEF', 9.6, 11),
+        extra('vg6', 'Gancio', 6, 'MID', 9.6, 4), extra('vg8', 'Sartiame', 8, 'MID', 9.6, 7),
+        extra('vg9', 'Mastro Lino', 9, 'FWD', 9.6, 9), P('papa', 'Papà', 10, 'FWD', [9, 9.2, 9.4, 4, 4, 1], 150, ['ancora']),
+      ]);
+    case 12:
+      return T('sirena', 'Atletico Sirena', 'SIR', 0x1f9ac8, 0xffffff, 0x1f9ac8, 0xffd23f, 'half', [
+        extra('si1', 'Corallo', 1, 'GK', 10, 5), extra('si2', 'Madrepora', 2, 'DEF', 10, 8), extra('si3', 'Murena', 3, 'DEF', 10, 1),
+        extra('si6', 'Perla', 6, 'MID', 10, 12), extra('si8', 'Nautilo', 8, 'MID', 10, 3),
+        extra('si9', 'Delfina', 9, 'FWD', 10, 6), P('sira', 'Sira Mar', 10, 'FWD', [9.5, 8.5, 9, 4, 4, 1], 150, ['canto']),
+      ]);
+    case 13:
+      return T('zenithprime', 'Zenith Prime', 'ZEP', 0x14141c, 0xffd23f, 0x14141c, 0xff5a5a, 'sash', [
+        P('oscar', 'Oscar Specchio', 1, 'GK', [3, 5, 3, 5, 7, 9], 150, ['specchio']),
+        extra('zp2', 'Titanio', 2, 'DEF', 8.5, 4), extra('zp3', 'Cromo', 3, 'DEF', 8.5, 7),
+        extra('zp6', 'Iridio', 6, 'MID', 8.5, 2), extra('zp8', 'Osmio', 8, 'MID', 8.5, 9),
+        extra('zp9', 'Rodio', 9, 'FWD', 8.5, 13), P('axel', 'Axel Kane', 10, 'FWD', [8.7, 8.5, 10, 4, 4, 1], 165, ['vuoto']),
+      ]);
     default:
       return T('brasile', 'Brasile U15', 'BRA', 0xffd23f, 0x3fae5a, 0x2f6fd0, 0x3a3a48, 'plain', [
         P('caio', 'Caio', 1, 'GK', [3, 5, 3, 4, 7, 8.8], 150, ['tucano']),
@@ -525,6 +569,149 @@ export const EPISODES: Episode[] = [
       t('FINE', 'LA LEGGENDA CONTINUA'),
     ],
     lose: [L('rafa', 'Ancora un ballo, Vento?')],
+  },
+  // ---------- secondo arco: OLTRE L'ALBA ----------
+  {
+    title: 'L\'Accademia Zenith',
+    place: 'Accademia Zenith, il campo di cristallo',
+    objective: { kind: 'nonperdere' },
+    minutes: 55,
+    sky: 0x9aa8c8,
+    intro: [
+      t('EPISODIO 11', 'L\'ACCADEMIA ZENITH'),
+      n('Tre mesi dopo il Mondiale. Il Maestro è sparito: ha lasciato solo un biglietto sulla porta del faro, "Torno presto".'),
+      L('bea', 'Nico, è arrivata una lettera per te. Dall\'Accademia Zenith, la scuola dei campioni!'),
+      L('nico', 'Zenith? Quella dove si entra solo con la borsa di studio?'),
+      L('kane', 'Benvenuto, Vento. Io sono il Direttor Kane. Qui il calcio è una scienza: niente istinto, niente cuore. Solo numeri.'),
+      L('dario', 'Nico, non mi piace. Il pallone non è una formula.'),
+      L('kane', 'Allora giocate contro i miei ragazzi. Il capitano è Leo Zero: non ha mai sbagliato un passaggio.'),
+      L('leo', 'Non ho tempo per le leggende. Fatevi vedere.'),
+      L('nico', 'Va bene. Ma se non perdiamo, la scienza dovrà imparare qualcosa dal cuore!'),
+    ],
+    script: [
+      { when: 'start', lines: [L('telecronista', 'Un campo di cristallo, divise nere e argento. L\'Accademia Zenith non sembra giocare: sembra calcolare.')] },
+      { when: 'rivalTech', arg: 'specchio', lines: [L('oscar', 'Ho già visto questo tiro. Mille volte.'), L('tommaso', 'Para come se leggesse nel pensiero!')] },
+      { when: 'rivalTech', arg: 'zero', lines: [L('telecronista', 'Il TIRO ZERO ASSOLUTO! Il pallone si congela a mezz\'aria... e poi esplode!')] },
+      { when: 'half', lines: [L('dario', 'Nico, hanno studiato tutti i nostri movimenti. Dobbiamo fare qualcosa che non c\'è nei loro numeri!')] },
+    ],
+    win: [
+      L('leo', 'Non è possibile. Nessuno... mi aveva mai tolto la palla così.'),
+      L('nico', 'Non è stata la palla, Leo. È stato il divertimento.'),
+      L('kane', 'Interessante. Molto interessante. Ci rivedremo, Vento.'),
+      n('Nel buio degli spalti, qualcuno ha lasciato una busta: "Chiedi a tuo padre cosa successe vent\'anni fa."'),
+    ],
+    lose: [L('kane', 'I numeri non mentono, ragazzo.')],
+  },
+  {
+    title: 'La lettera di Papà',
+    place: 'Portobello, il molo dei pescatori',
+    objective: { kind: 'segna', n: 3 },
+    minutes: 55,
+    sky: 0xffb070,
+    intro: [
+      t('EPISODIO 12', 'LA LETTERA DI PAPÀ'),
+      n('Al tramonto, sul molo, Nico mostra la busta a suo padre.'),
+      L('papa', 'Quindi l\'hai trovata. Vent\'anni fa giocavo nella squadra del Maestro. Corrado Nebbia era il nostro numero 10.'),
+      L('papa', 'Il nostro direttore, quello che spingeva tutti oltre il limite... si chiamava Viktor Kane.', true),
+      L('maestrogiovane', 'Il ginocchio mi fa male, direttore...', true),
+      L('kane', 'Il dolore passa. Le finali no. Giocherai.', true),
+      L('nico', 'È stato lui a fargli giocare quella finale con il ginocchio rotto?!'),
+      L('papa', 'Sì. E oggi cerca nuovi ragazzi da far giocare così. Io non posso fermarlo da solo...'),
+      L('nico', 'Papà, allora giochiamo. Tu e i tuoi vecchi compagni del porto contro di noi: ho bisogno di capire cosa vuol dire giocare col cuore.'),
+      L('papa', 'Sul serio? Le Vecchie Glorie non perdonano, figliolo. Tira fuori tutto.'),
+    ],
+    script: [
+      { when: 'start', lines: [L('telecronista', 'Pescatori contro ragazzini, con il mare come tribuna! Papà Vento in campo con la maglia a righe!')] },
+      { when: 'rivalTech', arg: 'ancora', lines: [L('papa', 'Questo era il tiro che mi insegnò tuo nonno. L\'ancora non si muove!'), L('tommaso', 'Pesa come un\'ancora vera!')] },
+      { when: 'goalFor', lines: [L('papa', 'Così, Nico! Così si gioca!')] },
+      { when: 'half', lines: [L('dario', 'Tuo padre è fortissimo! Ma hai visto come sorride?')] },
+    ],
+    win: [
+      L('papa', 'Sei diventato più forte di me. Ricordati: il pallone ti segue solo se lo ami.'),
+      L('nico', 'Papà, la prossima volta non ti faccio vincere.'),
+      n('Papà apre un baule: dentro c\'è la vecchia maglia del Maestro, con un biglietto: "Per chi finirà la mia partita."'),
+      L('bea', 'Coppa dei Giovani Campioni, semifinale. E c\'è un nome nuovo: Atletico Sirena.'),
+    ],
+    lose: [L('papa', 'Non è finita, figliolo. Il mare ha sempre un\'altra onda.')],
+  },
+  {
+    title: 'Notte di tempesta',
+    place: 'Coppa dei Giovani Campioni, semifinale',
+    objective: { kind: 'vinci' },
+    minutes: 60,
+    sky: 0x3a4a6a,
+    night: true,
+    intro: [
+      t('EPISODIO 13', 'NOTTE DI TEMPESTA'),
+      n('Semifinale della Coppa dei Giovani Campioni. Il cielo sopra lo stadio è nero come l\'inchiostro.'),
+      L('sira', 'Io sono Sira Mar, capitana dell\'Atletico Sirena. Il mio dribbling è una canzone: quando la senti, è già troppo tardi.'),
+      L('nico', 'Ho già sentito un dribbling così, sul mare. Ma non ho paura.'),
+      L('leo', 'Aspetta, Vento.'),
+      L('nico', 'Leo Zero?! Che ci fai qui, senza la divisa della Zenith?'),
+      L('leo', 'Ho lasciato l\'Accademia. Kane mi ha fatto giocare con una caviglia incrinata. Ho capito cosa intendevi.'),
+      L('nico', 'Allora gioca con noi. Dario, fai posto in mezzo al campo!'),
+      L('dario', 'Il mio uno-due ha sempre posto per un amico.'),
+      n('LEO ZERO SI UNISCE ALLA SQUADRA!'),
+    ],
+    script: [
+      { when: 'start', lines: [L('telecronista', 'Tuoni e fulmini, ma in campo nessuno ha paura. Chi arriverà in finale?')] },
+      { when: 'rivalTech', arg: 'canto', lines: [L('telecronista', 'Ha ballato come un\'onda! Il difensore è rimasto a guardare!'), L('gigi', 'Dove... dov\'è finita?!')] },
+      { when: 'goalFor', lines: [L('leo', 'Un gol. Però ne manca ancora uno, Vento.')] },
+      { when: 'half', lines: [L('sira', 'Siete bravi, ma stasera la tempesta è dalla mia parte!'), L('nico', 'Allora la attraverseremo!')] },
+    ],
+    win: [
+      L('sira', 'Che partita. Il mio canto non ha fermato il vento... per questa volta.'),
+      L('leo', 'Finale. Contro Zenith Prime.'),
+      L('nico', 'Contro Kane.'),
+      n('Quella sera, nello spogliatoio, Papà consegna a Nico la maglia numero 10 del Maestro.'),
+    ],
+    lose: [L('sira', 'La tempesta è passata. Ma tu sei rimasto a terra.')],
+  },
+  {
+    title: 'L\'ultimo fischio',
+    place: 'Finale della Coppa dei Giovani Campioni',
+    objective: { kind: 'vinci' },
+    minutes: 66,
+    sky: 0xff8a5a,
+    intro: [
+      t('EPISODIO 14', 'L\'ULTIMO FISCHIO'),
+      n('Lo stadio è pieno. Dalla tribuna d\'onore, un uomo con la sciarpa grigia guarda in silenzio.'),
+      L('nico', 'Maestro!'),
+      L('maestro', 'Sono tornato per l\'ultimo fischio, Nico. Quello che venti anni fa non ho sentito.'),
+      L('kane', 'Corrado. Ti ricordi come finì l\'ultima volta? Il ginocchio, il silenzio...'),
+      L('maestro', 'Mi ricordo anche chi mi disse di continuare. Oggi è diverso. Oggi, in campo, ci sono ragazzi liberi.'),
+      L('axel', 'Mio padre dice che il talento va sfruttato. Io sono la prova. Sono Axel Kane, e il mio TIRO DEL VUOTO non lo ferma nessuno.'),
+      L('nico', 'Mi basta una cosa, Axel: giocare. Ragazzi... è la nostra ultima partita insieme!'),
+      L('dario', 'Il vento, la luna, il tuono... e tutti gli altri.'),
+      L('leo', 'E lo zero che diventa tutto.'),
+    ],
+    script: [
+      { when: 'start', lines: [L('telecronista', 'Eccoci alla finale! Da una parte il cuore del Portobello, dall\'altra la scienza dell\'Accademia Zenith!')] },
+      { when: 'rivalTech', arg: 'vuoto', lines: [L('telecronista', 'IL TIRO DEL VUOTO! Il pallone è sparito... è già in porta?!'), L('tommaso', 'Non ho nemmeno visto da dove è passato!')] },
+      { when: 'rivalTech', arg: 'specchio', lines: [L('oscar', 'Ogni tiro ha un riflesso. Il tuo è il più evidente.')] },
+      { when: 'half', lines: [L('maestro', 'Non cercate di battere i loro numeri. Superateli. Suonate un\'altra musica.')] },
+      {
+        when: 'late',
+        arg: 55,
+        unlock: 'nova',
+        refill: 'nico',
+        lines: [
+          L('maestro', 'Nico. L\'alba è solo l\'inizio. Dopo l\'alba arriva un\'altra cosa: una stella intera.'),
+          L('nico', 'Il vento che accende una stella... TIRO NOVA!'),
+          n('NUOVA TECNICA: TIRO NOVA! L\'energia di Nico torna al massimo.'),
+        ],
+      },
+    ],
+    win: [
+      L('axel', 'Mio padre ha sempre detto che le leggende non esistono. Mi sbagliavo.'),
+      L('kane', 'Il... tabellone dice che abbiamo perso. I numeri hanno sbagliato.'),
+      L('maestro', 'I numeri non sbagliano, Viktor. Dimenticano solo di contare la gioia.'),
+      n('IL PORTOBELLO È CAMPIONE DEI GIOVANI CAMPIONI!'),
+      L('nico', 'Grazie, Maestro. Per tutto.'),
+      L('maestro', 'Adesso il fischio l\'ho sentito. È stato bellissimo.'),
+      t('FINE DEL SECONDO ARCO', 'OLTRE L\'ALBA'),
+    ],
+    lose: [L('axel', 'Il vuoto vince sempre.')],
   },
 ];
 

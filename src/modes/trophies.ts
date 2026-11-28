@@ -59,6 +59,7 @@ export const TROPHIES: TrophyDef[] = [
   T('leggenda', 1, 'Ragazzo prodigio', 'Leggenda: 1° episodio', 40),
   T('leggenda', 5, 'Campione regionale', 'Leggenda: 5° episodio', 120),
   T('leggenda', 10, 'Leggenda del Pallone', 'Vinci i Mondiali giovanili', 400),
+  T('leggenda', 14, 'Oltre l\'alba', 'Completa il secondo arco di Leggenda', 500),
   T('sopravvivenza', 3, 'Sopravvissuto', 'Sopravvivenza: supera 3 round', 60),
   T('sopravvivenza', 5, 'Cacciatore di Boss', 'Sopravvivenza: batti un Boss', 150),
   T('sopravvivenza', 10, 'Re della Scala', 'Sopravvivenza: supera 10 round', 350),
