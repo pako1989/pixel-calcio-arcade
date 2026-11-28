@@ -331,6 +331,7 @@ export class TournamentScene extends Phaser.Scene {
         goldenGoal: false,
         // pareggio: supplementari e poi rigori
         extraTime: true,
+        halftime: s.halftime !== false,
         humanTeam: 0,
       },
     };

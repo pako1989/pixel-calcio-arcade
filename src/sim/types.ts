@@ -149,6 +149,8 @@ export interface MatchConfig {
    * niente cambi, i compagni sono della CPU e PASSA senza palla chiede il pallone.
    */
   lockHuman?: number;
+  /** Intervallo a metà partita con cambi, modulo e tattica (e fatica che cala la velocità). */
+  halftime?: boolean;
   /** Falli, cartellini e infortuni. */
   fouls?: boolean;
   /** Meteo (predefinito: sereno). */

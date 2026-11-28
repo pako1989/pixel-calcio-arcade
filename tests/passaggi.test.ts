@@ -17,6 +17,8 @@ const NONE = { mx: 0, my: 0, shoot: false, pass: false, sprint: false };
 function setup() {
   const sim = new MatchSim(cfg());
   for (let i = 0; i < 200; i++) sim.update(1 / 60, NONE);
+  // controllo fisso sul difensore: il test non dipende da chi ha scelto il cambio automatico
+  sim.setHuman(1);
   const h = sim.human!;
   h.x = 300;
   h.y = sim.H / 2;
@@ -84,8 +86,10 @@ describe('passaggi in stile Tsubasa/FIFA', () => {
   });
 
   it('la catena si azzera se la palla passa agli avversari', () => {
-    const { sim } = setup();
+    const { sim, h } = setup();
     sim.chain[0] = 3;
+    // il nostro giocatore si allontana: la palla libera è dell'avversario
+    h.x -= 40;
     const opp = sim.teams[1][2];
     opp.x = sim.ball.x + 3;
     opp.y = sim.ball.y;

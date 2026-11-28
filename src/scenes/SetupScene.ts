@@ -225,6 +225,7 @@ export class SetupScene extends Phaser.Scene {
         powerUps: this.pu,
         formation: this.formation,
         goldenGoal: true,
+        halftime: load().settings.halftime !== false,
         humanTeam: 0,
         weather,
         night,

@@ -47,7 +47,7 @@ export class SettingsScene extends Phaser.Scene {
     let y = py + 58;
     for (const [k, label, test] of rows) {
       this.slider(px + 24, y, label, k, test);
-      y += 34;
+      y += 30;
     }
 
     const s = load().settings;
@@ -68,7 +68,7 @@ export class SettingsScene extends Phaser.Scene {
       vb.push(b);
     });
     const note = txt(this, W / 2, y + 16, 'Voce italiana non trovata su questo dispositivo', 6, '#ff9a5a').setVisible(s.voice && !commentary.available);
-    y += 38;
+    y += 34;
 
     txt(this, px + 24, y, 'TUTTO L\'AUDIO', 6, '#d8dcf0').setOrigin(0, 0.5);
     const mb: Button[] = [];
@@ -82,14 +82,14 @@ export class SettingsScene extends Phaser.Scene {
       b.setSelected(i === 0 ? !s.muted : s.muted);
       mb.push(b);
     });
-    y += 32;
+    y += 28;
 
     // regola di gioco: falli, cartellini e infortuni; oppure solo i rigori per le scivolate da dietro in area
     txt(this, px + 24, y, 'FALLI E RIGORI', 6, '#d8dcf0').setOrigin(0, 0.5);
     const fb: Button[] = [];
     const FOUL_NOTES = [
       'Gialli, rossi (30 s fuori), infortuni e rigori in area',
-      'Solo rigori: scivolata da dietro in area = dal dischetto',
+      'Solo rigori: fallo in area = tiro dal dischetto',
       'Niente falli e niente rigori in partita',
     ];
     const foulSel = () => (s.fouls ? 0 : s.penaltyKicks !== false ? 1 : 2);
@@ -106,7 +106,7 @@ export class SettingsScene extends Phaser.Scene {
       b.setSelected(i === foulSel());
       fb.push(b);
     });
-    y += 36;
+    y += 32;
 
     // supermosse stile anime
     txt(this, px + 24, y, 'SUPERMOSSE', 6, '#d8dcf0').setOrigin(0, 0.5);
@@ -120,6 +120,20 @@ export class SettingsScene extends Phaser.Scene {
       sb.push(b);
     });
     txt(this, W / 2, y + 15, 'Tasto SUPER: tiri speciali, combo e parate a barra piena', 6, '#8a8fb0');
+    y += 32;
+
+    // intervallo con cambi
+    txt(this, px + 24, y, 'INTERVALLO', 6, '#d8dcf0').setOrigin(0, 0.5);
+    const hb: Button[] = [];
+    (['SÌ', 'NO'] as const).forEach((l, i) => {
+      const b = button(this, px + 196 + i * 62, y, 56, 20, l, () => {
+        save((d) => (d.settings.halftime = i === 0));
+        hb.forEach((x, j) => x.setSelected(j === i));
+      }, { size: 6 });
+      b.setSelected(i === 0 ? s.halftime !== false : s.halftime === false);
+      hb.push(b);
+    });
+    txt(this, W / 2, y + 15, 'A metà partita: cambi, modulo e tattica', 6, '#8a8fb0');
 
     button(this, W / 2, py + ph - 22, 140, 26, 'FATTO', () => this.scene.stop(), { color: 0x2f8be0 });
   }

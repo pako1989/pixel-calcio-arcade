@@ -39,6 +39,8 @@ export interface SaveData {
     specials?: boolean;
     /** Calci di rigore in partita per le scivolate da dietro in area (attivi di serie). */
     penaltyKicks?: boolean;
+    /** Intervallo con cambi a metà partita (attivo di serie). */
+    halftime?: boolean;
     /** Modulo tattico in Partita veloce. */
     formation?: FormationId;
   };

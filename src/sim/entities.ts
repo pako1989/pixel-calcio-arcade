@@ -51,12 +51,14 @@ export class Player {
   spKind = '';
   /** Finestra per il tiro combinato dopo un passaggio o dribbling speciale. */
   comboT = 0;
+  /** Condizione fisica (0..1): cala con la corsa nelle partite con intervallo e si recupera con i cambi. */
+  fitness = 1;
 
   constructor(
     public readonly id: number,
     public readonly team: 0 | 1,
     public readonly idx: number,
-    public readonly def: PlayerDef,
+    public def: PlayerDef,
   ) {}
 
   get role(): Role {
@@ -142,8 +144,9 @@ export type SimEvent =
   | { type: 'tackle'; x: number; y: number; won: boolean; team: 0 | 1; idx?: number }
   | { type: 'slide'; x: number; y: number }
   | { type: 'steal'; x: number; y: number; team: 0 | 1; idx?: number }
-  | { type: 'whistle'; kind: 'start' | 'end' | 'kickoff' | 'golden' | 'extra' }
+  | { type: 'whistle'; kind: 'start' | 'end' | 'kickoff' | 'golden' | 'half' | 'extra' }
   | { type: 'penalty'; team: 0 | 1; taker: string; keeper: string; x: number; y: number; interactive: boolean }
+  | { type: 'sub'; team: 0 | 1; idx: number; inName: string; outName: string }
   | { type: 'powerup'; kind: PowerUpKind; team: 0 | 1; x: number; y: number }
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }
   | { type: 'superReady'; team: 0 | 1 }

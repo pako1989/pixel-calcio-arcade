@@ -8,6 +8,7 @@ import { backToMenu, backToScene } from './demo';
 import { MODES } from '../modes/modes';
 import { SPECIALS, pickSpecial, specialsOf } from '../sim/specials';
 import { PASS_LOB_T, PASS_THROUGH_T } from '../sim/match';
+import { HalftimeUi } from './halftimeUi';
 
 interface TouchButton {
   id: 'shoot' | 'pass' | 'sprint' | 'special';
@@ -36,6 +37,7 @@ export class HudScene extends Phaser.Scene {
   private touch = true;
   private msgQueue: Phaser.GameObjects.Container[] = [];
   private pauseLayer?: Phaser.GameObjects.Container;
+  private halftime?: HalftimeUi;
   private pauseBtn!: Button;
   private superBtn?: TouchButton;
   private lastScore = '';
@@ -54,6 +56,7 @@ export class HudScene extends Phaser.Scene {
     this.joy.pointer = null;
     this.msgQueue = [];
     this.pauseLayer = undefined;
+    this.halftime = undefined;
     this.input.addPointer(3);
     this.g = this.add.graphics();
     this.ctrlG = this.add.graphics();
@@ -138,12 +141,29 @@ export class HudScene extends Phaser.Scene {
 
     // pausa automatica se l'app va in background
     const onHide = () => {
-      if (document.hidden && !this.pauseLayer && this.scene.isActive()) this.togglePause(true);
+      if (document.hidden && !this.pauseLayer && !this.halftime && this.scene.isActive()) this.togglePause(true);
     };
     document.addEventListener('visibilitychange', onHide);
     this.events.once('shutdown', () => document.removeEventListener('visibilitychange', onHide));
 
     if (!load().settings.tutorialSeen) this.showHelp();
+  }
+
+  /** Mostra la schermata dell'intervallo quando la simulazione si ferma a metà partita. */
+  private syncHalftime() {
+    const sim = this.match.sim;
+    if (sim.phase === 'halftime' && !this.halftime) {
+      this.match.ctrl.reset();
+      for (const b of this.buttons) b.pointer = null;
+      this.joy.pointer = null;
+      this.ctrlG.clear();
+      this.help?.destroy();
+      this.help = undefined;
+      this.halftime = new HalftimeUi(this, sim, () => sim.resumeSecondHalf());
+    } else if (sim.phase !== 'halftime' && this.halftime) {
+      this.halftime.destroy();
+      this.halftime = undefined;
+    }
   }
 
   private layout() {
@@ -181,7 +201,7 @@ export class HudScene extends Phaser.Scene {
       this.match.endReplay();
       return;
     }
-    if (this.pauseLayer || !this.touch) return;
+    if (this.pauseLayer || this.halftime || !this.touch) return;
     const W = this.scale.width;
     // pulsanti
     let best: TouchButton | null = null;
@@ -261,6 +281,7 @@ export class HudScene extends Phaser.Scene {
     const cfg = this.match.launch.config;
     const g = this.g;
     g.clear();
+    this.syncHalftime();
     // tabellone
     panel(g, W / 2 - 92, 4, 184, 22, 0x1b1d2e, 0x2e3250, 0.92);
     g.fillStyle(cfg.home.colors.shirt).fillRect(W / 2 - 88, 8, 6, 14);
@@ -336,7 +357,7 @@ export class HudScene extends Phaser.Scene {
     // controlli touch
     const cg = this.ctrlG;
     cg.clear();
-    if (this.touch && !this.pauseLayer) {
+    if (this.touch && !this.pauseLayer && !this.halftime) {
       const h = sim.human;
       const owns = !!h && sim.ball.owner === h;
       const volley = !owns && h ? sim.canVolley(h) : null;
@@ -474,7 +495,7 @@ export class HudScene extends Phaser.Scene {
 
   togglePause(on: boolean) {
     if (on === !!this.pauseLayer) return;
-    if (this.match.finished) return;
+    if (this.match.finished || this.halftime) return;
     if (on) {
       this.help?.destroy();
       this.help = undefined;
