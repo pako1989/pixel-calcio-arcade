@@ -219,13 +219,16 @@ export class MatchScene extends Phaser.Scene {
     const H = sim.H;
 
     // --- grafica del campo ---
-    const pitchKey = `pitch_${pitch.id}`;
+    // la chiave include le misure: il campo grande (11 contro 11) ha lo stesso id del piccolo
+    // e senza questo riusava la texture del 5 contro 5, disallineata da linee, camera e palla
+    const sizeTag = `${pitch.width}x${pitch.height}_${pitch.goalWidth}`;
+    const pitchKey = `pitch_${pitch.id}_${sizeTag}`;
     if (!this.textures.exists(pitchKey)) drawPitch(this, pitch, pitchKey);
     this.add.image(-MARGIN, -MARGIN, pitchKey).setOrigin(0).setDepth(0);
     drawCrowd(this, pitch, cfg.home.colors.shirt, cfg.away.colors.shirt, 'crowdA', 'crowdB');
     this.crowdA = this.add.image(-MARGIN, -MARGIN, 'crowdA').setOrigin(0).setDepth(1);
     this.crowdB = this.add.image(-MARGIN, -MARGIN, 'crowdB').setOrigin(0).setDepth(1).setVisible(false);
-    const gk = `goal_${pitch.id}`;
+    const gk = `goal_${pitch.id}_${sizeTag}`;
     if (!this.textures.exists(gk + '_b')) drawGoals(this, pitch, gk + '_b', gk + '_f');
     const gy = sim.goalTop - BAR_H - 2;
     this.add.image(-GOAL_DEPTH - 2, gy, gk + '_b').setOrigin(0).setDepth(2);
@@ -1745,6 +1748,21 @@ export class MatchScene extends Phaser.Scene {
     this.camPt.x += (tx - this.camPt.x) * k;
     this.camPt.y += (ty - this.camPt.y) * k;
     cam.centerOn(this.camPt.x, this.camPt.y);
+    this.fitOverlays();
+  }
+
+  /**
+   * Gli overlay fissi sullo schermo (vignetta, notte) sono comunque scalati dallo zoom della camera:
+   * con zoom < 1 (11 contro 11) restavano più piccoli dello schermo e formavano un riquadro scuro.
+   */
+  private fitOverlays() {
+    const z = this.cameras.main.zoom;
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const ox = w / 2 - w / 2 / z;
+    const oy = h / 2 - h / 2 / z;
+    this.vignette?.setScale(1 / z).setPosition(ox, oy);
+    this.nightOverlay?.setScale(1 / z).setPosition(ox, oy);
   }
 
   private updateCrowd(dt: number) {
