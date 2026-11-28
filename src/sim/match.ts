@@ -1,9 +1,10 @@
 import { Ball, Player, type PowerUp, type PowerUpKind, type SimEvent } from './entities';
-import { clamp, dist, len, norm, Rng, turnTowards, type Vec } from './math';
+import { clamp, dist, distToSegment, len, norm, Rng, turnTowards, type Vec } from './math';
 import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef, Tactic } from './types';
 import { aiThink, aiGoalkeeper, chooseHumanPassTarget, decideAiActions } from './ai';
 import { applyWeather } from '../data/weather';
 import { tryStoneHand, updateSpecials, useSpecial, specialsOf, SPECIALS } from './specials';
+import { duelRatio, paceOf, passAimErr, passPowerMul, shotAimErr, shotPowerMul } from './abilita';
 
 export const GOAL_DEPTH = 22;
 export const CROSSBAR = 28;
@@ -576,40 +577,84 @@ export class MatchSim {
     this.events.push({ type: 'switch', id: this.teams[this.humanTeam][idx].id });
   }
 
-  private switchToBest(force: boolean) {
-    if (this.humanTeam === null) return;
+  /**
+   * Quanto è adatto un compagno a prendere il controllo (più basso = meglio).
+   * Se la palla ce l'hanno gli avversari non conta chi è più vicino alla palla, ma chi
+   * può tagliare la strada a chi la porta verso la nostra porta, meglio se sta dalla
+   * parte della porta (goal-side). Con la palla libera conta dove sta andando la palla.
+   */
+  switchScore(p: Player): number {
     const b = this.ball;
-    const team = this.teams[this.humanTeam];
+    const team = p.team;
+    const carrier = b.owner && b.owner.team !== team ? b.owner : null;
+    if (carrier) {
+      const gx = this.ownGoalX(team);
+      const g = norm(gx - carrier.x, this.H / 2 - carrier.y);
+      let dx = g.x;
+      let dy = g.y;
+      const sp = len(carrier.vx, carrier.vy);
+      if (sp > 30) {
+        dx = dx * 0.5 + (carrier.vx / sp) * 0.5;
+        dy = dy * 0.5 + (carrier.vy / sp) * 0.5;
+        const l = len(dx, dy) || 1;
+        dx /= l;
+        dy /= l;
+      }
+      const cut = { x: carrier.x + dx * 60, y: carrier.y + dy * 60 };
+      let s = dist(p, cut);
+      const goalSide = (carrier.x - p.x) * this.dirOf(team); // > 0: tra la palla e la nostra porta
+      if (goalSide > 4) s -= 45;
+      else if (goalSide < -14) s += 50;
+      if (p.state === 'stun' || p.state === 'slide') s += 80;
+      return s;
+    }
+    const ahead = { x: b.x + b.vx * 0.3, y: b.y + b.vy * 0.3 };
+    let s = dist(p, ahead);
+    if (p.state === 'stun') s += 80;
+    return s;
+  }
+
+  /** Il compagno a cui passerebbe il controllo (escluso `exclude`), o -1. */
+  private bestSwitch(exclude: number): number {
+    if (this.humanTeam === null) return -1;
     let best = -1;
-    let bestD = Infinity;
-    for (const p of team) {
-      if (p.isGK || p.out > 0) continue;
-      // punta un po' davanti alla palla
-      const d = dist(p, { x: b.x + b.vx * 0.25, y: b.y + b.vy * 0.25 });
-      if (d < bestD) {
-        bestD = d;
+    let bs = Infinity;
+    for (const p of this.teams[this.humanTeam]) {
+      if (p.isGK || p.out > 0 || p.idx === exclude) continue;
+      const s = this.switchScore(p);
+      if (s < bs) {
+        bs = s;
         best = p.idx;
       }
     }
-    if (best < 0) return;
+    return best;
+  }
+
+  /** Chi prenderebbe il controllo premendo PASSA in difesa (segnalino sul campo), o null. */
+  get switchHint(): Player | null {
+    if (this.humanTeam === null || this.locked || this.phase !== 'play') return null;
+    if (this.teamHasBall(this.humanTeam)) return null;
+    const team = this.teams[this.humanTeam];
+    const idx = this.bestSwitch(this.humanIdx);
+    if (idx < 0) return null;
+    const cand = team[idx];
+    return this.switchScore(cand) + 20 < this.switchScore(team[this.humanIdx]) ? cand : null;
+  }
+
+  private switchToBest(force: boolean) {
+    if (this.humanTeam === null) return;
+    const team = this.teams[this.humanTeam];
     if (team[this.humanIdx].out > 0) force = false;
-    if (force && best === this.humanIdx) {
-      // passa al secondo più vicino
-      let second = -1;
-      let sd = Infinity;
-      for (const p of team) {
-        if (p.isGK || p.idx === this.humanIdx || p.out > 0) continue;
-        const d = dist(p, b);
-        if (d < sd) {
-          sd = d;
-          second = p.idx;
-        }
-      }
-      if (second >= 0) this.setHuman(second);
+    if (force) {
+      // PASSA in difesa: sempre a un altro compagno, il più adatto
+      const other = this.bestSwitch(this.humanIdx);
+      if (other >= 0) this.setHuman(other);
       return;
     }
+    const best = this.bestSwitch(-1);
+    if (best < 0 || best === this.humanIdx) return;
     const cur = team[this.humanIdx];
-    if (force || dist(cur, b) - bestD > 40) this.setHuman(best);
+    if (cur.out > 0 || this.switchScore(cur) - this.switchScore(team[best]) > 40) this.setHuman(best);
   }
 
   private autoSwitch(dt: number) {
@@ -637,7 +682,7 @@ export class MatchSim {
   startSlide(p: Player, dir: number) {
     p.setState('slide', 0);
     p.facing = dir;
-    const sp = 230 * p.def.stats.speed;
+    const sp = 230 * paceOf(p.def.stats);
     p.vx = Math.cos(dir) * sp;
     p.vy = Math.sin(dir) * sp;
     p.tackleCd = 0.9;
@@ -699,8 +744,7 @@ export class MatchSim {
       const c = Math.cos(shootDir);
       if (d < 1.05 && (gx - p.x) * c > 0) {
         const crossY = p.y + Math.tan(shootDir) * (gx - p.x);
-        const goalHalf = this.pitch.goalWidth / 2 - 9;
-        const ty = clamp(crossY, this.H / 2 - goalHalf, this.H / 2 + goalHalf);
+        const ty = this.openGoalY(p, crossY);
         const target = Math.atan2(ty - p.y, gx - p.x);
         shootDir += Math.atan2(Math.sin(target - shootDir), Math.cos(target - shootDir)) * 0.8;
       }
@@ -712,11 +756,10 @@ export class MatchSim {
     }
     const fire = this.fireShot[team] || !!this.cfg.mods?.alwaysFire;
     this.fireShot[team] = !!this.cfg.mods?.alwaysFire;
-    const st = p.def.stats.shot;
-    const err = ((1 - power * 0.4) * 0.04 + (1.15 - st) * 0.06 + (this.isHuman(p) ? 0 : this.diff[team].shotErr * 0.7)) * (superShot ? 0.25 : 1);
+    const err = ((1 - power * 0.4) * 0.04 + shotAimErr(p.def.stats) * 0.75 + (this.isHuman(p) ? 0 : this.diff[team].shotErr * 0.7)) * (superShot ? 0.25 : 1);
     shootDir += this.rng.range(-err, err);
     const mult = kind === 'rovesciata' ? 1.24 : 1.15;
-    let speed = (300 + power * 270) * (0.88 + st * 0.18) * mult;
+    let speed = (300 + power * 270) * (shotPowerMul(p.def.stats) + 0.03) * mult;
     let vz = kind === 'rovesciata' ? clamp(72 - this.ball.z * 0.8, 28, 90) : clamp(56 - this.ball.z * 1.1, 18, 72);
     let spin = 0;
     if (fire) speed *= 1.26;
@@ -754,7 +797,49 @@ export class MatchSim {
     return kind;
   }
 
-  /** Tiro: `power` 0..1. `assist` corregge leggermente la mira verso la porta. */
+  /**
+   * Tiro intelligente: tra i punti della porta nella zona voluta (metà alta, metà bassa
+   * o tutta se si mira al centro) sceglie quello con la linea di tiro più libera da
+   * avversari e portiere; a parità vince il punto più vicino a dove si voleva mirare.
+   */
+  openGoalY(p: Player, wantY: number): number {
+    const team = p.team;
+    const gx = this.oppGoalX(team);
+    const mid = this.H / 2;
+    const half = this.pitch.goalWidth / 2 - 9;
+    const top = mid - half;
+    const bottom = mid + half;
+    const desired = clamp(wantY, top, bottom);
+    let lo = top;
+    let hi = bottom;
+    if (desired < mid - half * 0.3) hi = mid - 4;
+    else if (desired > mid + half * 0.3) lo = mid + 4;
+    const span = Math.max(hi - lo, 1);
+    const from = { x: this.ball.x, y: this.ball.y };
+    const opp = this.teams[team === 0 ? 1 : 0];
+    let best = desired;
+    let bs = -Infinity;
+    const N = 9;
+    for (let i = 0; i < N; i++) {
+      const ty = lo + (span * i) / (N - 1);
+      const to = { x: gx, y: ty };
+      let clear = 40;
+      for (const o of opp) {
+        if (o.out > 0) continue;
+        // il portiere copre di più (allunga le braccia)
+        const r = o.isGK ? 13 : 6;
+        clear = Math.min(clear, distToSegment(o, from, to) - r);
+      }
+      const s = clear + (1 - Math.abs(ty - desired) / span) * 12;
+      if (s > bs) {
+        bs = s;
+        best = ty;
+      }
+    }
+    return best;
+  }
+
+  /** Tiro: `power` 0..1. `assist` porta la mira nello specchio, verso l'angolo più libero. */
   shoot(p: Player, dir: number, power: number, assist: boolean) {
     const team = p.team;
     const gx = this.oppGoalX(team);
@@ -772,18 +857,17 @@ export class MatchSim {
       const d = Math.abs(Math.atan2(Math.sin(dir - toGoal), Math.cos(dir - toGoal)));
       const c = Math.cos(dir);
       if (d < 0.9 && (gx - p.x) * c > 0) {
-        // dove attraverserebbe la linea di porta? la mira viene portata dentro lo specchio
+        // dove attraverserebbe la linea di porta? la mira va nella parte dello specchio
+        // indicata dal joystick, scegliendo l'angolo più libero da difensori e portiere
         const crossY = p.y + Math.tan(dir) * (gx - p.x);
-        const goalHalf = this.pitch.goalWidth / 2 - 9;
-        const ty = clamp(crossY, this.H / 2 - goalHalf, this.H / 2 + goalHalf);
+        const ty = this.openGoalY(p, crossY);
         const target = Math.atan2(ty - p.y, gx - p.x);
         dir += Math.atan2(Math.sin(target - dir), Math.cos(target - dir)) * 0.75;
       }
     }
-    const st = p.def.stats.shot;
-    const err = (1 - power * 0.4) * 0.05 + (1.15 - st) * 0.08 + (this.isHuman(p) ? 0 : this.diff[team].shotErr);
+    const err = (1 - power * 0.4) * 0.05 + shotAimErr(p.def.stats) + (this.isHuman(p) ? 0 : this.diff[team].shotErr);
     dir += this.rng.range(-err, err) * (superShot ? 0.2 : 1);
-    let speed = (250 + power * 330) * (0.85 + st * 0.18);
+    let speed = (250 + power * 330) * shotPowerMul(p.def.stats);
     let vz = 20 + 105 * power * power + this.rng.range(0, 15);
     let spin = 0;
     // tiro a catena: dopo una bella serie di passaggi il tiro è più forte e preciso
@@ -837,8 +921,8 @@ export class MatchSim {
     const tx = target.x + target.vx * lead;
     const ty = target.y + target.vy * lead;
     const d = len(tx - p.x, ty - p.y);
-    const speed = clamp(140 + d * 1.15, 190, 470) * (0.9 + p.def.stats.pass * 0.12) * Math.sqrt(this.pitch.ballFriction);
-    const err = (1.15 - p.def.stats.pass) * 0.06;
+    const speed = clamp(140 + d * 1.15, 190, 470) * passPowerMul(p.def.stats) * Math.sqrt(this.pitch.ballFriction);
+    const err = passAimErr(p.def.stats);
     const dir = Math.atan2(ty - p.y, tx - p.x) + this.rng.range(-err, err);
     const lob = d > 210 ? 95 : 0;
     this.kickBall(p, dir, lob ? speed * 0.85 : speed, lob, 0);
@@ -883,10 +967,10 @@ export class MatchSim {
     const ty = clamp(target.y + target.vy * lead, 10, this.H - 10);
     const d = len(tx - p.x, ty - p.y);
     const q = p.def.stats.pass;
-    const err = (1.2 - q) * (0.05 + d / 2600);
+    const err = (passAimErr(p.def.stats) + 0.012) * (0.9 + d / 420);
     const dir = Math.atan2(ty - p.y, tx - p.x) + this.rng.range(-err, err);
     if (mode === 'filtrante') {
-      const speed = clamp(190 + d * 1.35, 250, 470) * (0.9 + q * 0.12) * Math.sqrt(this.pitch.ballFriction);
+      const speed = clamp(190 + d * 1.35, 250, 470) * passPowerMul(p.def.stats) * Math.sqrt(this.pitch.ballFriction);
       this.kickBall(p, dir, speed, 0, 0);
     } else {
       // arco alto: atterra vicino al compagno dopo circa mezzo secondo
@@ -990,7 +1074,7 @@ export class MatchSim {
   // ---------- movimento giocatori ----------
   maxSpeed(p: Player): number {
     const opp = p.team === 0 ? 1 : 0;
-    let s = 128 * p.def.stats.speed * this.pitch.playerSpeed;
+    let s = 128 * paceOf(p.def.stats) * this.pitch.playerSpeed;
     if (!this.isHuman(p)) s *= this.diff[p.team].speed;
     if (p.sprinting) s *= 1.32;
     if (this.ball.owner === p) s *= 0.92;
@@ -1139,7 +1223,7 @@ export class MatchSim {
     if (owner && owner.team !== p.team && !(owner.isGK && this.inOwnBox(owner.team, owner.x, owner.y))) {
       if (owner.spKind === 'tornado' && owner.spT > 0) return;
       if (dist(p, b) < 11 || dist(p, owner) < 12) {
-        const ratio = p.def.stats.tackle / (owner.def.stats.control + 0.2);
+        const ratio = duelRatio(p.def.stats, owner.def.stats) * 0.82;
         const won = this.rng.chance(clamp(0.55 + ratio * 0.3, 0.4, 0.95));
         this.events.push({ type: 'tackle', x: b.x, y: b.y, won, team: p.team, idx: p.idx });
         if (!won && this.cfg.fouls && dist(p, owner) < 12) {
@@ -1200,7 +1284,7 @@ export class MatchSim {
       const d = dist(p, b);
       if (d > 10) continue;
       const rate = this.isHuman(p) ? 1.6 : 1.1 * this.diff[p.team].steal;
-      const chance = rate * (p.def.stats.tackle / owner.def.stats.control) * dt * 2.2;
+      const chance = rate * duelRatio(p.def.stats, owner.def.stats) * dt * 2.2;
       if (this.rng.chance(chance)) {
         const out = this.dirOf(p.team);
         const deep = this.toTeamX(p.team, b.x) < 0.22;
@@ -1720,6 +1804,16 @@ export class MatchSim {
         return;
       }
       let p = clamp(1.05 - (s - 200) / 900, 0.35, 0.95) * kp;
+      // da lontano il portiere vede partire il tiro; un tiro forte da vicino è quasi imparabile
+      const from = b.shotFrom;
+      if (from) {
+        const shotD = len(from.x - this.ownGoalX(gk.team), from.y - this.H / 2);
+        p *= clamp(0.86 + shotD / 1100, 0.88, 1.14);
+        if (shotD < 140 && s > 360) p *= 0.86;
+      }
+      // tiro sul palo: anche se ci arriva con la punta delle dita, è più difficile tenerlo fuori
+      const corner = Math.abs(b.y - this.H / 2) / (this.pitch.goalWidth / 2);
+      if (corner > 0.62) p *= 1 - Math.min(0.2, (corner - 0.62) * 0.55);
       if (b.superShot) p *= 0.45;
       if (b.special?.id === 'gemello') p *= 0.7;
       if (b.fire) p *= 0.6;

@@ -75,6 +75,8 @@ export class MatchScene extends Phaser.Scene {
   private ballGhost!: Phaser.GameObjects.Sprite;
   private ballShadow!: Phaser.GameObjects.Image;
   private marker!: Phaser.GameObjects.Image;
+  /** Segnalino del prossimo compagno da controllare (PASSA in difesa). */
+  private hintMarker!: Phaser.GameObjects.Image;
   private ring!: Phaser.GameObjects.Image;
   private passRing!: Phaser.GameObjects.Image;
   private volleyRing!: Phaser.GameObjects.Image;
@@ -284,6 +286,7 @@ export class MatchScene extends Phaser.Scene {
     this.passRing = this.add.image(0, 0, 'ring').setTint(0xffffff).setAlpha(0.45).setDepth(3.5);
     this.volleyRing = this.add.image(0, 0, 'ring').setTint(0xffd23f).setAlpha(0.85).setDepth(10.5);
     this.marker = this.add.image(0, 0, 'marker').setTint(0xffd23f).setDepth(26);
+    this.hintMarker = this.add.image(0, 0, 'marker').setTint(0xffffff).setAlpha(0.6).setScale(0.75).setDepth(26).setVisible(false);
     this.chargeG = this.add.graphics().setDepth(27);
     this.markG = this.add.graphics().setDepth(26);
     const hasHuman = cfg.humanTeam !== null;
@@ -733,7 +736,7 @@ export class MatchScene extends Phaser.Scene {
     layer.setScale(1 / cam.zoom).setPosition(W / 2 - W / 2 / cam.zoom, H / 2 - H / 2 / cam.zoom);
 
     this.replay = { frames, goalOffset, head: 0, live: this.snap(), liveZoom, layer, speedBadge, goalBanner, bannerShown: false };
-    for (const o of [this.marker, this.ring, this.passRing, this.volleyRing]) o.setVisible(false);
+    for (const o of [this.marker, this.hintMarker, this.ring, this.passRing, this.volleyRing]) o.setVisible(false);
     this.chargeG.clear();
     this.events.emit('replay', true);
   }
@@ -781,6 +784,7 @@ export class MatchScene extends Phaser.Scene {
     this.applySnap(r.frames[i]);
     this.syncSprites(dt);
     this.marker.setVisible(false);
+    this.hintMarker.setVisible(false);
     this.ring.setVisible(false);
     this.passRing.setVisible(false);
     this.updateCamera(dt);
@@ -1468,6 +1472,9 @@ export class MatchScene extends Phaser.Scene {
     if (h) {
       const bob = Math.sin(t * 6) * 1.5;
       this.marker.setPosition(Math.round(h.x), Math.round(h.y - 30 + bob));
+      const hint = this.replaying ? null : sim.switchHint;
+      this.hintMarker.setVisible(!!hint);
+      if (hint) this.hintMarker.setPosition(Math.round(hint.x), Math.round(hint.y - 28 - bob));
       this.ring.setPosition(Math.round(h.x), Math.round(h.y + 1));
       const hasBall = b.owner === h;
       // destinatario del passaggio

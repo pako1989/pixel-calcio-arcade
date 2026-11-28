@@ -200,6 +200,89 @@ function supportSpot(sim: MatchSim, p: Player, carrier: Player): Vec {
   return best;
 }
 
+/**
+ * Movimenti senza palla quando la squadra attacca: il compagno più avanzato (non difensore)
+ * che è almeno all'altezza di chi ha palla si inserisce alle spalle della difesa; il più
+ * vicino tra quelli dietro viene incontro per lo scarico; gli altri tengono la posizione.
+ */
+export function offBallJob(sim: MatchSim, p: Player, carrier: Player): 'inserimento' | 'appoggio' | 'posizione' {
+  if (p.isGK || p === carrier || carrier.isGK) return 'posizione';
+  const team = p.team;
+  const cx = sim.toTeamX(team, carrier.x);
+  let runner: Player | null = null;
+  let rx = -Infinity;
+  for (const m of sim.teams[team]) {
+    if (m === carrier || m.isGK || m.out > 0 || m.role === 'DEF' || sim.isHuman(m)) continue;
+    const mx = sim.toTeamX(team, m.x);
+    if (mx >= cx - 0.03 && mx > rx) {
+      rx = mx;
+      runner = m;
+    }
+  }
+  // inserimento solo se c'è spazio davanti (non già sul fondo)
+  if (runner === p && rx < 0.88 && cx > 0.35) return 'inserimento';
+  let short: Player | null = null;
+  let sd = Infinity;
+  for (const m of sim.teams[team]) {
+    if (m === carrier || m === runner || m.isGK || m.out > 0 || sim.isHuman(m)) continue;
+    if (sim.toTeamX(team, m.x) > cx + 0.04) continue;
+    const d = dist(m, carrier);
+    if (d < sd) {
+      sd = d;
+      short = m;
+    }
+  }
+  if (short === p && sd > 60) return 'appoggio';
+  return 'posizione';
+}
+
+/** Punto dell'inserimento: davanti a chi ha palla, nella corsia più libera, verso la porta. */
+function runSpot(sim: MatchSim, p: Player, carrier: Player): Vec {
+  const fwd = sim.dirOf(p.team);
+  const gy = sim.H / 2;
+  // sempre in avanti: almeno 150 px oltre chi ha palla e mai indietro rispetto a dove si trova
+  const ahead = Math.max(sim.toTeamX(p.team, carrier.x + fwd * 150), sim.toTeamX(p.team, p.x + fwd * 40));
+  const tx = sim.fromTeamX(p.team, Math.min(ahead, 0.9));
+  let best: Vec = { x: tx, y: gy };
+  let bs = -Infinity;
+  for (const lane of [-0.32, -0.16, 0, 0.16, 0.32]) {
+    const pt = { x: tx, y: clamp(gy + lane * sim.H, 24, sim.H - 24) };
+    let s = Math.min(1, nearestOpp(sim, pt, p.team).d / 100) * 1.2;
+    if (isPassSafe(sim, carrier, pt, p.team)) s += 0.8;
+    // resta vicino alla propria corsia, e non sulla stessa linea di chi ha palla
+    s -= Math.abs(pt.y - p.y) / 400;
+    if (Math.abs(pt.y - carrier.y) < 30) s -= 0.4;
+    if (s > bs) {
+      bs = s;
+      best = pt;
+    }
+  }
+  return best;
+}
+
+/** Punto dello scarico: un po' dietro e di lato rispetto a chi ha palla, in linea libera. */
+function shortSpot(sim: MatchSim, p: Player, carrier: Player): Vec {
+  const fwd = sim.dirOf(p.team);
+  let best: Vec = { x: carrier.x - fwd * 70, y: carrier.y };
+  let bs = -Infinity;
+  for (const side of [-1, 1]) {
+    for (const back of [40, 80]) {
+      const pt = {
+        x: clamp(carrier.x - fwd * back, 20, sim.W - 20),
+        y: clamp(carrier.y + side * 75, 24, sim.H - 24),
+      };
+      let s = Math.min(1, nearestOpp(sim, pt, p.team).d / 80);
+      if (isPassSafe(sim, carrier, pt, p.team)) s += 1;
+      s -= dist(p, pt) / 500;
+      if (s > bs) {
+        bs = s;
+        best = pt;
+      }
+    }
+  }
+  return best;
+}
+
 /** Decisioni "lente" (a intervalli che dipendono dalla difficoltà). */
 export function aiThink(sim: MatchSim, p: Player) {
   const b = sim.ball;
@@ -214,6 +297,21 @@ export function aiThink(sim: MatchSim, p: Player) {
   const oppBall = sim.teamHasBall(opp);
   if (hasBall) {
     const carrier = b.owner!;
+    const job = offBallJob(sim, p, carrier);
+    if (job === 'inserimento') {
+      const s = runSpot(sim, p, carrier);
+      p.tx = s.x;
+      p.ty = s.y;
+      p.wantSprint = p.stamina > 0.35;
+      return;
+    }
+    if (job === 'appoggio') {
+      const s = shortSpot(sim, p, carrier);
+      p.tx = s.x;
+      p.ty = s.y;
+      p.wantSprint = dist(p, s) > 90 && p.stamina > 0.5;
+      return;
+    }
     const s = supportSpot(sim, p, carrier);
     p.tx = s.x;
     p.ty = s.y;
@@ -299,8 +397,10 @@ function carrierThink(sim: MatchSim, p: Player) {
     }
     const angleOk = Math.abs(gx - p.x) > Math.abs(gy - p.y) * 0.6;
     if (angleOk && (dGoal < 125 || (dGoal < range && !blocked && rng.chance(0.55 + d.decision * 0.4)))) {
-      const ty = gk.y < gy ? sim.goalBottom - 11 : sim.goalTop + 11;
-      const dir = Math.atan2(ty - p.y + rng.range(-8, 8), gx - p.x);
+      // mira all'angolo lontano dal portiere, ma sceglie la linea più libera
+      const far = gk.y < gy ? sim.goalBottom - 11 : sim.goalTop + 11;
+      const ty = sim.openGoalY(p, far);
+      const dir = Math.atan2(ty - p.y + rng.range(-6, 6), gx - p.x);
       const power = sim.superBar[p.team] >= 1 ? 1 : clamp(0.5 + dGoal / 420, 0.55, 1);
       sim.shoot(p, dir, power, false);
       return;
@@ -438,8 +538,13 @@ export function aiGoalkeeper(sim: MatchSim, gk: Player, dt: number) {
     if (onTarget) {
       if (!gk.seenShot) {
         gk.seenShot = true;
-        const kp = sim.diff[team].keeper;
-        gk.reactT = clamp(0.2 - kp * 0.1, 0.04, 0.16) + sim.rng.range(0, 0.06);
+        // riflessi: dipendono dalla difficoltà e dalla bravura del portiere;
+        // un tiro da lontano gli lascia il tempo di piazzarsi, uno da vicino quasi niente
+        const kp = sim.diff[team].keeper * clamp(gk.def.stats.keeping / 0.93, 0.8, 1.25);
+        const from = b.shotFrom ?? b;
+        const shotD = len(from.x - gx, from.y - sim.H / 2);
+        const near = shotD < 130 ? 0.03 : shotD > 300 ? -0.025 : 0;
+        gk.reactT = clamp(0.2 - kp * 0.1 + near, 0.03, 0.18) + sim.rng.range(0, 0.06);
       }
       gk.reactT -= dt;
       const tk = Math.max(0.05, (gk.x - b.x) / (b.vx || 1e-6));
