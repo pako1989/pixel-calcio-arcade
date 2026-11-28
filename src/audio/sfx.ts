@@ -24,6 +24,7 @@ class Sfx {
   private noiseBuf: AudioBuffer | null = null;
   private crowd: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
   private rain: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private windLoop: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
   private onUnlock: UnlockListener[] = [];
   prefs: AudioPrefs = { muted: false, music: 0.6, sfx: 0.8, crowd: 0.8, voice: true };
 
@@ -327,6 +328,43 @@ class Sfx {
       this.crowd = null;
     }
     this.stopRain();
+    this.stopWind();
+  }
+
+  /** Ululato del vento: rumore filtrato che si alza con le raffiche (forza 0..1 con windLevel). */
+  startWind() {
+    if (!this.ok || this.windLoop) return;
+    const c = this.ctx!;
+    const src = c.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    src.playbackRate.value = 0.5;
+    const filter = c.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 420;
+    filter.Q.value = 2.2;
+    const gain = c.createGain();
+    gain.gain.value = 0.0001;
+    src.connect(filter).connect(gain).connect(this.bus('crowd'));
+    src.start();
+    this.windLoop = { src, gain, filter };
+    this.windLevel(0.4);
+  }
+  windLevel(v: number) {
+    if (!this.windLoop || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.windLoop.gain.gain.setTargetAtTime(0.02 + v * 0.07, t, 0.6);
+    // raffica più forte = fischio più acuto
+    this.windLoop.filter.frequency.setTargetAtTime(300 + v * 520, t, 0.8);
+  }
+  stopWind() {
+    if (!this.windLoop) return;
+    try {
+      this.windLoop.src.stop();
+    } catch {
+      /* già fermato */
+    }
+    this.windLoop = null;
   }
 
   /** Scroscio di pioggia continuo. */

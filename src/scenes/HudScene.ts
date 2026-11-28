@@ -67,14 +67,15 @@ export class HudScene extends Phaser.Scene {
     if (goal) {
       this.goalT = txt(this, 0, 0, 'OBIETTIVO: ' + goal, 6, '#5be37d', { backgroundColor: '#0d0a1acc', padding: { x: 4, y: 3 } });
     }
-    if (cfg.pitch.wind) this.windT = txt(this, 0, 0, 'VENTO', 6, '#bfe6ff');
+    // il vento può arrivare dal campo o dal meteo (vento, temporale)
+    if (this.match.sim.pitch.wind) this.windT = txt(this, 0, 0, 'VENTO', 6, '#bfe6ff');
     const cond = [
       cfg.pitch.slope ? 'PENDENZA' : '',
       cfg.pitch.waves ? 'ONDE' : '',
       cfg.pitch.bumpers?.length ? 'FLIPPER' : '',
       cfg.pitch.mud?.length ? 'FANGO' : '',
       cfg.pitch.geysers?.length ? 'GEYSER' : '',
-      cfg.weather === 'pioggia' ? 'PIOGGIA' : cfg.weather === 'nebbia' ? 'NEBBIA' : '',
+      cfg.weather && cfg.weather !== 'sereno' && cfg.weather !== 'vento' ? cfg.weather.toUpperCase() : '',
       cfg.night && cfg.pitch.id !== 'tetto' ? 'NOTTE' : '',
       cfg.mods?.alwaysFire ? 'FUOCO' : '',
       cfg.mods?.superMult && cfg.mods.superMult > 1 ? `SUPER ${cfg.mods.superMult}X` : '',
@@ -276,7 +277,9 @@ export class HudScene extends Phaser.Scene {
     const tl = Math.ceil(sim.timeLeft);
     this.timeT.setText(sim.goldenGoal ? 'GG' : `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`);
     this.timeT.setColor(tl <= 10 && !sim.goldenGoal ? (Math.floor(this.time.now / 250) % 2 ? '#ff5a5a' : '#ffffff') : '#ffd23f');
-    this.goldenT.setVisible(sim.goldenGoal);
+    this.goldenT.setVisible(sim.goldenGoal || sim.extraTime);
+    if (sim.extraTime && !sim.goldenGoal) this.goldenT.setText('SUPPLEMENTARI');
+    else if (sim.goldenGoal) this.goldenT.setText('GOLDEN GOL');
 
     // barre super
     for (const t of [0, 1] as const) {
@@ -316,7 +319,7 @@ export class HudScene extends Phaser.Scene {
     }
 
     // vento
-    if (this.windT && cfg.pitch.wind) {
+    if (this.windT) {
       const wx = sim.wind.x;
       const wy = sim.wind.y;
       const m = Math.hypot(wx, wy);

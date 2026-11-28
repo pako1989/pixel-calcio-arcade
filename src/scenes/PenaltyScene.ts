@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Difficulty, PlayerDef, TeamDef } from '../sim/types';
+import type { Difficulty, PlayerDef, TeamDef, Weather } from '../sim/types';
 import type { MatchOutcome } from '../modes/modes';
 import { FRAME, frameIndex, makePlayerSheet } from '../gfx/sprites';
 import { button, COLORS, panel, shadowTxt, txt } from '../ui/ui';
@@ -31,10 +31,26 @@ import {
   type Shootout,
 } from '../modes/penalties';
 
-/** Dati della scena: dopo una partita del torneo, oppure la sfida ai rigori da sola. */
+/** Un solo calcio di rigore durante la partita: la scena gioca il tiro e restituisce l'esito. */
+export interface SinglePenalty {
+  /** [squadra del giocatore, CPU]. */
+  teams: [TeamDef, TeamDef];
+  difficulty: Difficulty;
+  /** Squadra che tira (0 = tiri tu, 1 = pari tu). */
+  shooter: 0 | 1;
+  taker: PlayerDef;
+  keeper: PlayerDef;
+  night?: boolean;
+  weather?: Weather;
+  /** Esito e punto della porta (u da -1 a 1). */
+  onDone: (o: PenOutcome, u: number) => void;
+}
+
+/** Dati della scena: dopo una partita del torneo, la sfida ai rigori da sola o un rigore in partita. */
 export interface PenaltyData {
   outcome?: MatchOutcome;
   standalone?: { home: TeamDef; away: TeamDef; difficulty: Difficulty };
+  single?: SinglePenalty;
 }
 
 type Phase = 'intro' | 'aim' | 'power' | 'userKick' | 'cpuRun' | 'flight' | 'result' | 'end';
@@ -82,7 +98,10 @@ export class PenaltyScene extends Phaser.Scene {
 
   init(d: PenaltyData) {
     this.d = d;
-    if (d.outcome) {
+    if (d.single) {
+      this.teams = d.single.teams;
+      this.diff = d.single.difficulty;
+    } else if (d.outcome) {
       const c = d.outcome.launch.config;
       this.teams = [c.home, c.away];
       this.diff = c.difficulty;
@@ -92,9 +111,9 @@ export class PenaltyScene extends Phaser.Scene {
       this.diff = s.difficulty;
     }
     this.rng = new Rng(Date.now());
-    this.so = newShootout(this.rng.chance(0.5) ? 0 : 1);
+    this.so = newShootout(d.single ? d.single.shooter : this.rng.chance(0.5) ? 0 : 1);
     this.phase = 'intro';
-    this.phaseT = 2.2;
+    this.phaseT = d.single ? 1.1 : 2.2;
     this.aim = null;
     this.dive = null;
     this.bigMsg = undefined;
@@ -131,9 +150,15 @@ export class PenaltyScene extends Phaser.Scene {
     this.hint = txt(this, this.cx, 66, '', 8, '#ffffff', { backgroundColor: '#0d0a1acc', padding: { x: 6, y: 4 } }).setDepth(30);
 
     // squadra e tiratore
-    for (const t of [0, 1] as const) {
-      takers(this.teams[t]).forEach((p, i) => makePlayerSheet(this, `pen_${t}_${i}`, this.teams[t], p));
-      makePlayerSheet(this, `pen_gk_${t}`, this.teams[t], keeperOf(this.teams[t]));
+    const one = this.d.single;
+    if (one) {
+      makePlayerSheet(this, `pen_${one.shooter}_0`, this.teams[one.shooter], one.taker);
+      makePlayerSheet(this, `pen_gk_${1 - one.shooter}`, this.teams[1 - one.shooter], one.keeper);
+    } else {
+      for (const t of [0, 1] as const) {
+        takers(this.teams[t]).forEach((p, i) => makePlayerSheet(this, `pen_${t}_${i}`, this.teams[t], p));
+        makePlayerSheet(this, `pen_gk_${t}`, this.teams[t], keeperOf(this.teams[t]));
+      }
     }
 
     button(this, W - 22, 18, 26, 22, 'II', () => this.togglePause(), { size: 8 }).c.setDepth(31);
@@ -145,13 +170,18 @@ export class PenaltyScene extends Phaser.Scene {
     kb?.on('keydown-SPACE', () => this.onKey());
     kb?.on('keydown-ENTER', () => this.onKey());
 
-    sfx.startCrowd(0.7);
-    music.play('rigori');
-    commentary.say('penStart');
-    this.showBig('RIGORI!', this.d.outcome ? 'Pareggio: si decide dal dischetto' : `${this.teams[0].name} contro ${this.teams[1].name}`, '#ffd23f', 2000);
-    this.drawBoard();
+    if (one) {
+      // rigore in partita: musica e pubblico restano quelli della partita
+      this.showBig('RIGORE!', one.shooter === 0 ? 'Mira, poi ferma la barra nel verde' : 'Tocca dove ti tuffi', one.shooter === 0 ? '#ffd23f' : '#ff5a5a', 1100);
+    } else {
+      sfx.startCrowd(0.7);
+      music.play('rigori');
+      commentary.say('penStart');
+      this.showBig('RIGORI!', this.d.outcome ? 'Pareggio: si decide dal dischetto' : `${this.teams[0].name} contro ${this.teams[1].name}`, '#ffd23f', 2000);
+      this.drawBoard();
+    }
     this.events.once('shutdown', () => {
-      if (!this.d.outcome) sfx.stopCrowd();
+      if (!this.d.outcome && !this.d.single) sfx.stopCrowd();
       this.input.removeAllListeners();
     });
   }
@@ -163,14 +193,38 @@ export class PenaltyScene extends Phaser.Scene {
     drawGoalBackground(this, W, H, [this.teams[0].colors.shirt, this.teams[1].colors.shirt], key);
     this.add.image(0, 0, key).setOrigin(0).setDepth(0);
     // pubblico che salta: alone che pulsa
-    const night = !!this.d.outcome?.launch.config.night || this.d.outcome?.launch.config.pitch.id === 'tetto';
+    const oc = this.d.outcome?.launch.config;
+    const night = this.d.single ? !!this.d.single.night : !!oc?.night || oc?.pitch.id === 'tetto';
+    const weather = this.d.single ? this.d.single.weather : oc?.weather;
+    this.drawWeather(W, weather);
     if (night) {
       this.add.rectangle(0, 0, W, H, 0x0a0d26, 0.35).setOrigin(0).setDepth(9);
       for (const x of [W * 0.12, W * 0.88]) this.add.image(x, 10, 'glow').setScale(6).setAlpha(0.35).setBlendMode('ADD').setDepth(9.5).setTint(0xfff6d0);
     }
   }
 
-  /** Rete e pali; `bulge` gonfia la rete dopo un gol. */
+  /** Pioggia o neve anche dal dischetto. */
+  private drawWeather(W: number, w?: Weather) {
+    if (!w || w === 'sereno' || w === 'vento') return;
+    if (w === 'nebbia') {
+      this.add.rectangle(0, 0, W, this.scale.height, 0xc4ccd6, 0.16).setOrigin(0).setDepth(9);
+      return;
+    }
+    const snow = w === 'neve';
+    if (!snow && !this.textures.exists('streak')) {
+      const sg = this.add.graphics();
+      sg.fillStyle(0xffffff).fillRect(0, 0, 1, 7);
+      sg.generateTexture('streak', 1, 7);
+      sg.destroy();
+    }
+    this.add
+      .particles(0, 0, snow ? 'px2' : 'streak', snow
+        ? { x: { min: 0, max: W }, y: -8, lifespan: 4200, speedY: { min: 30, max: 60 }, speedX: { min: -14, max: 8 }, scale: { min: 2, max: 4 }, alpha: { min: 0.6, max: 1 }, frequency: 22 }
+        : { x: { min: -40, max: W + 40 }, y: -10, lifespan: 800, speedY: { min: 460, max: 560 }, speedX: { min: -80, max: -50 }, rotate: 8, scaleY: 2, alpha: { min: 0.35, max: 0.65 }, tint: 0xcfe0ff, frequency: 8, quantity: 2 })
+      .setDepth(9.6);
+    if (!snow) this.add.rectangle(0, 0, W, this.scale.height, 0x1a2a4a, 0.18).setOrigin(0).setDepth(9);
+  }
+
   /** Rete e pali; `bulge` gonfia la rete dopo un gol. */
   private drawNet(bulge: number, bx = 0) {
     drawGoalNet(this.netG, this.cx, bulge, bx);
@@ -221,12 +275,25 @@ export class PenaltyScene extends Phaser.Scene {
   // ---------- turni ----------
 
   private nextKick() {
-    this.drawBoard();
+    const one = this.d.single;
+    if (one && this.so.kicks.length > 0) {
+      // rigore in partita: un tiro solo, poi si torna in campo
+      this.phase = 'end';
+      this.cameras.main.fadeOut(220, 10, 8, 20);
+      const res = this.outcome;
+      const u = this.shot.u;
+      this.time.delayedCall(230, () => {
+        this.scene.stop();
+        one.onDone(res, u);
+      });
+      return;
+    }
+    if (!one) this.drawBoard();
     if (isOver(this.so)) return this.finish();
     const t = nextTeam(this.so);
     this.shooter = t;
-    const list = takers(this.teams[t]);
-    const idx = taken(this.so)[t] % list.length;
+    const list = one ? [one.taker] : takers(this.teams[t]);
+    const idx = one ? 0 : taken(this.so)[t] % list.length;
     this.taker = list[idx];
     // tiratore di spalle, portiere avversario in porta
     this.kicker.setTexture(`pen_${t}_${idx}`, frameIndex('up', 'idle')).setPosition(this.cx - 46, this.scale.height + 90).setFlipX(false);
@@ -243,7 +310,7 @@ export class PenaltyScene extends Phaser.Scene {
     // il tiratore cammina verso il dischetto
     this.tweens.add({ targets: this.kicker, y: SPOT_Y + 46, duration: 450, ease: 'Sine.easeOut' });
     const human = t === 0;
-    const sudden = taken(this.so)[0] >= 5 && taken(this.so)[1] >= 5;
+    const sudden = !one && taken(this.so)[0] >= 5 && taken(this.so)[1] >= 5;
     const label = `${this.taker.name.toUpperCase()}${sudden ? ' · A OLTRANZA' : ''}`;
     if (human) {
       this.phase = 'aim';
@@ -339,7 +406,7 @@ export class PenaltyScene extends Phaser.Scene {
     this.kickAt = 0.35;
     this.hint.setText('');
     this.shot = userShot(this.aim!, this.power, this.taker, this.rng);
-    const gk = keeperOf(this.teams[1]);
+    const gk = this.d.single ? this.d.single.keeper : keeperOf(this.teams[1]);
     this.dive = cpuDive(this.shot, this.diff, this.power, this.rng);
     this.reach = cpuReach(gk, this.diff, this.power);
     this.outcome = resolveShot(this.shot, this.dive, this.reach);
@@ -353,7 +420,7 @@ export class PenaltyScene extends Phaser.Scene {
     this.diveAt = late;
     this.animateDive(this.dive, this.phase === 'flight' ? 260 : 380);
     // se il tiro è già partito, l'esito si ricalcola con il tuffo
-    if (this.phase === 'flight') this.outcome = resolveShot(this.shot, this.dive, userReach(keeperOf(this.teams[0]), late));
+    if (this.phase === 'flight') this.outcome = resolveShot(this.shot, this.dive, userReach(this.myKeeper(), late));
   }
 
   /** Il tiro parte: anima tiratore, palla e (per la CPU) il portiere. */
@@ -368,10 +435,14 @@ export class PenaltyScene extends Phaser.Scene {
     } else {
       // tiro della CPU: decide adesso dove va
       this.shot = cpuShot(this.taker, this.diff, this.rng, Math.max(0, taken(this.so)[1] - 4) * 0.5);
-      this.reach = userReach(keeperOf(this.teams[0]), Math.max(0, this.diveAt));
+      this.reach = userReach(this.myKeeper(), Math.max(0, this.diveAt));
       this.outcome = resolveShot(this.shot, this.dive, this.reach);
       if (!this.dive) this.keeperHop();
     }
+  }
+
+  private myKeeper(): PlayerDef {
+    return this.d.single ? this.d.single.keeper : keeperOf(this.teams[0]);
   }
 
   private keeperHop() {
@@ -460,7 +531,8 @@ export class PenaltyScene extends Phaser.Scene {
     // reazioni
     if (res === 'gol') this.kicker.setFrame(frameIndex('up', 'celebrate'));
     else this.time.delayedCall(300, () => this.kicker.setFrame(frameIndex('up', 'sad')));
-    this.drawBoard();
+    if (this.d.single) this.phaseT = 1.3;
+    else this.drawBoard();
     this.ballShadow.setVisible(false);
   }
 
@@ -539,7 +611,7 @@ export class PenaltyScene extends Phaser.Scene {
       this.scene.launch('settings');
       this.scene.bringToTop('settings');
     }).c);
-    if (!this.d.outcome) c.add(button(this, W / 2, H / 2 + 48, 180, 26, 'ESCI AL MENU', () => backToMenu(this), { color: 0x8a3040 }).c);
+    if (!this.d.outcome && !this.d.single) c.add(button(this, W / 2, H / 2 + 48, 180, 26, 'ESCI AL MENU', () => backToMenu(this), { color: 0x8a3040 }).c);
     this.pauseLayer = c;
   }
 
