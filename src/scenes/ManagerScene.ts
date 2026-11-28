@@ -16,11 +16,13 @@ import {
   weeklyBalance, boardLabel, canSignSponsor, renewContract, renewCost, signSponsor, sponsorWeekly, SPONSOR_OFFERS,
   type ManagerState, type MPlayer,
   applyMatch, CUP_ROUNDS, cupTeams, ensureManager, nextMatch, resolveEvent, type MatchApplied,
+  canPromote, dismissStaff, gazzetta, hireStaff, promoteCost, promoteProspect, staffUpgrade,
 } from '../modes/manager';
+import { potentialLabel, STAFF_INFO, STAFF_MAX, STAFF_ROLES, staffWage } from '../modes/managerStaff';
 import { WEATHER_INFO } from '../data/weather';
 
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
-type Tab = 'club' | 'rosa' | 'mercato' | 'allena' | 'classifica' | 'societa' | 'dirigenza';
+type Tab = 'club' | 'rosa' | 'mercato' | 'allena' | 'classifica' | 'societa' | 'dirigenza' | 'staff' | 'stampa';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'club', label: 'CLUB' },
   { id: 'rosa', label: 'ROSA' },
@@ -29,6 +31,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'classifica', label: 'CLASSIFICA' },
   { id: 'societa', label: 'SOCIETÀ' },
   { id: 'dirigenza', label: 'DIRIGENZA' },
+  { id: 'staff', label: 'STAFF' },
+  { id: 'stampa', label: 'GIORNALE' },
 ];
 
 /** Esito di una partita simulata, mostrato con la "cronaca" animata. */
@@ -132,6 +136,12 @@ export class ManagerScene extends Phaser.Scene {
         break;
       case 'dirigenza':
         this.buildBoard(st, W, H);
+        break;
+      case 'staff':
+        this.buildStaff(st, W, H);
+        break;
+      case 'stampa':
+        this.buildStampa(st, W, H);
         break;
     }
     this.buildFooter(st, W, H);
@@ -258,7 +268,7 @@ export class ManagerScene extends Phaser.Scene {
         this.confirm = null;
         sfx.select();
         this.build();
-      }, { size: 6, color: 0x2a2d48 });
+      }, { size: tw < 70 ? 5 : 6, color: 0x2a2d48 });
       b.setSelected(this.tab === t.id);
     });
   }
@@ -822,6 +832,96 @@ export class ManagerScene extends Phaser.Scene {
     });
   }
 
+  // ------------------------------------------------------------ STAFF e VIVAIO
+  private buildStaff(st: ManagerState, W: number, H: number) {
+    const g = this.add.graphics();
+    const top = 56;
+    const lw = Math.min(W * 0.5, 300);
+    const ph = H - top - 44;
+    panel(g, 8, top, lw, ph, 0x1b1d2e, 0x2e3250, 0.95);
+    txt(this, 8 + lw / 2, top + 11, 'STAFF TECNICO', 6, '#ffd23f');
+    const base = DIVISIONS[st.division].sponsor;
+    const rowH = (ph - 22) / STAFF_ROLES.length;
+    STAFF_ROLES.forEach((role, i) => {
+      const y = top + 22 + i * rowH;
+      const lvl = st.staff?.[role] ?? 0;
+      const info = STAFF_INFO[role];
+      g.fillStyle(0x23263d).fillRect(12, y, lw - 8, rowH - 3);
+      txt(this, 18, y + 8, info.name, 6, '#ffffff').setOrigin(0, 0.5);
+      for (let k = 0; k < STAFF_MAX; k++) g.fillStyle(k < lvl ? COLORS.accent : 0x0d0a1a).fillRect(lw - 44 + k * 11, y + 4, 9, 8);
+      txt(this, 18, y + 21, lvl ? info.levels[lvl - 1] : info.desc, 6, lvl ? '#5be37d' : '#8a8fb0', { wordWrap: { width: lw - 30 } }).setOrigin(0, 0.5);
+      if (lvl) txt(this, 18, y + 34, `Stipendio ${money(staffWage(lvl, base))} a settimana`, 6, '#ff9a9a').setOrigin(0, 0.5);
+      const up = staffUpgrade(st, role);
+      const bw = 92;
+      const b = button(this, lw - bw / 2 - 2, y + rowH - 18, bw, 16, up ? `${lvl ? 'POTENZIA' : 'ASSUMI'} ${money(up.cost)}` : 'AL MASSIMO', () => {
+        sfx.fanfare();
+        this.commit((s) => hireStaff(s, role));
+      }, { size: 5, color: 0x2f6fd0 });
+      b.setEnabled(!!up && st.budget >= up.cost);
+      if (lvl) {
+        button(this, lw - bw - 26, y + rowH - 18, 30, 16, 'VIA', () => this.commit((s) => dismissStaff(s, role)), { size: 5, color: 0x8a3040 });
+      }
+    });
+
+    const rx = 16 + lw;
+    const rw = W - rx - 8;
+    panel(g, rx, top, rw, ph, 0x1b1d2e, 0x2e3250, 0.95);
+    txt(this, rx + rw / 2, top + 11, 'VIVAIO', 6, '#ff7ab8');
+    const ac = st.academy;
+    const scout = st.staff?.osservatore ?? 0;
+    if (!ac || !ac.prospects.length) {
+      txt(this, rx + rw / 2, top + 60, 'Nessun provino in attesa.', 6, '#8a8fb0');
+      txt(this, rx + rw / 2, top + 76, 'A fine stagione arrivano nuovi ragazzi:', 6, '#5a5f80');
+      txt(this, rx + rw / 2, top + 88, 'più provini con un buon osservatore.', 6, '#5a5f80');
+      return;
+    }
+    txt(this, rx + rw / 2, top + 24, ac.promoted === 0 ? 'La prima promozione è GRATIS' : 'Altre promozioni: contratto a pagamento', 6, '#8a8fb0');
+    ac.prospects.forEach((p, i) => {
+      const y = top + 36 + i * 42;
+      g.fillStyle(0x23263d).fillRect(rx + 4, y, rw - 8, 38);
+      txt(this, rx + 10, y + 9, `${p.name.toUpperCase().slice(0, 12)}  ${ROLE_LABEL[p.role]}  ${p.age}a`, 6, '#ffffff').setOrigin(0, 0.5);
+      txt(this, rx + rw - 10, y + 9, `FORZA ${playerOvr(p)}`, 6, this.ovrColor(playerOvr(p))).setOrigin(1, 0.5);
+      txt(this, rx + 10, y + 23, `POTENZIALE ${potentialLabel(p.pot, scout, p.id)}`, 6, '#ffd23f').setOrigin(0, 0.5);
+      const cost = promoteCost(st, p);
+      const why = canPromote(st, p.id);
+      const b = button(this, rx + rw - 48, y + 24, 86, 15, why ?? (cost ? `PROMUOVI ${money(cost)}` : 'PROMUOVI GRATIS'), () => {
+        sfx.select();
+        this.commit((s) => promoteProspect(s, p.id));
+      }, { size: 5, color: 0x2f9a50 });
+      b.setEnabled(!why);
+    });
+    if (!scout) txt(this, rx + rw / 2, top + ph - 12, 'Senza osservatore il potenziale è un mistero.', 6, '#5a5f80');
+  }
+
+  // ------------------------------------------------------------ GIORNALE
+  private buildStampa(st: ManagerState, W: number, H: number) {
+    const g = this.add.graphics();
+    const top = 56;
+    const pw = Math.min(W - 16, 560);
+    const x0 = (W - pw) / 2;
+    const ph = H - top - 44;
+    const paper = 0xe6dfc8;
+    g.fillStyle(0x000000, 0.35).fillRect(x0 + 3, top + 3, pw, ph);
+    g.fillStyle(paper).fillRect(x0, top, pw, ph);
+    g.fillStyle(0x2a2018).fillRect(x0 + 8, top + 26, pw - 16, 2).fillRect(x0 + 8, top + 30, pw - 16, 1);
+    const ink = '#2a2018';
+    const gz = gazzetta(st);
+    txt(this, x0 + pw / 2, top + 13, 'LA GAZZETTA PIXEL', 12, ink);
+    txt(this, x0 + 12, top + 38, `STAGIONE ${st.season}`, 5, ink).setOrigin(0, 0.5);
+    txt(this, x0 + pw - 12, top + 38, `${DIVISIONS[st.division].name} · GIORNATA ${Math.min(st.week + 1, st.fixtures.length)}`, 5, ink).setOrigin(1, 0.5);
+    const head = txt(this, x0 + pw / 2, top + 62, gz.headline, 11, '#8a1a1a', { wordWrap: { width: pw - 30 }, align: 'center' });
+    txt(this, x0 + pw / 2, top + 62 + head.height / 2 + 10, gz.sub, 6, '#4a3f30', { wordWrap: { width: pw - 30 }, align: 'center' });
+    let y = top + 62 + head.height / 2 + 28;
+    g.fillStyle(0x2a2018).fillRect(x0 + 8, y - 6, pw - 16, 1);
+    const colW = (pw - 36) / 2;
+    gz.items.forEach((it, i) => {
+      const cx = x0 + 12 + (i % 2) * (colW + 12);
+      const cy = y + Math.floor(i / 2) * 40;
+      txt(this, cx, cy + 4, it.tag, 5, '#8a1a1a').setOrigin(0, 0.5);
+      txt(this, cx, cy + 12, it.text, 6, ink, { wordWrap: { width: colW } }).setOrigin(0, 0);
+    });
+  }
+
   // ------------------------------------------------------------ SOCIETÀ
   private buildSociety(st: ManagerState, W: number, H: number) {
     const g = this.add.graphics();
@@ -900,11 +1000,11 @@ export class ManagerScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     const bg = this.add.rectangle(0, 0, W, H, 0x0d0a1a, 0.9).setOrigin(0).setInteractive();
     const g = this.add.graphics();
-    panel(g, W / 2 - 180, 40, 360, 270, 0x1b1d2e, COLORS.accent, 0.98);
+    panel(g, W / 2 - 180, 24, 360, 308, 0x1b1d2e, COLORS.accent, 0.98);
     c.add([bg, g]);
     const title = se.outcome === 'campione' ? 'CAMPIONI!' : se.outcome === 'promosso' ? 'PROMOSSI!' : se.outcome === 'retrocesso' ? 'RETROCESSI' : 'FINE STAGIONE';
     const col = se.outcome === 'retrocesso' ? '#ff5a5a' : se.outcome === 'salvo' ? '#ffffff' : '#ffd23f';
-    const t = shadowTxt(this, W / 2, 64, title, 16, col);
+    const t = shadowTxt(this, W / 2, 46, title, 16, col);
     c.add(t.c);
     const lines: [string, string][] = [
       [`Stagione ${se.season} · ${DIVISIONS[se.division].name}`, '#8a8fb0'],
@@ -918,12 +1018,14 @@ export class ManagerScene extends Phaser.Scene {
       [`Premio: +${money(se.prize)}`, '#5be37d'],
       [se.objective ? `Obiettivo "${se.objective.label}": ${se.objective.met ? `centrato! +${money(se.objective.bonus)}` : 'mancato. Il presidente sbuffa.'}` : '', se.objective?.met ? '#5be37d' : '#ff9a9a'],
       [se.retired.length ? `Si ritirano: ${se.retired.join(', ')}` : 'Nessun ritiro', '#d8dcf0'],
-      [se.youth.length ? `Dal vivaio: ${se.youth.join(', ')} (16 anni)` : '', '#ff7ab8'],
+      [se.awards?.topScorer ? `Capocannoniere: ${se.awards.topScorer.name} (${se.awards.topScorer.goals} gol)` : '', '#ffd23f'],
+      [se.awards?.mvp ? `Giocatore dell'anno: ${se.awards.mvp.name}${se.awards.young ? ` · Giovane: ${se.awards.young.name}` : ''}` : '', '#ffd23f'],
+      [se.youth.length ? `Dal vivaio in prima squadra: ${se.youth.join(', ')}` : se.prospects ? `${se.prospects} provini nel vivaio: scheda STAFF` : '', '#ff7ab8'],
       ['Tutti un anno più vecchi: i giovani crescono, i veterani calano.', '#8a8fb0'],
     ];
-    lines.forEach(([s, cl], i) => c.add(txt(this, W / 2, 94 + i * 18, s, 6, cl, { wordWrap: { width: 330 }, align: 'center' })));
+    lines.filter(([s]) => s).forEach(([s, cl], i) => c.add(txt(this, W / 2, 76 + i * 18, s, 6, cl, { wordWrap: { width: 330 }, align: 'center' })));
     if (se.outcome !== 'retrocesso' && se.outcome !== 'salvo') sfx.fanfare();
-    const b = button(this, W / 2, 284, 160, 26, 'AVANTI', () => this.commit((s) => delete s.seasonEnd), { color: COLORS.good, textColor: '#1a1222' });
+    const b = button(this, W / 2, 308, 160, 26, 'AVANTI', () => this.commit((s) => delete s.seasonEnd), { color: COLORS.good, textColor: '#1a1222' });
     c.add(b.c);
     c.setDepth(20);
   }

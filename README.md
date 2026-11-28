@@ -28,6 +28,7 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 - **Torneo**: la Coppa Pixel a 8 squadre, quarti, semifinale e finale. Un campo diverso a ogni turno, la finale allo Stadio. Le coppe vinte restano in bacheca.
 - **Missioni**: 12 sfide con obiettivi speciali (rimonta da 0-2, gol col super tiro, porta inviolata, gol lampo...). Si sbloccano un po' alla volta.
 - **Duello a carte**: modalità a turni da 2 minuti. Ogni giocatore della squadra è una carta con DRIBBLING e DIFESA e un costo in energia; schieri fino a 4 carte (entrano in campo al turno dopo), a fine turno attaccano: dribbling maggiore salta il difensore, uguale si annulla, minore viene fermato. Campo avversario vuoto = gol, vince chi fa 2 round. Vittorie e serie salvate, monete in premio.
+- **Manager** (nuovo: staff, vivaio e giornale): oltre a rosa, mercato, allenamento, finanze e coppa, ora c'è lo **STAFF** (allenatore in seconda, preparatore, medico e capo osservatore, livelli 1-3 con stipendio che pesa sui conti), il **VIVAIO** (a fine stagione arrivano dei provini con potenziale nascosto: l'osservatore lo rivela; il primo si promuove gratis), i **premi di fine stagione** (capocannoniere, giocatore dell'anno, giovane dell'anno) e **La Gazzetta Pixel**, il giornale del club con titolo, mercato, classifica e premi.
 - **Diventa un mito** (storia): crei il tuo campione e lo porti dal campetto di quartiere alla finale di Coppa in Serie A. 9 partite in 6 capitoli, con dialoghi, un rivale, punti abilità da spendere e abilità speciali da sbloccare. Puoi scegliere se muovere **solo il tuo campione** (i compagni sono della CPU e con PASSA senza palla chiedi il pallone) o tutta la squadra.
 - **Leggenda del Pallone** (storia in stile anime sportivo): Nico Vento, un ragazzino con un pallone, dal campo sulla collina di Portobello fino alla finale dei Mondiali giovanili, in 10 episodi con ricordi, rivali, un infortunio e un allenatore misterioso. Si gioca **a turni** su un **campo lunghissimo** che scorre per cinque schermate: quando chi ha palla incontra un avversario scegli dribbling, passaggio, tiro o una tecnica speciale, e ogni scelta consuma energia. I tiri speciali hanno una scena a tutto schermo col nome urlato, il pallone che si deforma e la rete che si strappa; i portieri leggendari si stancano a ogni parata. Le tecniche (anche le combo in coppia) si imparano con i Punti Leggenda vinti nei duelli e nell'allenamento col Maestro. Premi in monete e trofei nella bacheca comune.
 
@@ -71,3 +72,7 @@ GitHub Pages serve la radice del branch `main`. La pagina sorgente è `game.html
 `index.html`, `assets/`, `icons/`, `sw.js` e `manifest.webmanifest` nella radice sono la **build pubblicata**
 e non vanno modificati a mano: a ogni push su `main` il workflow `deploy.yml` esegue i test,
 ricostruisce il gioco e li aggiorna da solo.
+
+### Ringraziamenti
+
+Lo staff e il vivaio del Manager sono ispirati (idee e meccaniche, codice riscritto da zero in TypeScript) a [open-football](https://github.com/ZOXEXIVO/open-football) di ZOXEXIVO, rilasciato con licenza Apache 2.0.
