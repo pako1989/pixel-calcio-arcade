@@ -44,7 +44,10 @@ export function homePos(sim: MatchSim, p: Player, attacking: boolean): Vec {
   const b = sim.ball;
   const bnx = sim.toTeamX(p.team, b.x);
   const bny = b.y / sim.H;
-  let nx = bx + (bnx - 0.5) * 0.5 + (attacking ? 0.1 : -0.07);
+  // atteggiamento: la squadra "attacco" sale in blocco e pressa alta, "difesa" resta bassa
+  const tac = sim.tactic[p.team];
+  const shift = tac === 'attacco' ? 0.08 : tac === 'difesa' ? -0.09 : 0;
+  let nx = bx + (bnx - 0.5) * 0.5 + (attacking ? 0.1 : -0.07) + (p.role === 'GK' ? 0 : shift);
   let [lo, hi] = ROLE_X[p.role] ?? [0.1, 0.9];
   if (fId === '1-1-2' && p.idx === 3) hi = Math.max(hi, 0.9);
   if (fId === '2-1-1' && p.idx === 2) lo = Math.min(lo, 0.1);
@@ -257,7 +260,8 @@ export function aiThink(sim: MatchSim, p: Player) {
       const n = norm(gx - t.x, sim.H / 2 - t.y);
       // marcatura stretta solo vicino alla propria porta, altrimenti a zona
       const danger = 1 - sim.toTeamX(team, t.x);
-      const w = clamp(danger * 1.4, 0.35, 1);
+      const tac = sim.tactic[team];
+      const w = clamp(danger * 1.4, tac === 'attacco' ? 0.6 : tac === 'difesa' ? 0.25 : 0.35, 1);
       p.tx = (t.x + n.x * 16) * w + home.x * (1 - w);
       p.ty = (t.y + n.y * 16) * w + home.y * (1 - w);
       return;
@@ -300,6 +304,15 @@ function carrierThink(sim: MatchSim, p: Player) {
       const power = sim.superBar[p.team] >= 1 ? 1 : clamp(0.5 + dGoal / 420, 0.55, 1);
       sim.shoot(p, dir, power, false);
       return;
+    }
+    // filtrante o pallonetto per un compagno lanciato in avanti
+    if (p.holdT > 0.5 && rng.chance(0.05 + d.decision * 0.07)) {
+      const tgt = sim.throughTarget(p, Math.atan2(gy - p.y, gx - p.x));
+      const dir0 = sim.dirOf(p.team);
+      if (tgt && (tgt.x - p.x) * dir0 > 70 && nearestOpp(sim, tgt, p.team).d > 30) {
+        sim.throughPass(p, tgt, isPassSafe(sim, p, tgt, p.team) ? 'filtrante' : 'pallonetto');
+        return;
+      }
     }
     // passaggio?
     const near = nearestOpp(sim, p, p.team);

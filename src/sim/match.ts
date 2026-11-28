@@ -1,6 +1,6 @@
 import { Ball, Player, type PowerUp, type PowerUpKind, type SimEvent } from './entities';
 import { clamp, dist, len, norm, Rng, turnTowards, type Vec } from './math';
-import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef } from './types';
+import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef, Tactic } from './types';
 import { aiThink, aiGoalkeeper, chooseHumanPassTarget, decideAiActions } from './ai';
 import { applyWeather } from '../data/weather';
 import { tryStoneHand, updateSpecials, useSpecial, specialsOf, SPECIALS } from './specials';
@@ -11,6 +11,11 @@ export const BALL_R = 3;
 export const PLAYER_R = 6;
 const GRAVITY = 520;
 const CHARGE_TIME = 0.75;
+/** Dopo quanto tenendo PASSA il passaggio diventa filtrante, e poi pallonetto. */
+export const PASS_THROUGH_T = 0.28;
+export const PASS_LOB_T = 0.8;
+/** Passaggi riusciti di fila per caricare il tiro a catena. */
+export const CHAIN_SHOT_AT = 4;
 
 export interface HumanInput {
   mx: number;
@@ -78,6 +83,14 @@ export class MatchSim {
   readonly humanTeam: 0 | 1 | null;
   charge = 0;
   charging = false;
+  /** Secondi per cui il giocatore tiene premuto PASSA con la palla (0 = non sta caricando). */
+  passHold = 0;
+  passCharging = false;
+  /** Passaggi riusciti di fila per squadra: dalla 4a in poi il tiro è "a catena". */
+  chain: [number, number] = [0, 0];
+  /** Atteggiamento tattico di ogni squadra. */
+  tactic: [Tactic, Tactic] = ['equilibrio', 'equilibrio'];
+  private tacticT = 4;
   private prevShoot = false;
   private prevPass = false;
   private prevSpecial = false;
@@ -139,6 +152,7 @@ export class MatchSim {
       });
     });
     this.kickoffTeam = this.rng.chance(0.5) ? 0 : 1;
+    if (cfg.tactic && cfg.humanTeam !== null) this.tactic[cfg.humanTeam] = cfg.tactic;
     if (cfg.mods?.startWall) this.wall[0] = cfg.mods.startWall;
     if (cfg.mods?.startTurbo) this.turbo[0] = cfg.mods.startTurbo;
     if (cfg.mods?.alwaysFire) this.fireShot = [true, true];
@@ -232,6 +246,9 @@ export class MatchSim {
     this.callT = 0;
     this.charge = 0;
     this.charging = false;
+    this.passCharging = false;
+    this.passHold = 0;
+    this.chain = [0, 0];
   }
 
   private startPlay() {
@@ -409,6 +426,7 @@ export class MatchSim {
     this.updateGeysers(dt);
     this.updatePowerUps(dt);
     updateSpecials(this, dt);
+    this.updateCpuTactic(dt);
     if (this.callT > 0) this.callT -= dt;
 
     // decisioni
@@ -492,10 +510,24 @@ export class MatchSim {
         this.charge = 0;
         return;
       }
+      // PASSA: tocco = passaggio corto; tenuto premuto = filtrante, ancora di più = pallonetto
       if (passPressed && !this.charging) {
+        this.passCharging = true;
+        this.passHold = 0;
+      }
+      if (this.passCharging && shootPressed) this.passCharging = false;
+      if (this.passCharging && input.pass) this.passHold += dt;
+      if (this.passCharging && !input.pass) {
+        const held = this.passHold;
+        this.passCharging = false;
+        this.passHold = 0;
         const dir = mag > 0.15 ? Math.atan2(input.my, input.mx) : h.facing;
-        const target = chooseHumanPassTarget(this, h, dir);
-        if (target) {
+        const mode = held >= PASS_LOB_T ? 'pallonetto' : held >= PASS_THROUGH_T ? 'filtrante' : null;
+        const target = mode ? this.throughTarget(h, dir) : chooseHumanPassTarget(this, h, dir);
+        if (target && mode) {
+          this.throughPass(h, target, mode);
+          if (!this.locked) this.setHuman(target.idx);
+        } else if (target) {
           this.pass(h, target);
           if (!this.locked) this.setHuman(target.idx);
         } else {
@@ -507,6 +539,8 @@ export class MatchSim {
     } else {
       this.charging = false;
       this.charge = 0;
+      this.passCharging = false;
+      this.passHold = 0;
       if (shootPressed && h.canAct) {
         const gx = this.oppGoalX(h.team);
         const toGoal = Math.atan2(this.H / 2 - h.y, gx - h.x);
@@ -622,6 +656,7 @@ export class MatchSim {
     b.z = Math.max(b.z, 1);
     b.spin = spin;
     b.passTarget = null;
+    b.through = null;
     b.isShot = false;
     b.volley = null;
     b.giant = this.giant[p.team] > 0;
@@ -751,6 +786,14 @@ export class MatchSim {
     let speed = (250 + power * 330) * (0.85 + st * 0.18);
     let vz = 20 + 105 * power * power + this.rng.range(0, 15);
     let spin = 0;
+    // tiro a catena: dopo una bella serie di passaggi il tiro è più forte e preciso
+    const chainShot = this.chain[team] >= CHAIN_SHOT_AT && !superShot && power > 0.5;
+    if (chainShot) {
+      speed *= 1.14;
+      dir += (toGoal - dir) * 0.2;
+      this.events.push({ type: 'chain', team, n: 99, x: p.x, y: p.y });
+    }
+    this.chain[team] = 0;
     if (fire) speed *= 1.3;
     if (this.giant[team] > 0) {
       speed *= 1.18;
@@ -802,6 +845,98 @@ export class MatchSim {
     b.passTarget = target;
     this.stats.passes[p.team]++;
     this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team, idx: p.idx });
+  }
+
+  /** Compagno più avanzato nella direzione indicata: bersaglio del filtrante e del pallonetto. */
+  throughTarget(p: Player, dir: number): Player | null {
+    const dx = Math.cos(dir);
+    const dy = Math.sin(dir);
+    const fwd = this.dirOf(p.team);
+    let best: Player | null = null;
+    let bs = -Infinity;
+    for (const t of this.teams[p.team]) {
+      if (t === p || t.isGK || t.out > 0) continue;
+      const d = dist(p, t);
+      if (d < 40) continue;
+      const c = ((t.x - p.x) * dx + (t.y - p.y) * dy) / d;
+      if (c < 0.3) continue;
+      // meglio chi è più avanti e libero
+      const ahead = (t.x - p.x) * fwd;
+      const s = c * 1.6 + ahead / 260 - d / 700;
+      if (s > bs) {
+        bs = s;
+        best = t;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Passaggio filtrante (rasoterra, davanti al compagno che scatta) o pallonetto (alto,
+   * scavalca gli avversari). Più rischioso del passaggio corto: l'errore cresce con la distanza.
+   */
+  throughPass(p: Player, target: Player, mode: 'filtrante' | 'pallonetto') {
+    const b = this.ball;
+    const fwd = this.dirOf(p.team);
+    const lead = mode === 'filtrante' ? 0.8 : 0.5;
+    const tx = clamp(target.x + target.vx * lead + fwd * (mode === 'filtrante' ? 46 : 24), 10, this.W - 10);
+    const ty = clamp(target.y + target.vy * lead, 10, this.H - 10);
+    const d = len(tx - p.x, ty - p.y);
+    const q = p.def.stats.pass;
+    const err = (1.2 - q) * (0.05 + d / 2600);
+    const dir = Math.atan2(ty - p.y, tx - p.x) + this.rng.range(-err, err);
+    if (mode === 'filtrante') {
+      const speed = clamp(190 + d * 1.35, 250, 470) * (0.9 + q * 0.12) * Math.sqrt(this.pitch.ballFriction);
+      this.kickBall(p, dir, speed, 0, 0);
+    } else {
+      // arco alto: atterra vicino al compagno dopo circa mezzo secondo
+      const speed = clamp(d / 0.5, 150, 470) * (0.92 + q * 0.08);
+      this.kickBall(p, dir, speed, 150, 0);
+    }
+    b.passTarget = target;
+    b.through = mode;
+    // il compagno scatta verso il punto di arrivo senza aspettare la prossima decisione
+    if (!this.isHuman(target)) {
+      target.tx = tx;
+      target.ty = ty;
+      target.wantSprint = true;
+      target.thinkT = 0.45;
+    }
+    this.stats.passes[p.team]++;
+    this.events.push({ type: 'pass', x: p.x, y: p.y, team: p.team, idx: p.idx, kind: mode });
+  }
+
+  /** Cambia atteggiamento tattico di una squadra. */
+  setTactic(team: 0 | 1, t: Tactic) {
+    if (this.tactic[team] === t) return;
+    this.tactic[team] = t;
+    this.events.push({ type: 'mentality', team, tactic: t });
+  }
+
+  /** La CPU rischia di più se è sotto a fine partita e si copre se è avanti. */
+  private updateCpuTactic(dt: number) {
+    this.tacticT -= dt;
+    if (this.tacticT > 0) return;
+    this.tacticT = 3;
+    for (const t of [0, 1] as const) {
+      if (t === this.humanTeam) continue;
+      const diff = this.score[t] - this.score[1 - t];
+      const late = this.timeLeft < this.cfg.durationSec * 0.45 || this.goldenGoal;
+      const next: Tactic = late && diff < 0 ? 'attacco' : late && diff > 0 ? 'difesa' : 'equilibrio';
+      this.setTactic(t, next);
+    }
+  }
+
+  /** Un passaggio è arrivato al compagno: la catena cresce e carica barra SUPER. */
+  private chainPass(from: Player, to: Player) {
+    const t = to.team;
+    this.chain[t]++;
+    const n = this.chain[t];
+    if (n >= 2) this.addSuper(t, 0.03 * Math.min(n, 5));
+    if (n === 3 || n === CHAIN_SHOT_AT) {
+      this.events.push({ type: 'chain', team: t, n, x: to.x, y: to.y });
+    }
+    if (from.team !== t) this.chain[t] = 1;
   }
 
   addSuper(team: 0 | 1, amount: number) {
@@ -1030,6 +1165,7 @@ export class MatchSim {
           owner.setState('stun', 0);
           owner.pickupCd = 0.6;
           this.stats.tackles[p.team]++;
+          this.chain[owner.team] = 0;
           this.addSuper(p.team, 0.14);
           this.addEnergy(p, 0.2);
         }
@@ -1072,6 +1208,7 @@ export class MatchSim {
         owner.setState('stun', 0.15);
         this.events.push({ type: 'steal', x: b.x, y: b.y, team: p.team, idx: p.idx });
         this.stats.tackles[p.team]++;
+        this.chain[owner.team] = 0;
         this.addSuper(p.team, 0.1);
         this.addEnergy(p, 0.16);
         // vicino alla linea di porta: niente autogol girando all'indietro, spazza o ruota verso fuori
@@ -1488,9 +1625,13 @@ export class MatchSim {
     }
     const prev = b.lastTouch;
     if (prev && prev !== p && prev.team === p.team && b.passTarget) {
-      this.addSuper(p.team, 0.08);
-      this.addEnergy(prev, 0.12);
+      this.addSuper(p.team, b.through ? 0.12 : 0.08);
+      this.addEnergy(prev, b.through ? 0.18 : 0.12);
+      this.chainPass(prev, p);
+    } else if (!prev || prev.team !== p.team) {
+      this.chain = [0, 0];
     }
+    b.through = null;
     // tunnel riuscito: la palla è passata tra le gambe e la riprende la stessa squadra
     const tc = this.tunnelCand;
     this.tunnelCand = null;

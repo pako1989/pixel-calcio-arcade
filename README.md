@@ -11,11 +11,14 @@ Partite veloci 5 contro 5 contro la CPU, effetti, power-up e campi diversi, ognu
 | --- | --- | --- |
 | Joystick (metà sinistra dello schermo) | Frecce / WASD | Muoversi |
 | **TIRA** (tieni premuto per caricare) | J, X o Spazio | Tiro. Senza palla: **scivolata** |
-| **PASSA** | K o Z | Passaggio verso il joystick. Senza palla: **cambia giocatore** |
+| **PASSA** (tienilo premuto) | K o Z | Tocco: passaggio verso il joystick. Tenuto premuto: **filtrante** rasoterra davanti al compagno che scatta, ancora più a lungo: **pallonetto** che scavalca. Senza palla: **cambia giocatore** |
 | **SCATTO** | L, Shift o C | Corsa veloce (consuma fiato) |
 | II | Esc / P | Pausa |
 
 - **Super tiro**: passaggi riusciti, contrasti e recuperi riempiono la barra SUPER sotto il punteggio. Quando lampeggia, un tiro caricato al massimo diventa un super tiro a effetto.
+- **Catena di passaggi**: 4 passaggi riusciti di fila senza perdere palla e il prossimo tiro è **a catena** (più forte e preciso). Ogni passaggio riuscito carica anche un po' di barra SUPER.
+- **Tattica**: dalla pausa scegli DIFESA / EQUILIBRIO / ATTACCO: cambia dove si posizionano i compagni e quanto pressano. La CPU rischia di più se è sotto a fine partita.
+- **Fiato**: sotto il giocatore controllato compare la barra del fiato quando scatti.
 - **Power-up** sul campo: 🔥 tiro di fuoco, ⚡ turbo per tutta la squadra, 🧱 muro davanti alla propria porta.
 - In caso di pareggio si va al **golden gol**.
 

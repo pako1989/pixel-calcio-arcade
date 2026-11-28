@@ -7,6 +7,7 @@ import { sfx } from '../audio/sfx';
 import { backToMenu, backToScene } from './demo';
 import { MODES } from '../modes/modes';
 import { SPECIALS, pickSpecial, specialsOf } from '../sim/specials';
+import { PASS_LOB_T, PASS_THROUGH_T } from '../sim/match';
 
 interface TouchButton {
   id: 'shoot' | 'pass' | 'sprint' | 'special';
@@ -362,6 +363,19 @@ export class HudScene extends Phaser.Scene {
           if (!full) cg.fillStyle(0x000000, 0.35).fillCircle(b.x, b.y, r);
         }
       }
+      // anello di carica sul tasto PASSA (tieni premuto: filtrante, poi pallonetto)
+      if (sim.passCharging && sim.passHold > 0.05) {
+        const pb = this.buttons.find((x) => x.id === 'pass');
+        if (pb) {
+          const held = sim.passHold;
+          const c = Math.min(1, held / PASS_LOB_T);
+          cg.lineStyle(4, held >= PASS_LOB_T ? 0xff8ad8 : held >= PASS_THROUGH_T ? 0x6ae6ff : 0xffffff, 1);
+          cg.beginPath();
+          cg.arc(pb.x, pb.y, pb.r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * c, false);
+          cg.strokePath();
+          pb.label.setText(held >= PASS_LOB_T ? 'ALTO' : held >= PASS_THROUGH_T ? 'FILTR.' : 'PASSA');
+        }
+      }
       // anello di carica sul tasto TIRA
       if (sim.charging) {
         const sb = this.buttons[0];
@@ -445,8 +459,8 @@ export class HudScene extends Phaser.Scene {
     panel(g, W / 2 - 170, H / 2 - 62, 340, 126, 0x1b1d2e, 0x2e3250, 0.94);
     c.add(g);
     const lines = this.touch
-      ? ['COME SI GIOCA', '', 'Joystick a sinistra: muoviti', 'TIRA: tieni premuto per caricare', 'PASSA: passaggio verso il joystick', 'Senza palla: SCIVOLA e CAMBIA', 'SCATTO: corri più veloce', 'SUPER: supermossa a barra piena']
-      : ['COME SI GIOCA', '', 'Frecce/WASD: muoviti', 'J o X: tira (tieni premuto)', 'K o Z: passa / cambia', 'Senza palla J: scivolata', 'L o Shift: scatto  -  E o V: SUPERMOSSA  -  Esc: pausa'];
+      ? ['COME SI GIOCA', '', 'Joystick a sinistra: muoviti', 'TIRA: tieni premuto per caricare', 'PASSA: passaggio (tienilo premuto: filtrante, poi pallonetto)', 'Senza palla: SCIVOLA e CAMBIA', 'SCATTO: corri più veloce', 'SUPER: supermossa a barra piena']
+      : ['COME SI GIOCA', '', 'Frecce/WASD: muoviti', 'J o X: tira (tieni premuto)', 'K o Z: passa (tieni premuto: filtrante / pallonetto)', 'Senza palla J: scivolata', 'L o Shift: scatto  -  E o V: SUPERMOSSA  -  Esc: pausa'];
     lines.forEach((l, i) => c.add(txt(this, W / 2, H / 2 - 50 + i * 14, l, i === 0 ? 8 : 6, i === 0 ? '#ffd23f' : '#ffffff')));
     this.help = c;
     this.time.delayedCall(5200, () => {
@@ -470,9 +484,9 @@ export class HudScene extends Phaser.Scene {
       const c = this.add.container(0, 0);
       const bg = this.add.rectangle(0, 0, W, H, 0x0a0816, 0.7).setOrigin(0).setInteractive();
       c.add(bg);
-      c.add(shadowTxt(this, W / 2, H / 2 - 80, 'PAUSA', 24, '#ffd23f').c);
-      const b1 = button(this, W / 2, H / 2 - 30, 180, 26, 'RIPRENDI', () => this.togglePause(false), { color: 0x2f8be0 });
-      const b2 = button(this, W / 2, H / 2 + 6, 180, 26, 'OPZIONI', () => {
+      c.add(shadowTxt(this, W / 2, H / 2 - 92, 'PAUSA', 24, '#ffd23f').c);
+      const b1 = button(this, W / 2, H / 2 - 48, 180, 26, 'RIPRENDI', () => this.togglePause(false), { color: 0x2f8be0 });
+      const b2 = button(this, W / 2, H / 2 - 12, 180, 26, 'OPZIONI', () => {
         this.scene.launch('settings');
         this.scene.bringToTop('settings');
         // se le supermosse cambiano nelle opzioni, vale subito per questa partita
@@ -482,15 +496,23 @@ export class HudScene extends Phaser.Scene {
       // interruttore rapido delle supermosse (le missioni che le chiedono le tengono sempre attive)
       const forced = !!this.match.launch.forceSpecials;
       const spLabel = () => (forced ? 'SUPERMOSSE: OBBLIGATE' : `SUPERMOSSE: ${this.match.sim.specialsOn ? 'SÌ' : 'NO'}`);
-      const bs = button(this, W / 2, H / 2 + 42, 180, 26, spLabel(), () => {
+      const bs = button(this, W / 2, H / 2 + 24, 180, 26, spLabel(), () => {
         if (forced) return;
         this.setSpecials(!this.match.sim.specialsOn, true);
         bs.setLabel(spLabel());
         bs.setSelected(this.match.sim.specialsOn);
       }, { color: 0x7a2a8a, size: 6 });
       bs.setSelected(this.match.sim.specialsOn);
-      const b3 = button(this, W / 2, H / 2 + 78, 180, 26, this.match.launch.mode === 'quick' ? 'ESCI AL MENU' : 'ABBANDONA', () => this.quit(), { color: 0x8a3040 });
-      c.add([b1.c, bs.c, b3.c]);
+      const tacLabel = () => `TATTICA: ${{ difesa: 'DIFESA', equilibrio: 'EQUILIBRIO', attacco: 'ATTACCO' }[this.match.sim.tactic[this.match.sim.humanTeam ?? 0]]}`;
+      const order = ['difesa', 'equilibrio', 'attacco'] as const;
+      const bt = button(this, W / 2, H / 2 + 60, 180, 26, tacLabel(), () => {
+        const sim = this.match.sim;
+        const t = sim.humanTeam ?? 0;
+        sim.setTactic(t, order[(order.indexOf(sim.tactic[t]) + 1) % 3]);
+        bt.setLabel(tacLabel());
+      }, { color: 0x2a7a5a, size: 6 });
+      const b3 = button(this, W / 2, H / 2 + 96, 180, 26, this.match.launch.mode === 'quick' ? 'ESCI AL MENU' : 'ABBANDONA', () => this.quit(), { color: 0x8a3040 });
+      c.add([b1.c, bs.c, bt.c, b3.c]);
       this.pauseLayer = c;
       this.ctrlG.clear();
     } else {

@@ -1,4 +1,4 @@
-import type { PlayerDef, Role } from './types';
+import type { PlayerDef, Role, Tactic } from './types';
 
 export type PlayerState = 'run' | 'slide' | 'stun' | 'kick' | 'dive' | 'volley' | 'bicycle' | 'celebrate' | 'sad';
 
@@ -101,6 +101,8 @@ export class Ball {
   volley: 'volo' | 'rovesciata' | null = null;
   /** Destinatario di un passaggio in corso. */
   passTarget: Player | null = null;
+  /** Passaggio filtrante o pallonetto: il compagno scatta sulla palla davanti a sé. */
+  through: 'filtrante' | 'pallonetto' | null = null;
   /** Supermossa in volo (fulmine, cometa...): `t` secondi dal calcio. */
   special: { id: string; t: number } | null = null;
 
@@ -127,7 +129,9 @@ export interface PowerUp {
 export type SimEvent =
   | { type: 'kick'; x: number; y: number; power: number; team: 0 | 1 }
   | { type: 'shot'; x: number; y: number; power: number; team: 0 | 1; superShot: boolean; fire: boolean; idx?: number; volley?: 'volo' | 'rovesciata'; special?: string }
-  | { type: 'pass'; x: number; y: number; team: 0 | 1; idx?: number }
+  | { type: 'pass'; x: number; y: number; team: 0 | 1; idx?: number; kind?: 'filtrante' | 'pallonetto' }
+  | { type: 'chain'; team: 0 | 1; n: number; x: number; y: number }
+  | { type: 'mentality'; team: 0 | 1; tactic: Tactic }
   | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number; volley?: 'volo' | 'rovesciata' | null; banked?: boolean; long?: boolean; superGoal?: boolean; special?: string }
   | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1; idx?: number }
   | { type: 'post'; x: number; y: number }
