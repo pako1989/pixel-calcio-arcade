@@ -1,9 +1,10 @@
 import { Ball, Player, type PowerUp, type PowerUpKind, type SimEvent } from './entities';
 import { clamp, dist, distToSegment, len, norm, Rng, turnTowards, type Vec } from './math';
-import type { Difficulty, MatchConfig, MatchResult, MatchStats, PitchDef, Tactic } from './types';
+import type { Difficulty, FormationId, MatchConfig, MatchResult, MatchStats, PitchDef, Tactic } from './types';
 import { aiThink, aiGoalkeeper, chooseHumanPassTarget, decideAiActions } from './ai';
 import { applyWeather } from '../data/weather';
 import { tryStoneHand, updateSpecials, useSpecial, specialsOf, SPECIALS } from './specials';
+import { makeBench, type Reserve } from './bench';
 import { duelRatio, paceOf, passAimErr, passPowerMul, shotAimErr, shotPowerMul } from './abilita';
 
 export const GOAL_DEPTH = 22;
@@ -46,7 +47,10 @@ export const DIFFICULTY: Record<Difficulty, DiffParams> = {
   difficile: { speed: 1.01, think: 0.16, tackle: 2.0, shotErr: 0.07, keeper: 1.05, steal: 1.2, decision: 0.9 },
 };
 
-export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end' | 'freekick';
+export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end' | 'freekick' | 'halftime';
+
+/** Cambi disponibili per squadra nell'intervallo. */
+export const MAX_SUBS = 3;
 
 /** Punizione dal limite: chi tira, dove mira, quanto effetto. */
 export interface FreeKick {
@@ -78,6 +82,12 @@ export class MatchSim {
   phaseT = 0;
   kickoffTeam: 0 | 1 = 0;
   goldenGoal = false;
+  /** Intervallo già fatto (o non previsto). */
+  halfDone = false;
+  /** Panchina di ogni squadra (3 riserve) e cambi ancora disponibili. */
+  bench: [Reserve[], Reserve[]];
+  subsLeft: [number, number] = [MAX_SUBS, MAX_SUBS];
+  private initialKick: 0 | 1 = 0;
   events: SimEvent[] = [];
   /** Indice (in teams[humanTeam]) del giocatore controllato. */
   humanIdx = 4;
@@ -153,6 +163,10 @@ export class MatchSim {
       });
     });
     this.kickoffTeam = this.rng.chance(0.5) ? 0 : 1;
+    this.initialKick = this.kickoffTeam;
+    const bseed = (cfg.seed ?? 1) * 31 + 7;
+    this.bench = [makeBench(cfg.home, bseed), makeBench(cfg.away, bseed + 1)];
+    this.halfDone = !cfg.halftime;
     if (cfg.tactic && cfg.humanTeam !== null) this.tactic[cfg.humanTeam] = cfg.tactic;
     if (cfg.mods?.startWall) this.wall[0] = cfg.mods.startWall;
     if (cfg.mods?.startTurbo) this.turbo[0] = cfg.mods.startTurbo;
@@ -347,9 +361,90 @@ export class MatchSim {
       case 'freekick':
         this.updateFreeKick(dt, input);
         break;
+      case 'halftime':
+        break;
     }
     this.prevShoot = input.shoot;
     this.prevPass = input.pass;
+  }
+
+  // ---------- intervallo e cambi ----------
+  /** Chi corre si stanca: dopo il primo tempo i titolari sono un po' più lenti, le riserve fresche. */
+  private updateFitness(dt: number) {
+    const k = dt / Math.max(30, this.cfg.durationSec);
+    for (const p of this.players) {
+      if (p.isGK || p.out > 0) continue;
+      p.fitness = Math.max(0.45, p.fitness - k * (0.4 + (p.sprinting ? 0.8 : 0)));
+    }
+  }
+
+  private startHalftime() {
+    this.halfDone = true;
+    this.phase = 'halftime';
+    this.phaseT = 1e9;
+    const b = this.ball;
+    b.owner = null;
+    b.stop();
+    b.fire = b.superShot = b.giant = b.isShot = false;
+    b.volley = null;
+    b.passTarget = null;
+    this.charging = false;
+    this.passCharging = false;
+    this.passHold = 0;
+    for (const p of this.players) {
+      p.vx = p.vy = 0;
+      p.wantX = p.wantY = 0;
+      p.sprinting = false;
+      p.setState('run');
+    }
+    this.events.push({ type: 'whistle', kind: 'half' });
+    // la CPU cambia da sola chi è più stanco
+    for (const t of [0, 1] as const) if (t !== this.humanTeam) this.cpuSubs(t);
+  }
+
+  /** La CPU sostituisce fino a due titolari stanchi con la riserva dello stesso ruolo. */
+  private cpuSubs(team: 0 | 1) {
+    const order = this.teams[team].filter((p) => !p.isGK).sort((a, b) => a.fitness - b.fitness);
+    let n = 0;
+    for (const p of order) {
+      if (n >= 2 || p.fitness > 0.85) break;
+      const bi = this.bench[team].findIndex((r) => r.def.role === p.def.role);
+      if (bi >= 0 && this.bench[team][bi].fitness > p.fitness + 0.05 && this.substitute(team, p.idx, bi)) n++;
+    }
+  }
+
+  /** Cambio durante l'intervallo: la riserva entra al posto del titolare, che va in panchina. */
+  substitute(team: 0 | 1, idx: number, benchIdx: number): boolean {
+    if (this.phase !== 'halftime' || this.subsLeft[team] <= 0) return false;
+    const p = this.teams[team][idx];
+    const r = this.bench[team][benchIdx];
+    if (!p || !r || p.isGK) return false;
+    const out = { def: p.def, fitness: p.fitness };
+    p.def = r.def;
+    p.fitness = r.fitness;
+    p.injured = false;
+    p.yellows = 0;
+    p.out = 0;
+    p.energy = 0;
+    this.bench[team][benchIdx] = out;
+    this.subsLeft[team]--;
+    this.events.push({ type: 'sub', team, idx, inName: p.def.name, outName: out.def.name });
+    return true;
+  }
+
+  /** Fine intervallo: tutti recuperano un po' e il secondo tempo inizia dall'altra squadra. */
+  resumeSecondHalf() {
+    if (this.phase !== 'halftime') return;
+    for (const p of this.players) p.fitness = Math.min(1, p.fitness + 0.12);
+    for (const t of [0, 1] as const) for (const r of this.bench[t]) r.fitness = Math.min(1, r.fitness + 0.12);
+    this.kickoffTeam = this.initialKick === 0 ? 1 : 0;
+    this.setupKickoff();
+  }
+
+  /** Cambia il modulo di una squadra (anche durante l'intervallo). */
+  setFormation(team: 0 | 1, f: FormationId) {
+    if (team === 0) this.cfg.formation = f;
+    else this.cfg.awayFormation = f;
   }
 
   private endMatch() {
@@ -399,6 +494,11 @@ export class MatchSim {
     this.elapsed += dt;
     if (this.ball.owner) this.stats.possession[this.ball.owner.team] += dt;
 
+    if (!this.halfDone && !this.goldenGoal && this.timeLeft <= this.cfg.durationSec / 2) {
+      this.startHalftime();
+      return;
+    }
+
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
       if (this.score[0] === this.score[1] && this.cfg.goldenGoal && !this.goldenGoal) {
@@ -422,6 +522,7 @@ export class MatchSim {
       if (this.magnet[t] > 0) this.magnet[t] -= dt;
       if (this.giant[t] > 0) this.giant[t] -= dt;
     }
+    if (this.cfg.halftime) this.updateFitness(dt);
     this.updateWind(dt);
     this.updateWaves(dt);
     this.updateGeysers(dt);
@@ -1083,6 +1184,7 @@ export class MatchSim {
     if (this.inMud(p.x, p.y)) s *= 0.62;
     if (p.isGK) s *= 1.05;
     if (p.injured) s *= 0.86;
+    if (this.cfg.halftime) s *= 0.8 + 0.2 * p.fitness;
     if (p.spKind === 'tornado' && p.spT > 0) s *= 1.45;
     if (this.cfg.mods?.speedMult) s *= this.cfg.mods.speedMult;
     return s;
@@ -1128,7 +1230,7 @@ export class MatchSim {
       p.sprinting = wantsSprint && len(p.wantX, p.wantY) > 0.3;
       const stMult = this.cfg.mods?.staminaMult ?? 1;
       if (p.sprinting && this.turbo[p.team] <= 0) p.stamina = Math.max(0, p.stamina - dt * 0.32 * stMult * (p.def.skills?.includes('motore') ? 0.6 : 1));
-      else p.stamina = Math.min(1, p.stamina + dt * 0.18);
+      else p.stamina = Math.min(1, p.stamina + dt * 0.18 * (this.cfg.halftime ? 0.6 + 0.4 * p.fitness : 1));
       const ms = this.maxSpeed(p);
       const dvx = p.wantX * ms - p.vx;
       const dvy = p.wantY * ms - p.vy;

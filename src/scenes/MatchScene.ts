@@ -1103,6 +1103,8 @@ export class MatchScene extends Phaser.Scene {
           } else if (e.kind === 'golden') {
             sfx.whistle(2);
             commentary.say('golden');
+          } else if (e.kind === 'half') {
+            sfx.whistle(2);
           }
         }
         if (!demo) {
@@ -1167,6 +1169,16 @@ export class MatchScene extends Phaser.Scene {
         break;
       case 'switch':
         break;
+      case 'sub': {
+        // la riserva entra: nuova maglia col suo numero e aspetto
+        const ps = this.ps.find((q) => q.p.team === e.team && q.p.idx === e.idx);
+        if (ps) {
+          const key = `pl_${e.team}_${e.idx}`;
+          makePlayerSheet(this, key, e.team === 0 ? this.launch.config.home : this.launch.config.away, ps.p.def);
+          ps.spr.setTexture(key, 0);
+        }
+        break;
+      }
       case 'wave':
         if (!quiet) {
           sfx.wave();
