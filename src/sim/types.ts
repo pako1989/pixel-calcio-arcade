@@ -156,7 +156,12 @@ export interface MatchConfig {
   /** Modulo tattico delle squadre (predefinito: 1-2-1). */
   formation?: FormationId;
   awayFormation?: FormationId;
+  /** Atteggiamento della squadra umana (predefinito: equilibrio). Si cambia anche dal menu di pausa. */
+  tactic?: Tactic;
 }
+
+/** Atteggiamento tattico: squadra bassa, equilibrata o tutta all'attacco con pressing alto. */
+export type Tactic = 'difesa' | 'equilibrio' | 'attacco';
 
 /** Modificatori arcade applicati dalla simulazione della partita. */
 export interface MatchMods {

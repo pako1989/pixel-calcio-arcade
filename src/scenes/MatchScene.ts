@@ -4,7 +4,7 @@ import type { Player } from '../sim/entities';
 import type { SimEvent } from '../sim/entities';
 import { chooseHumanPassTarget } from '../sim/ai';
 import { drawCrowd, drawGoals, drawObstacle, drawPitch, MARGIN, THEMES, Z_SCALE, BAR_H } from '../gfx/pitchArt';
-import { GOAL_DEPTH } from '../sim/match';
+import { GOAL_DEPTH, PASS_LOB_T, PASS_THROUGH_T } from '../sim/match';
 import { FRAME, frameIndex, makePlayerSheet, type Dir, type Pose } from '../gfx/sprites';
 import { sfx } from '../audio/sfx';
 import { music } from '../audio/music';
@@ -925,6 +925,19 @@ export class MatchScene extends Phaser.Scene {
       case 'pass':
         if (!quiet) sfx.pass();
         this.fx.dust.explode(3, e.x, e.y);
+        if (e.kind && !demo && e.team === human) {
+          this.msg({ text: e.kind === 'filtrante' ? 'FILTRANTE!' : 'PALLONETTO!', color: e.kind === 'filtrante' ? '#6ae6ff' : '#ff8ad8', ms: 700 });
+        }
+        break;
+      case 'chain':
+        if (!demo && e.team === human) {
+          this.msg(e.n === 99 ? { text: 'TIRO A CATENA!', color: '#ffd23f' } : { text: `CATENA x${e.n}`, sub: e.n >= 4 ? 'il prossimo tiro è carico' : undefined, color: '#6ae6ff', ms: 800 });
+        }
+        break;
+      case 'mentality':
+        if (!demo && e.team === human) {
+          this.msg({ text: e.tactic === 'attacco' ? 'ALL\'ATTACCO!' : e.tactic === 'difesa' ? 'SI DIFENDE' : 'EQUILIBRIO', color: '#ffd23f', ms: 800 });
+        }
         break;
       case 'shot': {
         if (!quiet) {
@@ -1477,7 +1490,21 @@ export class MatchScene extends Phaser.Scene {
       }
       // barra di carica
       this.chargeG.clear();
-      if (sim.charging) {
+      if (sim.passCharging && sim.passHold > 0.12) {
+        // passaggio tenuto premuto: corto -> filtrante -> pallonetto
+        const w = 22;
+        const x = Math.round(h.x - w / 2);
+        const y = Math.round(h.y - 40);
+        const c = Math.min(1, sim.passHold / PASS_LOB_T);
+        const col = sim.passHold >= PASS_LOB_T ? 0xff8ad8 : sim.passHold >= PASS_THROUGH_T ? 0x6ae6ff : 0xffffff;
+        this.chargeG.fillStyle(0x1a1222).fillRect(x - 1, y - 1, w + 2, 5);
+        this.chargeG.fillStyle(0x3a3d55).fillRect(x, y, w, 3);
+        this.chargeG.fillStyle(col).fillRect(x, y, Math.round(w * c), 3);
+        const tgt = sim.throughTarget(h, Math.hypot(this.ctrl.mx, this.ctrl.my) > 0.15 ? Math.atan2(this.ctrl.my, this.ctrl.mx) : h.facing);
+        if (tgt && sim.passHold >= PASS_THROUGH_T) {
+          this.passRing.setVisible(true).setPosition(Math.round(tgt.x), Math.round(tgt.y + 1)).setTint(col);
+        }
+      } else if (sim.charging) {
         const w = 22;
         const x = Math.round(h.x - w / 2);
         const y = Math.round(h.y - 40);
@@ -1495,6 +1522,15 @@ export class MatchScene extends Phaser.Scene {
         this.chargeG.fillStyle(0x1a1222, 0.85).fillRect(x - 1, y - 1, w + 2, 4);
         const pulse = Math.floor(t * 8) % 2 === 0;
         this.chargeG.fillStyle(full ? (pulse ? 0xffd23f : 0xff3fa4) : 0x3fd0ff).fillRect(x, y, Math.round(w * h.energy), 2);
+      }
+      // fiato: compare quando si sta scattando o si è un po' stanchi
+      if (!h.isGK && (h.stamina < 0.98 || h.sprinting)) {
+        const w = 18;
+        const x = Math.round(h.x - w / 2);
+        const y = Math.round(h.y + (sim.specialsOn ? 13 : 9));
+        const col = h.stamina > 0.5 ? 0x5be37d : h.stamina > 0.2 ? 0xffd23f : 0xff5a3a;
+        this.chargeG.fillStyle(0x1a1222, 0.85).fillRect(x - 1, y - 1, w + 2, 4);
+        this.chargeG.fillStyle(col).fillRect(x, y, Math.round(w * h.stamina), 2);
       }
     }
 
