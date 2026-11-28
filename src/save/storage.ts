@@ -8,6 +8,7 @@ import type { MissionsSave } from '../modes/missions';
 import type { TournamentState } from '../modes/tournament';
 import type { LeggendaSave } from '../modes/leggenda';
 import type { SurvivalRecord, SurvivalState } from '../modes/survival';
+import type { DuelloRecord } from '../modes/duello';
 import type { WorldTourState } from '../modes/worldTour';
 import type { FormationId } from '../sim/types';
 
@@ -60,6 +61,8 @@ export interface SaveData {
   /** Sopravvivenza roguelite: corsa in corso e record personale. */
   survival?: SurvivalState;
   survivalBest?: SurvivalRecord;
+  /** Duello a carte: duelli giocati, vinti e serie. */
+  duello?: DuelloRecord;
   /** Street World Tour: campagna internazionale. */
   worldTour?: WorldTourState;
 }

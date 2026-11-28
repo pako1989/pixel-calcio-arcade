@@ -86,8 +86,8 @@ export class TitleScene extends Phaser.Scene {
           this.scene.stop();
         },
         {
-          color: !m.available ? 0x3a3d55 : m.id === 'worldtour' ? 0x1b8f9a : m.id === 'mito' ? 0x8a3fd0 : m.id === 'conquista' ? 0x2f9a50 : m.id === 'manager' ? 0xc07a1a : m.id === 'leggenda' ? 0xe85a1a : m.id === 'sopravvivenza' ? 0xd02f6f : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
-          badge: !m.available ? 'PRESTO' : m.id === 'worldtour' ? (wt?.finished ? 'VINTO' : wt ? `${wt.step}/6` : 'NUOVO') : m.id === 'mito' ? 'STORIA' : m.id === 'leggenda' ? 'NUOVO: STELLE' : m.id === 'sopravvivenza' ? (survBest > 0 ? `REC ${survBest}` : 'ROGUELITE') : undefined,
+          color: !m.available ? 0x3a3d55 : m.id === 'worldtour' ? 0x1b8f9a : m.id === 'mito' ? 0x8a3fd0 : m.id === 'conquista' ? 0x2f9a50 : m.id === 'manager' ? 0xc07a1a : m.id === 'leggenda' ? 0xe85a1a : m.id === 'sopravvivenza' ? 0xd02f6f : m.id === 'duello' ? 0x7a3fd0 : m.id === 'quick' ? 0xe8443a : 0x2f6fd0,
+          badge: !m.available ? 'PRESTO' : m.id === 'worldtour' ? (wt?.finished ? 'VINTO' : wt ? `${wt.step}/6` : 'NUOVO') : m.id === 'mito' ? 'STORIA' : m.id === 'leggenda' ? 'NUOVO: STELLE' : m.id === 'sopravvivenza' ? (survBest > 0 ? `REC ${survBest}` : 'ROGUELITE') : m.id === 'duello' ? (sv.duello?.bestStreak ? `SERIE ${sv.duello.bestStreak}` : 'NUOVO') : undefined,
           size: m.title.length > 18 ? 7 : 8,
         },
       );
