@@ -329,6 +329,8 @@ export class TournamentScene extends Phaser.Scene {
         powerUps: s.powerUps,
         formation: st.formation ?? s.formation,
         goldenGoal: false,
+        // pareggio: supplementari e poi rigori
+        extraTime: true,
         halftime: s.halftime !== false,
         humanTeam: 0,
       },

@@ -14,7 +14,7 @@ import type { PenaltyData } from './PenaltyScene';
 const DIFFS: Difficulty[] = ['facile', 'normale', 'difficile'];
 const DURS = [120, 150, 180, 300];
 const FORMATIONS: FormationId[] = FORMATIONS_5;
-const WEATHER_OPTS = ['sereno', 'pioggia', 'nebbia', 'caso'] as const;
+const WEATHER_OPTS = ['sereno', 'pioggia', 'nebbia', 'neve', 'vento', 'temporale', 'caso'] as const;
 const TIME_OPTS = ['giorno', 'notte', 'caso'] as const;
 
 export class SetupScene extends Phaser.Scene {
@@ -147,7 +147,7 @@ export class SetupScene extends Phaser.Scene {
         const b = button(this, W / 2 - 140 + bw / 2 + i * (bw + 6), y, bw, 18, it, () => {
           onPick(i);
           bs.forEach((x, j) => x.setSelected(j === i));
-        }, { size: 6 });
+        }, { size: items.length > 5 ? 5 : 6 });
         b.setSelected(i === sel);
         bs.push(b);
       });
@@ -164,7 +164,7 @@ export class SetupScene extends Phaser.Scene {
       else this.formation = mods[i];
       this.rebuild();
     }, 372);
-    row(286, 'METEO', ['SERENO', 'PIOGGIA', 'NEBBIA', 'A CASO'], WEATHER_OPTS.indexOf(this.weather), (i) => (this.weather = WEATHER_OPTS[i]));
+    row(286, 'METEO', ['SOLE', 'PIOVE', 'NEBBIA', 'NEVE', 'VENTO', 'TUONI', 'CASO'], WEATHER_OPTS.indexOf(this.weather), (i) => (this.weather = WEATHER_OPTS[i]));
     if (alwaysNight(p.id)) txt(this, W / 2 - 140, 308, 'ORA: sempre di notte su questo campo', 6, '#8a8fb0').setOrigin(0, 0.5);
     else row(308, 'ORA', ['GIORNO', 'NOTTE', 'A CASO'], TIME_OPTS.indexOf(this.night), (i) => (this.night = TIME_OPTS[i]));
 

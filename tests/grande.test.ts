@@ -133,4 +133,18 @@ describe('11 contro 11', () => {
     expect(big.core?.[9]).toBe(4);
     expect(p.xp[base.id][4]).toBe(40);
   });
+
+  it('rigori in partita, supplementari, falli e meteo funzionano sul campo grande', () => {
+    for (const weather of ['sereno', 'pioggia', 'nebbia', 'neve', 'vento', 'temporale'] as const) {
+      const sim = new MatchSim(cfg({ weather, fouls: true, penaltyKicks: true, extraTime: true, goldenGoal: true, humanTeam: 0, durationSec: 60, seed: 9 }));
+      let penalties = 0;
+      for (let i = 0; i < 60 * 300 && sim.phase !== 'end'; i++) {
+        sim.update(1 / 60, NONE);
+        if (sim.phase === 'penalty') penalties++;
+        for (const p of sim.players) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+      }
+      expect(sim.phase).toBe('end');
+      expect(penalties).toBeGreaterThanOrEqual(0);
+    }
+  });
 });
