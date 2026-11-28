@@ -5,7 +5,7 @@ import type { MatchTally } from './tally';
  * Modalità di gioco. Ogni modalità prepara le partite (MatchConfig) e decide
  * cosa succede dopo il fischio finale, sempre sopra la stessa simulazione.
  */
-export type ModeId = 'quick' | 'torneo' | 'missioni' | 'mito' | 'conquista' | 'worldtour' | 'manager' | 'leggenda' | 'sopravvivenza';
+export type ModeId = 'quick' | 'torneo' | 'missioni' | 'mito' | 'conquista' | 'worldtour' | 'manager' | 'leggenda' | 'sopravvivenza' | 'duello';
 
 export interface ModeInfo {
   id: ModeId;
@@ -25,6 +25,7 @@ export const MODES: ModeInfo[] = [
   { id: 'mito', title: 'DIVENTA UN MITO', desc: 'Storia: dal campetto alla Serie A', available: true, scene: 'career' },
   { id: 'conquista', title: 'QUARTIERE VS CITTÀ', desc: 'Saga: conquista l\'Italia città per città', available: true, scene: 'conquista' },
   { id: 'leggenda', title: 'LEGGENDA DEL PALLONE', desc: 'Anime sportivo: duelli, tiri speciali e i Mondiali giovanili', available: true, scene: 'leggenda' },
+  { id: 'duello', title: 'DUELLO A CARTE', desc: 'Schiera i giocatori come carte e svuota il campo avversario', available: true, scene: 'duello' },
   { id: 'manager', title: 'MANAGER', desc: 'Guida il tuo club dal quartiere alla Serie Pixel', available: true, scene: 'manager' },
 ];
 
