@@ -1039,6 +1039,8 @@ export class ManagerScene extends Phaser.Scene {
     const me = myTeamDef(st);
     const launch: MatchLaunch = {
       mode: 'manager',
+      // in coppa il pareggio va ai supplementari e poi ai rigori
+      penalties: nm.cup,
       modeData: { season: st.season, week: st.week, cup: nm.cup ? st.cup!.round : -1 },
       hudGoal: nm.cup ? `${st.cup!.europe ? 'EUROPA' : 'COPPA'}: ${CUP_ROUNDS[st.cup!.round]}` : undefined,
       config: {
@@ -1049,7 +1051,8 @@ export class ManagerScene extends Phaser.Scene {
         difficulty: st.difficulty,
         durationSec: load().settings.duration,
         powerUps: load().settings.powerUps,
-        goldenGoal: nm.cup,
+        goldenGoal: false,
+        extraTime: nm.cup,
         humanTeam: 0,
       },
     };

@@ -466,7 +466,8 @@ export class ResultScene extends Phaser.Scene {
     txt(this, W / 2 + 100, 84, cfg.away.short, 8);
     shadowTxt(this, W / 2, 84, `${a} - ${b}`, 24, '#ffffff');
     if (result.goldenGoal) txt(this, W / 2, 106, 'GOLDEN GOL', 6, '#ffd23f');
-    if (result.penalties) txt(this, W / 2, 106, `RIGORI ${result.penalties[0]} - ${result.penalties[1]}`, 6, '#ffd23f');
+    if (result.penalties) txt(this, W / 2, 106, `${result.extraTime ? 'D.T.S. · ' : ''}RIGORI ${result.penalties[0]} - ${result.penalties[1]}`, 6, '#ffd23f');
+    else if (result.extraTime) txt(this, W / 2, 106, 'DOPO I SUPPLEMENTARI', 6, '#ffd23f');
 
     // marcatori
     const home = result.scorers.filter((s) => s.team === 0);

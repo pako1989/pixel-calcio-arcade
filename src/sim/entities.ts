@@ -134,7 +134,7 @@ export type SimEvent =
   | { type: 'pass'; x: number; y: number; team: 0 | 1; idx?: number; kind?: 'filtrante' | 'pallonetto' }
   | { type: 'chain'; team: 0 | 1; n: number; x: number; y: number }
   | { type: 'mentality'; team: 0 | 1; tactic: Tactic }
-  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number; volley?: 'volo' | 'rovesciata' | null; banked?: boolean; long?: boolean; superGoal?: boolean; special?: string }
+  | { type: 'goal'; team: 0 | 1; scorer: string; x: number; y: number; own: boolean; idx?: number; volley?: 'volo' | 'rovesciata' | null; banked?: boolean; long?: boolean; superGoal?: boolean; special?: string; pen?: boolean }
   | { type: 'save'; x: number; y: number; catch: boolean; team: 0 | 1; idx?: number }
   | { type: 'post'; x: number; y: number }
   | { type: 'wall'; x: number; y: number; power: number }
@@ -144,7 +144,8 @@ export type SimEvent =
   | { type: 'tackle'; x: number; y: number; won: boolean; team: 0 | 1; idx?: number }
   | { type: 'slide'; x: number; y: number }
   | { type: 'steal'; x: number; y: number; team: 0 | 1; idx?: number }
-  | { type: 'whistle'; kind: 'start' | 'end' | 'kickoff' | 'golden' | 'half' }
+  | { type: 'whistle'; kind: 'start' | 'end' | 'kickoff' | 'golden' | 'half' | 'extra' }
+  | { type: 'penalty'; team: 0 | 1; taker: string; keeper: string; x: number; y: number; interactive: boolean }
   | { type: 'sub'; team: 0 | 1; idx: number; inName: string; outName: string }
   | { type: 'powerup'; kind: PowerUpKind; team: 0 | 1; x: number; y: number }
   | { type: 'powerupSpawn'; kind: PowerUpKind; x: number; y: number }

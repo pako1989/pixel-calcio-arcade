@@ -84,18 +84,28 @@ export class SettingsScene extends Phaser.Scene {
     });
     y += 28;
 
-    // regola di gioco: falli, cartellini e infortuni
-    txt(this, px + 24, y, 'FALLI E CARTELLINI', 6, '#d8dcf0').setOrigin(0, 0.5);
+    // regola di gioco: falli, cartellini e infortuni; oppure solo i rigori per le scivolate da dietro in area
+    txt(this, px + 24, y, 'FALLI E RIGORI', 6, '#d8dcf0').setOrigin(0, 0.5);
     const fb: Button[] = [];
-    (['SÌ', 'NO'] as const).forEach((l, i) => {
-      const b = button(this, px + 196 + i * 62, y, 56, 20, l, () => {
-        save((d) => (d.settings.fouls = i === 0));
+    const FOUL_NOTES = [
+      'Gialli, rossi (30 s fuori), infortuni e rigori in area',
+      'Solo rigori: fallo in area = tiro dal dischetto',
+      'Niente falli e niente rigori in partita',
+    ];
+    const foulSel = () => (s.fouls ? 0 : s.penaltyKicks !== false ? 1 : 2);
+    const fnote = txt(this, W / 2, y + 15, FOUL_NOTES[foulSel()], 6, '#8a8fb0');
+    (['SÌ', 'RIGORI', 'NO'] as const).forEach((l, i) => {
+      const b = button(this, px + 196 + i * 58 - 4, y, 54, 20, l, () => {
+        save((d) => {
+          d.settings.fouls = i === 0;
+          d.settings.penaltyKicks = i !== 2;
+        });
         fb.forEach((x, j) => x.setSelected(j === i));
-      }, { size: 6 });
-      b.setSelected(i === 0 ? s.fouls : !s.fouls);
+        fnote.setText(FOUL_NOTES[i]);
+      }, { size: i === 1 ? 5 : 6 });
+      b.setSelected(i === foulSel());
       fb.push(b);
     });
-    txt(this, W / 2, y + 15, 'Scivolate fallose: gialli, rossi (30 s fuori) e infortuni', 6, '#8a8fb0');
     y += 32;
 
     // supermosse stile anime

@@ -37,6 +37,8 @@ export interface SaveData {
     fouls: boolean;
     /** Supermosse dei giocatori (attive di serie). */
     specials?: boolean;
+    /** Calci di rigore in partita per le scivolate da dietro in area (attivi di serie). */
+    penaltyKicks?: boolean;
     /** Intervallo con cambi a metà partita (attivo di serie). */
     halftime?: boolean;
     /** Modulo tattico in Partita veloce. */

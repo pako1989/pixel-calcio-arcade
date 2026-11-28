@@ -94,8 +94,8 @@ export interface Geyser {
   phase: number;
 }
 
-/** Meteo della partita: cambia la fisica (pioggia) o la visuale (nebbia). */
-export type Weather = 'sereno' | 'pioggia' | 'nebbia';
+/** Meteo della partita: cambia la fisica (pioggia, neve, vento) o la visuale (nebbia). */
+export type Weather = 'sereno' | 'pioggia' | 'nebbia' | 'neve' | 'vento' | 'temporale';
 
 export interface PitchDef {
   id: PitchId;
@@ -112,6 +112,8 @@ export interface PitchDef {
   /** 1 = aderenza normale, valori bassi = si scivola. */
   playerGrip: number;
   wind: boolean;
+  /** Forza del vento (1 = normale; il temporale soffia più forte). */
+  windPower?: number;
   /** Ostacoli in campo. */
   obstacles?: Obstacle[];
   /** Respingenti da flipper in campo. */
@@ -135,6 +137,10 @@ export interface MatchConfig {
   powerUps: boolean;
   /** Pareggio a fine tempo: si continua fino al prossimo gol. */
   goldenGoal: boolean;
+  /** Pareggio a fine tempo: supplementari (un terzo della durata), poi eventuali rigori. */
+  extraTime?: boolean;
+  /** Fallo da dietro in area sul portatore di palla = calcio di rigore (anche con i falli spenti). */
+  penaltyKicks?: boolean;
   seed?: number;
   /** Squadra controllata dal giocatore umano (0 = casa, null = CPU contro CPU). */
   humanTeam: 0 | 1 | null;
@@ -198,6 +204,8 @@ export interface MatchResult {
   score: [number, number];
   stats: MatchStats;
   goldenGoal: boolean;
+  /** Si sono giocati i supplementari. */
+  extraTime?: boolean;
   /** Esito dei calci di rigore, se ci sono stati. */
   penalties?: [number, number];
   scorers: { team: 0 | 1; name: string; time: number }[];

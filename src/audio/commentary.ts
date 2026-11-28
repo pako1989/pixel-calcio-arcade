@@ -25,6 +25,11 @@ export type CallKind =
   | 'rain'
   | 'fog'
   | 'night'
+  | 'snow'
+  | 'windy'
+  | 'storm'
+  | 'penalty'
+  | 'extra'
   | 'penStart'
   | 'penGoal'
   | 'penSave'
@@ -65,6 +70,11 @@ const LINES: Record<CallKind, string[]> = {
   rain: ['Si gioca sotto la pioggia. Il pallone frena sul bagnato!'],
   fog: ['Nebbia fitta stasera: si vede pochissimo!'],
   night: ['Partita in notturna, accesi i riflettori!'],
+  snow: ['Nevica sul campo! Il pallone si pianta nella neve.', 'Fiocchi di neve e campo bianco: si corre a fatica!'],
+  windy: ['Tira un vento forte: occhio ai palloni alti!', 'Raffiche di vento sullo stadio!'],
+  storm: ['Temporale! Pioggia, vento e fulmini: partita durissima!', 'Che diluvio! Si gioca sotto il temporale!'],
+  penalty: ["Rigore! L'arbitro indica il dischetto!", 'Calcio di rigore! Sul pallone {n}!', 'È rigore! Che occasione!'],
+  extra: ['Si va ai supplementari!', 'Tempi supplementari! Ancora tutto da decidere!'],
   penStart: ['Si va ai rigori!', 'Calci di rigore!'],
   penGoal: ['Gol!', 'Spiazzato!', 'Rete!', 'Freddo dal dischetto!'],
   penSave: ['Parato!', 'Lo para!', 'Che intervento!'],
@@ -88,7 +98,7 @@ const LINES: Record<CallKind, string[]> = {
 
 /** Priorità: le frasi importanti interrompono quelle in corso. */
 const PRIORITY: Partial<Record<CallKind, number>> = {
-  goal: 3, ownGoal: 3, penWin: 3, red: 2, end: 2, golden: 2, penGoal: 2, penSave: 2, penMiss: 2, penPost: 2, penStart: 2,
+  goal: 3, ownGoal: 3, penWin: 3, red: 2, end: 2, golden: 2, penGoal: 2, penSave: 2, penMiss: 2, penPost: 2, penStart: 2, penalty: 2, extra: 2,
 };
 
 class Commentary {

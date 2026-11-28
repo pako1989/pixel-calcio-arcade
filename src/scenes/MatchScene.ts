@@ -11,6 +11,7 @@ import { music } from '../audio/music';
 import { commentary } from '../audio/commentary';
 import { Controls } from '../input/controls';
 import type { MatchLaunch } from '../modes/modes';
+import type { PenaltyData } from './PenaltyScene';
 import { demoLaunch, fixKits } from './demo';
 import { load, progressOf } from '../save/storage';
 import { ballTint, equipped, GROWTH_MODES, grownTeam, isRival, kitVariant } from '../modes/progress';
@@ -126,6 +127,8 @@ export class MatchScene extends Phaser.Scene {
   };
   private fogWisps: Phaser.GameObjects.Image[] = [];
   private rainOn = false;
+  /** La mini-sfida del rigore è aperta sopra la partita. */
+  private penOpen = false;
   private thunderT = 0;
   private chantT = 0;
   private started = false;
@@ -170,7 +173,9 @@ export class MatchScene extends Phaser.Scene {
     this.replayMeta = undefined;
     this.replay = undefined;
     this.fogWisps = [];
+    this.gusts = undefined;
     this.rainOn = false;
+    this.penOpen = false;
     this.thunderT = 14 + Math.random() * 10;
     this.chantT = 12 + Math.random() * 10;
     this.started = false;
@@ -190,7 +195,7 @@ export class MatchScene extends Phaser.Scene {
     this.celebration = 'salto';
     data = { ...data, config: { ...data.config, specials: !data.demo && (!!data.forceSpecials || load().settings.specials !== false) } };
     if (data.demo || data.config.humanTeam !== 0) return data;
-    const cfg = { ...data.config, fouls: load().settings.fouls };
+    const cfg = { ...data.config, fouls: load().settings.fouls, penaltyKicks: load().settings.penaltyKicks !== false };
     const p = progressOf();
     this.ballSkin = equipped(p, 'pallone');
     this.celebration = equipped(p, 'esultanza');
@@ -344,7 +349,8 @@ export class MatchScene extends Phaser.Scene {
     };
     const weather = cfg.weather ?? 'sereno';
     const night = th.night || !!cfg.night;
-    if (weather === 'pioggia') {
+    const storm = weather === 'temporale';
+    if (weather === 'pioggia' || storm) {
       this.rainOn = true;
       if (!this.textures.exists('streak')) {
         const sg = this.add.graphics();
@@ -357,12 +363,12 @@ export class MatchScene extends Phaser.Scene {
         y: -12,
         lifespan: 900,
         speedY: { min: 420, max: 520 },
-        speedX: { min: -70, max: -50 },
-        rotate: 8,
+        speedX: storm ? { min: -190, max: -140 } : { min: -70, max: -50 },
+        rotate: storm ? 18 : 8,
         alpha: { min: 0.35, max: 0.7 },
         tint: [0xcfe0ff, 0x9fb8e8],
-        frequency: 6,
-        quantity: 2,
+        frequency: storm ? 4 : 6,
+        quantity: storm ? 3 : 2,
       }).setDepth(28).setScrollFactor(0);
       this.fx.splash = this.add.particles(0, 0, 'px2', {
         lifespan: { min: 160, max: 280 },
@@ -374,18 +380,24 @@ export class MatchScene extends Phaser.Scene {
         tint: 0xd8e6ff,
         emitting: false,
       }).setDepth(9);
-      this.add.rectangle(0, 0, 4000, 4000, 0x1a2a4a, night ? 0.12 : 0.22).setOrigin(0.5).setScrollFactor(0).setDepth(22.5);
-    } else if (pitch.id === 'neve') {
+      this.add.rectangle(0, 0, 4000, 4000, storm ? 0x121c34 : 0x1a2a4a, (night ? 0.12 : 0.22) + (storm ? 0.1 : 0)).setOrigin(0.5).setScrollFactor(0).setDepth(22.5);
+    } else if (pitch.id === 'neve' || weather === 'neve') {
+      const heavy = weather === 'neve';
       this.fx.weather = this.add.particles(0, 0, 'px2', {
         x: { min: 0, max: 900 },
         y: -10,
         lifespan: 5000,
-        speedY: { min: 18, max: 40 },
+        speedY: heavy ? { min: 26, max: 58 } : { min: 18, max: 40 },
         speedX: { min: -12, max: 6 },
-        scale: { min: 0.5, max: 1 },
+        scale: heavy ? { min: 0.6, max: 1.4 } : { min: 0.5, max: 1 },
         alpha: { min: 0.6, max: 1 },
-        frequency: 40,
+        frequency: heavy ? 14 : 40,
       }).setDepth(28).setScrollFactor(0);
+      if (heavy && pitch.id !== 'neve') {
+        // manto bianco sul prato e aria lattiginosa
+        this.add.rectangle(0, 0, W, H, 0xf2f6ff, 0.28).setOrigin(0).setDepth(0.5);
+        this.add.rectangle(0, 0, 4000, 4000, 0xe8f0ff, 0.08).setOrigin(0.5).setScrollFactor(0).setDepth(22.5);
+      }
     } else if (pitch.id === 'tetto' && weather === 'sereno') {
       this.fx.weather = this.add.particles(0, 0, 'px2', {
         x: { min: -100, max: 900 },
@@ -398,6 +410,8 @@ export class MatchScene extends Phaser.Scene {
       }).setDepth(28).setScrollFactor(0);
     }
     if (weather === 'nebbia') this.makeFog(night);
+    // vento e temporale: folate che seguono le raffiche (anche foglie e sabbia se è solo vento)
+    if (weather === 'vento' || storm) this.makeGusts(pitch.id, storm);
 
     // --- luci ---
     if (night) {
@@ -470,8 +484,10 @@ export class MatchScene extends Phaser.Scene {
       this.scene.launch('hud');
       sfx.startCrowd(th.crowd);
       if (this.rainOn) sfx.startRain();
+      if (this.gusts) sfx.startWind();
       music.play('match');
-      const cond = weather === 'pioggia' ? 'rain' : weather === 'nebbia' ? 'fog' : night && !th.night ? 'night' : null;
+      const COND = { pioggia: 'rain', nebbia: 'fog', neve: 'snow', vento: 'windy', temporale: 'storm' } as const;
+      const cond = weather !== 'sereno' ? COND[weather] : night && !th.night ? 'night' : null;
       if (cond) this.time.delayedCall(400, () => commentary.say(cond));
     } else if (music.playing !== 'menu') music.play('menu');
     this.syncSprites(0);
@@ -490,6 +506,48 @@ export class MatchScene extends Phaser.Scene {
   }
 
   /** Nebbia: si vede bene solo intorno alla palla. */
+  private gusts?: Phaser.GameObjects.Particles.ParticleEmitter;
+
+  /** Folate di vento: righe chiare che volano nel verso della raffica. */
+  private makeGusts(pitchId: string, storm: boolean) {
+    if (!this.textures.exists('gust')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 0.5).fillRect(0, 0, 14, 1);
+      g.fillStyle(0xffffff, 1).fillRect(4, 0, 6, 1);
+      g.generateTexture('gust', 14, 1);
+      g.destroy();
+    }
+    const wind = () => this.sim.wind;
+    const sp = (k: 'x' | 'y') => () => wind()[k] * (storm ? 4.2 : 3.4) + (k === 'x' ? Math.random() - 0.5 : Math.random() - 0.5) * 30;
+    this.gusts = this.add.particles(0, 0, 'gust', {
+      x: { min: -60, max: 900 },
+      y: { min: -20, max: 420 },
+      lifespan: 900,
+      speedX: { onEmit: sp('x') },
+      speedY: { onEmit: sp('y') },
+      rotate: { onEmit: () => Phaser.Math.RadToDeg(Math.atan2(wind().y, wind().x)) },
+      scaleX: { min: 0.8, max: 2 },
+      alpha: { start: 0.75, end: 0, ease: 'Sine.easeIn' },
+      tint: 0xf4f8ff,
+      frequency: storm ? 30 : 45,
+    }).setDepth(28).setScrollFactor(0);
+    if (!storm) {
+      // foglie (sabbia in spiaggia, cenere sul vulcano) trascinate dal vento
+      const tint = pitchId === 'spiaggia' ? [0xf0d890, 0xe0c070] : pitchId === 'vulcano' ? [0x5a5060, 0x8a7a80] : [0xc87a2a, 0xe0a030, 0x9a6a2a, 0x7aa040];
+      this.add.particles(0, 0, 'px2', {
+        x: { min: -40, max: 880 },
+        y: { min: 0, max: 400 },
+        lifespan: 2200,
+        speedX: { onEmit: () => wind().x * 2.2 + (Math.random() - 0.5) * 20 },
+        speedY: { onEmit: () => wind().y * 2.2 + (Math.random() - 0.5) * 20 },
+        scale: { min: 1.2, max: 2 },
+        alpha: { start: 1, end: 0.2 },
+        tint,
+        frequency: 70,
+      }).setDepth(27.5).setScrollFactor(0);
+    }
+  }
+
   private makeFog(night: boolean) {
     const key = night ? 'fogN' : 'fogD';
     const R = 520;
@@ -551,12 +609,16 @@ export class MatchScene extends Phaser.Scene {
       if (!this.launch.demo) {
         this.thunderT -= dt;
         if (this.thunderT <= 0) {
-          this.thunderT = 16 + Math.random() * 18;
+          this.thunderT = this.launch.config.weather === 'temporale' ? 7 + Math.random() * 9 : 16 + Math.random() * 18;
           this.cameras.main.flash(90, 200, 210, 255);
           this.time.delayedCall(160, () => this.cameras.main.flash(60, 160, 170, 220));
           sfx.thunder();
         }
       }
+    }
+    if (this.gusts && !this.launch.demo) {
+      const m = Math.hypot(this.sim.wind.x, this.sim.wind.y);
+      sfx.windLevel(Math.min(1, m / 140));
     }
     if (this.geyserG && this.sim.pitch.geysers) {
       const gg = this.geyserG;
@@ -671,6 +733,36 @@ export class MatchScene extends Phaser.Scene {
 
   get replaying() {
     return !!this.replay;
+  }
+
+  /** Mini-sfida del rigore: la scena dei rigori gioca un solo tiro e rende l'esito alla partita. */
+  private openPenalty() {
+    const pen = this.sim.penalty;
+    if (!pen || !pen.interactive || this.finished || this.penOpen) return;
+    this.penOpen = true;
+    pen.open = true;
+    this.ctrl.reset();
+    this.scene.sleep('hud');
+    const cfg = this.sim.cfg;
+    const data: PenaltyData = {
+      single: {
+        teams: [cfg.home, cfg.away],
+        difficulty: cfg.difficulty,
+        shooter: pen.team,
+        taker: pen.taker.def,
+        keeper: pen.keeper.def,
+        night: !!cfg.night || cfg.pitch.id === 'tetto',
+        weather: cfg.weather ?? 'sereno',
+        onDone: (o, u) => {
+          this.penOpen = false;
+          this.ctrl.reset();
+          this.scene.wake('hud');
+          this.sim.resolvePenalty(o, u);
+        },
+      },
+    };
+    this.scene.launch('penalties', data);
+    this.scene.bringToTop('penalties');
   }
 
   private startReplay() {
@@ -985,7 +1077,9 @@ export class MatchScene extends Phaser.Scene {
                     ? '★ DA LONTANO! ★'
                     : e.banked
                       ? '★ DI SPONDA! ★'
-                      : undefined;
+                      : e.pen
+                        ? 'SU RIGORE'
+                        : undefined;
           const min = Math.max(1, Math.round((this.sim.elapsed / Math.max(1, this.launch.config.durationSec)) * 90));
           this.replayMeta = {
             scorer: e.scorer,
@@ -1103,12 +1197,18 @@ export class MatchScene extends Phaser.Scene {
           } else if (e.kind === 'golden') {
             sfx.whistle(2);
             commentary.say('golden');
+          } else if (e.kind === 'extra') {
+            sfx.whistle(2, true);
+            sfx.roar(0.5);
+            commentary.say('extra');
           } else if (e.kind === 'half') {
             sfx.whistle(2);
           }
         }
         if (!demo) {
           if (e.kind === 'golden') this.msg({ text: 'GOLDEN GOL!', sub: 'Chi segna vince', color: '#ffd23f', big: true, ms: 2200 });
+          if (e.kind === 'extra')
+            this.msg({ text: 'SUPPLEMENTARI!', sub: this.launch.penalties ? 'Poi, se è ancora pari, i rigori' : 'Ultima occasione per vincerla', color: '#ffd23f', big: true, ms: 2400 });
           if (e.kind === 'end') this.msg({ text: 'FINE!', color: '#ffffff', big: true, ms: 2400 });
         }
         break;
@@ -1249,6 +1349,24 @@ export class MatchScene extends Phaser.Scene {
         }
         break;
       }
+      case 'penalty':
+        if (!quiet) {
+          sfx.whistle(2, true);
+          sfx.roar(0.6);
+          commentary.say('penalty', e.taker);
+        }
+        if (!demo) {
+          const mine = e.team === human;
+          this.msg({
+            text: 'RIGORE!',
+            sub: e.interactive ? (mine ? `Tira ${e.taker}: mira e calcia` : `Tira ${e.taker}: tuffati!`) : `Dal dischetto ${e.taker}`,
+            color: mine ? '#ffd23f' : '#ff5a5a',
+            big: true,
+            ms: 1800,
+          });
+          if (e.interactive) this.time.delayedCall(1300, () => this.openPenalty());
+        }
+        break;
       case 'freekick':
         if (!quiet) commentary.say('freekick');
         if (!demo) {
@@ -1641,7 +1759,8 @@ export class MatchScene extends Phaser.Scene {
       this.crowdB.setVisible(v);
       this.crowdA.setVisible(!v);
     }
-    sfx.crowdLevel(this.excite);
+    // prima del rigore lo stadio trattiene il fiato
+    sfx.crowdLevel(this.sim.phase === 'penalty' ? -0.3 : this.excite);
     if (!this.launch.demo && this.sim.phase === 'play') {
       this.chantT -= dt;
       if (this.chantT <= 0) {

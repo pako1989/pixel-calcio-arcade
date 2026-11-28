@@ -47,7 +47,25 @@ export const DIFFICULTY: Record<Difficulty, DiffParams> = {
   difficile: { speed: 1.01, think: 0.16, tackle: 2.0, shotErr: 0.07, keeper: 1.05, steal: 1.2, decision: 0.9 },
 };
 
-export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end' | 'freekick' | 'halftime';
+export type Phase = 'kickoff' | 'play' | 'goal' | 'golden' | 'end' | 'freekick' | 'halftime' | 'extra' | 'penalty';
+
+/** Distanza del dischetto dalla linea di porta. */
+export const PENALTY_SPOT = 62;
+
+/** Esito di un calcio di rigore in partita. */
+export type PenaltyOutcome = 'gol' | 'parato' | 'fuori' | 'palo';
+
+/** Calcio di rigore in corso: chi tira, chi para, chi lo decide. */
+export interface PenaltyKick {
+  taker: Player;
+  keeper: Player;
+  /** Squadra che tira. */
+  team: 0 | 1;
+  /** true = lo gioca il giocatore umano con la mini-sfida; false = si risolve da solo. */
+  interactive: boolean;
+  /** La mini-sfida è aperta sullo schermo (la imposta la scena). */
+  open?: boolean;
+}
 
 /** Cambi disponibili per squadra nell'intervallo. */
 export const MAX_SUBS = 3;
@@ -82,6 +100,10 @@ export class MatchSim {
   phaseT = 0;
   kickoffTeam: 0 | 1 = 0;
   goldenGoal = false;
+  /** Supplementari in corso o giocati. */
+  extraTime = false;
+  /** Calcio di rigore in attesa di esito (fase 'penalty'). */
+  penalty: PenaltyKick | null = null;
   /** Intervallo già fatto (o non previsto). */
   halfDone = false;
   /** Panchina di ogni squadra (3 riserve) e cambi ancora disponibili. */
@@ -322,6 +344,7 @@ export class MatchSim {
         possession: [Math.round((this.stats.possession[0] / tot) * 100), Math.round((this.stats.possession[1] / tot) * 100)],
       },
       goldenGoal: this.goldenGoal,
+      extraTime: this.extraTime || undefined,
       scorers: this.scorers,
     };
   }
@@ -348,8 +371,15 @@ export class MatchSim {
         }
         break;
       case 'golden':
+      case 'extra':
         this.updatePlayersIdle(dt);
         if (this.phaseT <= 0) this.setupKickoff();
+        break;
+      case 'penalty':
+        this.updatePlayersIdle(dt);
+        // senza mini-sfida (CPU contro CPU, simulazioni) il rigore si tira da solo
+        // (paracadute: se nessuna scena apre la mini-sfida, dopo un po' si tira comunque)
+        if (this.penalty && (this.penalty.interactive ? !this.penalty.open && this.phaseT < -12 : this.phaseT <= 0)) this.resolvePenalty(this.autoPenalty());
         break;
       case 'play':
         this.updatePlay(dt, input);
@@ -501,6 +531,15 @@ export class MatchSim {
 
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
+      if (this.score[0] === this.score[1] && this.cfg.extraTime && !this.extraTime) {
+        // supplementari: un terzo della durata, almeno 30 secondi
+        this.extraTime = true;
+        this.timeLeft = Math.max(30, Math.round(this.cfg.durationSec / 3));
+        this.phase = 'extra';
+        this.phaseT = 2.4;
+        this.events.push({ type: 'whistle', kind: 'extra' });
+        return;
+      }
       if (this.score[0] === this.score[1] && this.cfg.goldenGoal && !this.goldenGoal) {
         this.goldenGoal = true;
         this.phase = 'golden';
@@ -1332,6 +1371,7 @@ export class MatchSim {
           this.foul(p, owner);
           return;
         }
+        if (!won && !this.cfg.fouls && this.cfg.penaltyKicks && dist(p, owner) < 12 && this.penaltyFoul(p, owner)) return;
         if (won) {
           b.owner = null;
           const deepDef = this.toTeamX(p.team, b.x) < 0.34;
@@ -1388,6 +1428,7 @@ export class MatchSim {
       const rate = this.isHuman(p) ? 1.6 : 1.1 * this.diff[p.team].steal;
       const chance = rate * duelRatio(p.def.stats, owner.def.stats) * dt * 2.2;
       if (this.rng.chance(chance)) {
+        if (this.boxFoul(p, owner)) return;
         const out = this.dirOf(p.team);
         const deep = this.toTeamX(p.team, b.x) < 0.22;
         owner.pickupCd = 0.7;
@@ -1971,7 +2012,7 @@ export class MatchSim {
     if (this.windT <= 0) {
       this.windT = this.rng.range(9, 15);
       const a = this.rng.range(0, Math.PI * 2);
-      const m = this.rng.range(40, 110);
+      const m = this.rng.range(40, 110) * (this.pitch.windPower ?? 1);
       this.wind = { x: Math.cos(a) * m, y: Math.sin(a) * m };
     }
   }
@@ -2061,10 +2102,158 @@ export class MatchSim {
       }
     }
     if (this.humanTeam === victim.team && !this.locked) this.setHuman(victim.idx);
+    // in area: calcio di rigore
+    if (this.inOwnBox(by.team, victim.x, victim.y) && !victim.isGK) {
+      this.setupPenalty(victim, by.team);
+      return;
+    }
     // vicino alla porta: punizione da calciare
     const gx = this.oppGoalX(victim.team);
     if (Math.abs(gx - victim.x) < FREEKICK_RANGE && Math.abs(victim.y - this.H / 2) < 190 && Math.abs(gx - victim.x) > 70) {
       this.setupFreeKick(victim, by.team);
+    }
+  }
+
+  // ---------- calci di rigore ----------
+  /** Con i falli spenti: scivolata da dietro in area sul portatore = rigore (niente cartellini). */
+  private penaltyFoul(by: Player, victim: Player): boolean {
+    if (victim.isGK || !this.inOwnBox(by.team, victim.x, victim.y)) return false;
+    const behind = Math.cos(by.facing - victim.facing) > 0.4;
+    if (!behind || !this.rng.chance(0.65)) return false;
+    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, byIdx: by.idx, victim: victim.def.name, card: 'none', injury: false });
+    by.setState('stun', 0);
+    this.setupPenalty(victim, by.team);
+    return true;
+  }
+
+  /** Contrasto in piedi nella propria area: a volte è fallo da rigore (con falli o rigori attivi). */
+  private boxFoul(by: Player, victim: Player): boolean {
+    if (!this.cfg.fouls && !this.cfg.penaltyKicks) return false;
+    if (victim.isGK || !this.inOwnBox(by.team, victim.x, victim.y)) return false;
+    const behind = Math.cos(by.facing - victim.facing) > 0.4;
+    if (!this.rng.chance(behind ? 0.7 : 0.35)) return false;
+    if (this.cfg.fouls) {
+      this.foul(by, victim);
+      return true;
+    }
+    this.events.push({ type: 'foul', x: victim.x, y: victim.y, team: by.team, by: by.def.name, byIdx: by.idx, victim: victim.def.name, card: 'none', injury: false });
+    by.setState('stun', 0);
+    this.setupPenalty(victim, by.team);
+    return true;
+  }
+
+  /** Mette tutti in posizione per il rigore: palla sul dischetto, portiere sulla linea, gli altri fuori area. */
+  setupPenalty(taker: Player, defTeam: 0 | 1) {
+    const b = this.ball;
+    const gx = this.oppGoalX(taker.team);
+    const dir = gx > this.W / 2 ? 1 : -1;
+    const sx = gx - dir * PENALTY_SPOT;
+    const sy = this.H / 2;
+    const keeper = this.teams[defTeam].find((p) => p.isGK) ?? this.teams[defTeam][0];
+    b.stop();
+    b.owner = null;
+    b.x = sx;
+    b.y = sy;
+    b.z = 0;
+    b.lastTouch = taker;
+    b.passTarget = null;
+    b.isShot = b.fire = b.superShot = false;
+    b.volley = null;
+    b.special = null;
+    this.freeKick = null;
+    let k = 0;
+    for (const p of this.players) {
+      p.vx = p.vy = 0;
+      if (p.state !== 'stun') p.setState('run');
+      p.holdT = 0;
+      if (p === taker) {
+        p.x = sx - dir * 12;
+        p.y = sy + 4;
+        p.facing = dir > 0 ? 0 : Math.PI;
+      } else if (p === keeper) {
+        p.x = gx - dir * 5;
+        p.y = sy;
+        p.facing = dir > 0 ? Math.PI : 0;
+      } else if (Math.abs(p.x - gx) < 112 || dist(p, b) < 50) {
+        // fuori dall'area, a ventaglio sulla lunetta
+        p.x = gx - dir * (118 + (k % 3) * 14);
+        p.y = clamp(sy + ((k % 2 ? 1 : -1) * (30 + Math.floor(k / 2) * 26)), 10, this.H - 10);
+        p.facing = dir > 0 ? 0 : Math.PI;
+        k++;
+      }
+    }
+    this.charging = false;
+    this.charge = 0;
+    this.passCharging = false;
+    this.passHold = 0;
+    const human = this.humanTeam;
+    // la mini-sfida si gioca se tocca all'umano tirare o parare; con un solo giocatore controllato solo se tira lui
+    const interactive = human !== null && (!this.locked || (taker.team === human && taker.idx === this.cfg.lockHuman));
+    this.penalty = { taker, keeper, team: taker.team, interactive };
+    this.phase = 'penalty';
+    this.phaseT = 2.4;
+    this.events.push({ type: 'penalty', team: taker.team, taker: taker.def.name, keeper: keeper.def.name, x: sx, y: sy, interactive });
+  }
+
+  /** Esito di un rigore senza mini-sfida: conta il tiro di chi calcia e le mani del portiere. */
+  autoPenalty(): PenaltyOutcome {
+    const pen = this.penalty;
+    if (!pen) return 'fuori';
+    const shot = pen.taker.def.stats.shot;
+    const keep = pen.keeper.def.stats.keeping * this.diff[pen.keeper.team].keeper;
+    const pGoal = clamp(0.68 + (shot - 0.6) * 0.35 - (keep - 0.7) * 0.3, 0.5, 0.9);
+    if (this.rng.chance(pGoal)) return 'gol';
+    const r = this.rng.next();
+    return r < 0.62 ? 'parato' : r < 0.88 ? 'fuori' : 'palo';
+  }
+
+  /** Chiude il rigore con l'esito (dalla mini-sfida o automatico) e riprende il gioco. `u` = punto della porta da -1 a 1. */
+  resolvePenalty(outcome: PenaltyOutcome, u = this.rng.range(-0.7, 0.7)) {
+    const pen = this.penalty;
+    if (!pen || this.phase !== 'penalty') return;
+    this.penalty = null;
+    const { taker, keeper, team } = pen;
+    const b = this.ball;
+    const gx = this.oppGoalX(team);
+    const dir = gx > this.W / 2 ? 1 : -1;
+    const sx = gx - dir * PENALTY_SPOT;
+    const half = (this.goalBottom - this.goalTop) / 2;
+    this.stats.shots[team]++;
+    this.events.push({ type: 'shot', x: sx, y: this.H / 2, power: 0.8, team, superShot: false, fire: false, idx: taker.idx });
+    taker.kickCd = 0.4;
+    this.phase = 'play';
+    this.phaseT = 0;
+    b.lastTouch = taker;
+    b.shotFrom = { x: sx, y: this.H / 2 };
+    b.banked = false;
+    if (outcome === 'gol') {
+      b.x = gx + dir * 6;
+      b.y = this.H / 2 + clamp(u, -0.9, 0.9) * half;
+      b.z = 0;
+      b.stop();
+      this.scoreGoal(team);
+      const ev = this.events[this.events.length - 1];
+      if (ev && ev.type === 'goal') ev.pen = true;
+      return;
+    }
+    if (outcome === 'palo') {
+      const top = u < 0;
+      b.x = gx - dir * 3;
+      b.y = top ? this.goalTop : this.goalBottom;
+      b.z = 4;
+      b.vx = -dir * this.rng.range(130, 190);
+      b.vy = (top ? 1 : -1) * this.rng.range(30, 90);
+      b.vz = 40;
+      b.owner = null;
+      this.events.push({ type: 'post', x: b.x, y: b.y });
+      return;
+    }
+    // parato o fuori: palla al portiere
+    b.x = keeper.x;
+    b.y = keeper.y;
+    this.keeperCatch(keeper);
+    if (outcome === 'parato') {
+      this.events.push({ type: 'save', x: keeper.x, y: keeper.y, catch: true, team: keeper.team, idx: keeper.idx });
     }
   }
 
