@@ -36,6 +36,7 @@ export class HudScene extends Phaser.Scene {
   private msgQueue: Phaser.GameObjects.Container[] = [];
   private pauseLayer?: Phaser.GameObjects.Container;
   private pauseBtn!: Button;
+  private superBtn?: TouchButton;
   private lastScore = '';
   private help?: Phaser.GameObjects.Container;
 
@@ -94,7 +95,9 @@ export class HudScene extends Phaser.Scene {
         pointer: null,
       });
       this.buttons.push(mk('shoot', 'TIRA', 0xe8443a), mk('pass', 'PASSA', 0x2f8be0), mk('sprint', 'SCATTO', 0xe0a020));
-      if (this.match.launch.config.specials !== false) this.buttons.push(mk('special', 'SUPER', 0xff3fa4));
+      this.superBtn = mk('special', 'SUPER', 0xff3fa4);
+      if (this.match.launch.config.specials !== false) this.buttons.push(this.superBtn);
+      else this.superBtn.label.setVisible(false);
     }
     this.layout();
 
@@ -472,9 +475,22 @@ export class HudScene extends Phaser.Scene {
       const b2 = button(this, W / 2, H / 2 + 6, 180, 26, 'OPZIONI', () => {
         this.scene.launch('settings');
         this.scene.bringToTop('settings');
+        // se le supermosse cambiano nelle opzioni, vale subito per questa partita
+        this.scene.get('settings').events.once('shutdown', () => this.setSpecials(load().settings.specials !== false, false));
       });
-      const b3 = button(this, W / 2, H / 2 + 42, 180, 26, this.match.launch.mode === 'quick' ? 'ESCI AL MENU' : 'ABBANDONA', () => this.quit(), { color: 0x8a3040 });
-      c.add([b1.c, b2.c, b3.c]);
+      c.add(b2.c);
+      // interruttore rapido delle supermosse (le missioni che le chiedono le tengono sempre attive)
+      const forced = !!this.match.launch.forceSpecials;
+      const spLabel = () => (forced ? 'SUPERMOSSE: OBBLIGATE' : `SUPERMOSSE: ${this.match.sim.specialsOn ? 'SÌ' : 'NO'}`);
+      const bs = button(this, W / 2, H / 2 + 42, 180, 26, spLabel(), () => {
+        if (forced) return;
+        this.setSpecials(!this.match.sim.specialsOn, true);
+        bs.setLabel(spLabel());
+        bs.setSelected(this.match.sim.specialsOn);
+      }, { color: 0x7a2a8a, size: 6 });
+      bs.setSelected(this.match.sim.specialsOn);
+      const b3 = button(this, W / 2, H / 2 + 78, 180, 26, this.match.launch.mode === 'quick' ? 'ESCI AL MENU' : 'ABBANDONA', () => this.quit(), { color: 0x8a3040 });
+      c.add([b1.c, bs.c, b3.c]);
       this.pauseLayer = c;
       this.ctrlG.clear();
     } else {
@@ -482,6 +498,21 @@ export class HudScene extends Phaser.Scene {
       this.pauseLayer = undefined;
       this.scene.resume('match');
     }
+  }
+
+  /** Accende o spegne le supermosse a partita in corso (per entrambe le squadre). */
+  private setSpecials(on: boolean, persist: boolean) {
+    if (this.match.launch.forceSpecials || this.match.launch.demo) return;
+    if (persist) save((d) => (d.settings.specials = on));
+    this.match.sim.cfg.specials = on;
+    const b = this.superBtn;
+    if (!b) return;
+    const has = this.buttons.includes(b);
+    if (on && !has) this.buttons.push(b);
+    if (!on && has) this.buttons.splice(this.buttons.indexOf(b), 1);
+    b.pointer = null;
+    b.label.setVisible(on);
+    this.layout();
   }
 
   private quit() {

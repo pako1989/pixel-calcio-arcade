@@ -124,6 +124,7 @@ export class MissionsScene extends Phaser.Scene {
       modeData: { mission: m.id },
       startScore: m.startScore,
       superStart: m.superStart,
+      forceSpecials: m.goals.some((o) => o.kind === 'special'),
       hudGoal: m.goals.map(objectiveText).join(' + ').toUpperCase(),
       config: {
         home,

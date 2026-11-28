@@ -44,6 +44,8 @@ export interface MatchLaunch {
   penalties?: boolean;
   /** Giocatore della squadra 0 da seguire (indice): commenti in diretta e voto nell'HUD. */
   spotlight?: number;
+  /** Supermosse sempre attive, anche se spente nelle opzioni (missioni che le chiedono). */
+  forceSpecials?: boolean;
   /** Dati extra della modalità (es. turno del torneo, id della missione). */
   modeData?: unknown;
 }

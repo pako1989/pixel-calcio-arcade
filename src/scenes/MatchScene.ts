@@ -186,7 +186,7 @@ export class MatchScene extends Phaser.Scene {
     this.rival = false;
     this.ballSkin = 'classico';
     this.celebration = 'salto';
-    data = { ...data, config: { ...data.config, specials: !data.demo && load().settings.specials !== false } };
+    data = { ...data, config: { ...data.config, specials: !data.demo && (!!data.forceSpecials || load().settings.specials !== false) } };
     if (data.demo || data.config.humanTeam !== 0) return data;
     const cfg = { ...data.config, fouls: load().settings.fouls };
     const p = progressOf();
